@@ -10,9 +10,9 @@ import (
 )
 
 type CLI struct {
-	Version  VersionCmd  `cmd:"" help:"Print the pgkit version and exit."`
-	Generate GenerateCmd `cmd:"" help:"Generate deterministic PostgreSQL SQL from a Go schema package."`
+	Version VersionCmd `cmd:"" help:"Print the pgkit version and exit."`
 	GlobalFlags
+	Generate GenerateCmd `cmd:"" help:"Generate deterministic PostgreSQL SQL from a Go schema package."`
 }
 
 type GlobalFlags struct {

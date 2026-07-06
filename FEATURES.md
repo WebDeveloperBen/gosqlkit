@@ -28,10 +28,11 @@ Legend:
 - `[x]` Define columns in Go.
 - `[x]` Register schema from Go package imports.
 - `[x]` Render canonical PostgreSQL SQL.
-- `[x]` Stable table ordering.
+- `[x]` Stable table ordering that respects foreign-key dependencies.
 - `[x]` Stable index ordering.
 - `[x]` Golden-style SQL tests.
 - `[x]` Example schema with two related tables.
+- `[x]` Example schema with a composite-key child table.
 - `[x]` Example `sqlc` config and query files.
 - `[x]` CLI `generate`.
 - `[x]` CLI `generate --out`.
@@ -124,17 +125,17 @@ Missing common PostgreSQL types:
 ## Constraints
 
 - `[x]` Inline primary key.
-- `[ ]` Table-level primary key.
-- `[ ]` Composite primary key.
+- `[x]` Table-level primary key.
+- `[x]` Composite primary key.
 - `[x]` Inline unique constraint.
-- `[ ]` Named unique constraint.
-- `[ ]` Composite unique constraint.
-- `[ ]` `NULLS NOT DISTINCT` unique constraints.
+- `[x]` Named unique constraint.
+- `[x]` Composite unique constraint.
+- `[x]` `NULLS NOT DISTINCT` unique constraints.
 - `[x]` Inline single-column foreign key.
-- `[ ]` Named foreign key.
-- `[ ]` Composite foreign key.
-- `[~]` `ON DELETE` action rendering.
-- `[~]` `ON UPDATE` action rendering.
+- `[x]` Named foreign key.
+- `[x]` Composite foreign key.
+- `[x]` `ON DELETE` action rendering.
+- `[x]` `ON UPDATE` action rendering.
 - `[x]` Basic table check constraints.
 - `[ ]` Named check helper ergonomics beyond raw expression strings.
 - `[ ]` Exclusion constraints.
@@ -146,16 +147,16 @@ Missing common PostgreSQL types:
 - `[x]` Basic unique index.
 - `[x]` Multi-column index by column names.
 - `[ ]` Named auto-generation helpers.
-- `[ ]` Index methods: `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`.
-- `[ ]` Extension index methods: `hnsw`, `ivfflat`, and custom methods.
-- `[ ]` Per-column sort direction.
-- `[ ]` Per-column `NULLS FIRST` / `NULLS LAST`.
-- `[ ]` Per-column operator class.
-- `[ ]` Expression indexes.
-- `[ ]` Partial indexes with `WHERE`.
-- `[ ]` `CREATE INDEX CONCURRENTLY`.
-- `[ ]` `ONLY` table indexes.
-- `[ ]` Index storage parameters with `WITH (...)`.
+- `[x]` Index methods: `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`.
+- `[x]` Extension index methods: `hnsw`, `ivfflat`, and custom methods.
+- `[x]` Per-column sort direction.
+- `[x]` Per-column `NULLS FIRST` / `NULLS LAST`.
+- `[x]` Per-column operator class.
+- `[x]` Expression indexes.
+- `[x]` Partial indexes with `WHERE`.
+- `[x]` `CREATE INDEX CONCURRENTLY`.
+- `[x]` `ONLY` table indexes.
+- `[x]` Index storage parameters with `WITH (...)`.
 
 ## RLS, Roles, and Policies
 
@@ -284,7 +285,7 @@ Other provider requirement:
 - `[x]` `pgkit generate`.
 - `[x]` `pgkit generate --out`.
 - `[x]` `pgkit generate --check`.
-- `[ ]` `pgkit version`.
+- `[x]` `pgkit version`.
 - `[ ]` `pgkit inspect` or equivalent database introspection.
 - `[ ]` `pgkit inspect --url ...`.
 - `[ ]` `pgkit inspect --auth password`.
@@ -313,11 +314,12 @@ Other provider requirement:
 - `[x]` Duplicate index validation.
 - `[x]` Duplicate check validation.
 - `[x]` Foreign key action validation.
+- `[x]` Unknown local constraint column validation.
+- `[x]` Unknown index column validation.
 - `[ ]` Duplicate schema object validation across schemas.
-- `[ ]` Duplicate constraint validation scoped like PostgreSQL.
+- `[~]` Duplicate constraint validation scoped like PostgreSQL.
 - `[ ]` Unknown referenced table validation.
 - `[ ]` Unknown referenced column validation.
-- `[ ]` Unknown index column validation.
 - `[ ]` Invalid default expression validation where practical.
 - `[ ]` Invalid generated-column expression validation where practical.
 - `[ ]` Invalid RLS policy validation.

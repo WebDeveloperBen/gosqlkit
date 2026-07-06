@@ -1,0 +1,124 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  BIN: "{{.TASK_DIR}}/bin/pgkit"
+  EXAMPLE_SCHEMA: "examples/basic/schema"
+  EXAMPLE_SQL: "examples/basic/db/schema.generated.sql"
+
+tasks:
+  default:
+    desc: Run the standard local verification set
+    cmds:
+      - task: verify
+
+  setup:
+    desc: Install git hooks for this repository
+    cmds:
+      - go tool lefthook install
+
+  build:
+    desc: Build the pgkit CLI
+    cmds:
+      - mkdir -p "{{.TASK_DIR}}/bin"
+      - go build -o "{{.BIN}}" ./cmd/pgkit
+
+  test:
+    desc: Run all Go tests
+    cmds:
+      - go test ./...
+
+  generate:
+    desc: Regenerate the checked-in example schema SQL
+    cmds:
+      - go run ./cmd/pgkit generate --out "{{.EXAMPLE_SQL}}" ./{{.EXAMPLE_SCHEMA}}
+
+  generate:check:
+    desc: Check the checked-in example schema SQL is current
+    cmds:
+      - go run ./cmd/pgkit generate --out "{{.EXAMPLE_SQL}}" --check ./{{.EXAMPLE_SCHEMA}}
+
+  sqlc:check:
+    desc: Validate the example schema and queries with sqlc in a temp directory
+    cmds:
+      - |
+        set -e
+        if ! command -v sqlc >/dev/null 2>&1; then
+          echo "sqlc not found; install sqlc to run this check" >&2
+          exit 1
+        fi
+        WORK=$(mktemp -d)
+        trap 'rm -rf "$WORK"' EXIT
+        cp -R examples/basic/. "$WORK"
+        cd "$WORK"
+        sqlc generate
+
+  fmt:
+    desc: Format all Go files with gofumpt
+    cmds:
+      - go tool gofumpt -w .
+
+  modernize:
+    desc: Apply Go modernization fixes
+    cmds:
+      - go tool modernize -fix ./...
+
+  modernize:check:
+    desc: Report Go modernization opportunities without applying fixes
+    cmds:
+      - go tool modernize ./...
+
+  lint:
+    desc: Run golangci-lint if installed
+    cmds:
+      - |
+        set -e
+        if ! command -v golangci-lint >/dev/null 2>&1; then
+          echo "golangci-lint not found; install golangci-lint to run this check" >&2
+          exit 1
+        fi
+        golangci-lint run ./...
+
+  vuln:
+    desc: Run govulncheck
+    cmds:
+      - go tool govulncheck ./...
+
+  verify:build:
+    desc: Compile all packages
+    cmds:
+      - go build ./...
+
+  verify:test:
+    desc: Run all Go tests
+    cmds:
+      - task: test
+
+  verify:generate:
+    desc: Check generated example SQL is current
+    cmds:
+      - task: generate:check
+
+  verify:sqlc:
+    desc: Run the sqlc compatibility check
+    cmds:
+      - task: sqlc:check
+
+  verify:cli:
+    desc: Smoke-test the pgkit CLI
+    deps: [build]
+    cmds:
+      - "{{.BIN}} --help"
+      - "{{.BIN}} version"
+      - "{{.BIN}} generate ./{{.EXAMPLE_SCHEMA}} > /dev/null"
+      - "{{.BIN}} generate --out {{.EXAMPLE_SQL}} --check ./{{.EXAMPLE_SCHEMA}}"
+
+  verify:
+    desc: Run the main project checks
+    cmds:
+      - task: verify:build
+      - task: verify:test
+      - task: verify:generate
+      - task: verify:sqlc
+      - task: verify:cli

@@ -5,10 +5,13 @@ type Schema struct {
 }
 
 type Table struct {
-	Name    string
-	Columns []Column
-	Checks  []Check
-	Indexes []Index
+	Name              string
+	Columns           []Column
+	PrimaryKeys       []PrimaryKey
+	UniqueConstraints []UniqueConstraint
+	ForeignKeys       []ForeignKeyConstraint
+	Checks            []Check
+	Indexes           []Index
 }
 
 type Column struct {
@@ -28,13 +31,46 @@ type ForeignKey struct {
 	OnUpdate string
 }
 
+type PrimaryKey struct {
+	Name    string
+	Columns []string
+}
+
+type UniqueConstraint struct {
+	Name             string
+	Columns          []string
+	NullsNotDistinct bool
+}
+
+type ForeignKeyConstraint struct {
+	Name              string
+	ReferencedTable   string
+	OnDelete          string
+	OnUpdate          string
+	Columns           []string
+	ReferencedColumns []string
+}
+
 type Check struct {
 	Name       string
 	Expression string
 }
 
 type Index struct {
-	Name    string
-	Columns []string
-	Unique  bool
+	Name         string
+	Columns      []IndexColumn
+	Method       string
+	Where        string
+	With         map[string]string
+	Unique       bool
+	Concurrently bool
+	Only         bool
+}
+
+type IndexColumn struct {
+	Expression   string
+	Order        string
+	Nulls        string
+	OpClass      string
+	IsExpression bool
 }

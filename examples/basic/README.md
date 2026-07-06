@@ -3,7 +3,8 @@
 This example shows the phase 1 workflow:
 
 ```bash
-go run ../../cmd/pgkit generate ./schema > db/schema.generated.sql
+go run ../../cmd/pgkit generate --out db/schema.generated.sql ./schema
+go run ../../cmd/pgkit generate --out db/schema.generated.sql --check ./schema
 sqlc generate
 ```
 

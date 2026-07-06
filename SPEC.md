@@ -201,21 +201,31 @@ Current implementation status:
   - Column primary keys
   - Column unique constraints
   - Inline foreign keys
+  - Table-level primary keys
+  - Composite primary keys
+  - Named unique constraints
+  - Composite unique constraints
+  - Named foreign keys
+  - Composite foreign keys
   - Basic indexes
+  - Unique indexes
+  - Advanced index methods
+  - Index predicates
+  - Per-column index ordering/null ordering/operator classes
+  - Concurrent indexes
+  - Index storage parameters
   - Basic checks
   - Defaults
   - Nullable / not-null columns
   - Common PostgreSQL scalar types listed above
-  - Deterministic table and index ordering
+  - Deterministic table ordering that respects foreign-key dependencies
+  - Deterministic index ordering
   - CLI `generate`
   - CLI `generate --out`
   - CLI `generate --check`
   - Golden-style SQL output tests
   - `sqlc` compatibility example
 - Not implemented yet:
-  - Table-level composite primary keys
-  - Table-level named unique constraints
-  - Multi-column foreign keys
   - Extensions, enums, views, RLS, triggers, functions
   - Migration diff integration
 
