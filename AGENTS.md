@@ -64,8 +64,8 @@ schema-management surface looks like — **not** as an implementation blueprint.
   - Sequences with increment/min/max/start/cache/cycle/ownership.
 - The serializer pattern: schema is collected into a **structured snapshot**
   before any diffing, and the snapshot is the diff input — not the rendered
-  SQL text. `gosqlkit` already does this (`internal/snapshot`,
-  `internal/dialects/pg/pgsnapshot`); future diff work builds on it.
+  SQL text. `gosqlkit` already does this (`internal/dialects/pg/pgschema`'s
+  `JSON` function); future diff work builds on it.
 - Stable object identity and metadata maps for rename detection and
   destructive-change guards (planned, see FEATURES.md "Serialisation and Diff
   Readiness").
@@ -105,12 +105,14 @@ kit/                     dialect-neutral provider registry, aliases, capabilitie
 pg/                      PUBLIC PostgreSQL DSL (user-facing import path)
 internal/dialects/pg/    PostgreSQL internal machinery, grouped:
   pgschema/              PG schema envelope: namespaces, extensions, enums,
-                         sequences, composite types, domains + ast.Tables
-  pgsnapshot/            PG snapshot envelope wrapping shared snapshots
+                         sequences, composite types, domains + ast.Tables.
+                         Also owns the snapshot JSON function — the model types
+                         carry JSON tags directly, so the snapshot IS the model
+                         serialised. No separate snapshot conversion layer.
   render/                PG SQL renderer + all validation
 internal/ast/            shared dialect-neutral schema core: Table, Column,
-                         constraints, indexes
-internal/snapshot/       shared snapshot JSON format (versioned, dialect-tagged)
+                         constraints, indexes. Types carry JSON tags so they
+                         serve as both the in-memory model and the snapshot.
 internal/version/        build info
 examples/basic/          end-to-end example feeding sqlc
 ```
@@ -125,8 +127,8 @@ with siblings like `internal/mysqlschema/`, `internal/mysqlsnapshot/`, etc.
 and makes the dialect boundary explicit.
 
 The **shared, dialect-neutral** packages stay at the top of `internal/`:
-- `internal/ast/` — the schema core types common to all dialects.
-- `internal/snapshot/` — the shared snapshot JSON format.
+- `internal/ast/` — the schema core types common to all dialects (these
+  carry JSON tags so they double as the snapshot types).
 
 The **public DSL** stays at the top level (`pg/`, future `mysql/`, etc.)
 because that is the user-facing import path. It can't move to `internal/`.
@@ -139,15 +141,16 @@ because that is the user-facing import path. It can't move to `internal/`.
 - `kit` owns the dialect-neutral registry.
 - Dialect packages (`pg`, future `mysql`, etc.) own their DSL, registry,
   renderer selection, and snapshot dialect marker.
-- `internal/ast`, `pg`, `kit`, `internal/dialects/`, `internal/snapshot`
+- `internal/ast`, `pg`, `kit`, `internal/dialects/`
   **never import CLI packages**.
 - A new CLI command becomes an `internal/app` function first, then a thin
   `internal/cli` adapter. See `generate.go` / `snapshot.go` for the shape.
 
 ### Adding a new dialect
 
-1. Create `internal/dialects/<dialect>/` with `schema/`, `snapshot/`, and
-   `render/` sub-packages mirroring `internal/dialects/pg/`.
+1. Create `internal/dialects/<dialect>/` with `schema/` and `render/`
+   sub-packages mirroring `internal/dialects/pg/`. The schema package owns
+   both the model types (with JSON tags) and the `JSON()` snapshot function.
 2. Create a top-level `<dialect>/` package for the public DSL (must stay
    outside `internal/` — it's the user import path).
 3. Register the provider with `kit` via `init()` in the public DSL package.
@@ -228,17 +231,20 @@ runs regardless of map iteration order or input order. Conventions:
 If you add a new object collection, sort it before rendering and before
 snapshotting, and add a golden test.
 
-### 4.6 The snapshot is the diff-ready intermediate, separate from SQL
+### 4.6 The snapshot is the model serialised, not a separate type
 
-`internal/snapshot` is the shared (dialect-neutral) table/column/constraint
-snapshot. `internal/dialects/pg/pgsnapshot` wraps it with PG-specific objects
-(namespaces, extensions, enums, sequences, composite types, domains) and tags
-the dialect. Both are versioned (`snapshot.Version`).
+The AST and pgschema model types carry JSON tags directly. The snapshot IS
+`json.MarshalIndent` of the model — there is no separate snapshot conversion
+layer. This is deliberate: when you add a schema field, you add it to the
+model once (with a JSON tag) and add rendering once. You do NOT need to
+update a second set of snapshot types.
 
-The snapshot is what future migration diffing will consume. When you add a
-schema field, **add it to both the renderer and the snapshot** so SQL output
-and diff input stay in sync. A field that only renders to SQL but isn't in
-the snapshot will silently be invisible to diffs.
+`pgschema.JSON()` handles deterministic sorting before marshalling and wraps
+the output with `version` and `dialect` metadata. The version
+(`pgschema.SnapshotVersion`) bumps only when the JSON shape changes in a way
+that would break a diff consumer.
+
+The snapshot is what future migration diffing will consume.
 
 ### 4.7 SQL generation runs a generated Go program, not reflection
 
@@ -270,30 +276,29 @@ Use this checklist. Example: adding a new column type, constraint, or schema
 object.
 
 1. **Model** — add the struct to `internal/ast/schema.go` (if shared across
-   dialects) or `internal/dialects/pg/pgschema/schema.go` (if PG-specific). Add it to the
-   containing struct (`Table`, `Schema`, etc.).
+   dialects) or `internal/dialects/pg/pgschema/schema.go` (if PG-specific).
+   Add a JSON tag so it serialises into the snapshot automatically. Add it to
+   the containing struct (`Table`, `Schema`, etc.).
 2. **DSL** — add a constructor + fluent methods in `pg/` (`column.go`,
    `table.go`, or `schema.go`). Return a typed `*Def`. Implement `apply` if
    it's a table element. Register PG-specific objects in `pg/registry.go`.
-3. **Render** — add a `render*` function in `internal/dialects/pg/render/postgres.go` and
-   call it from `Postgres` in the right position (namespaces -> extensions ->
+3. **Render** — add a `render*` function in `internal/dialects/pg/render/postgres.go`
+   and call it from `Postgres` in the right position (namespaces -> extensions ->
    enums -> composite types -> domains -> sequences -> tables -> indexes ->
    comments). Add **validation** to `validateSchema`.
-4. **Snapshot** — add the field to `internal/snapshot/snapshot.go` (shared)
-   and/or `internal/dialects/pg/pgsnapshot/snapshot.go` (PG envelope), plus the
-   conversion functions. Keep JSON tags consistent with existing style.
-5. **Example** — exercise the feature in `examples/basic/schema/schema.go`.
-6. **Golden** — regenerate:
+4. **Example** — exercise the feature in `examples/basic/schema/schema.go`.
+5. **Golden** — regenerate:
    ```bash
    task generate
    task snapshot
    ```
    Then copy the canonical SQL into `internal/dialects/pg/render/testdata/postgres.golden.sql`
    if `TestPostgresRender` should cover it (the test builds the schema
-   directly via `internal/ast`/`internal/dialects/pg/pgschema`, so update its input too).
-7. **FEATURES.md** — flip the relevant `[ ]` to `[x]` and add tests to the
+   directly via `internal/ast`/`internal/dialects/pg/pgschema`, so update its
+   input too).
+6. **FEATURES.md** — flip the relevant `[ ]` to `[x]` and add tests to the
    "Testing Requirements" section if applicable.
-8. **Verify** — run the full suite (section 7).
+7. **Verify** — run the full suite (section 7).
 
 ### Where validation goes (recap)
 
@@ -426,12 +431,13 @@ tracks are roughly:
 When direction is ambiguous, ask the user which track rather than guessing.
 A wrong track wastes more time than a quick clarifying question.
 
-### 9.3 Don't duplicate work across layers
+### 9.3 One model, one render pass
 
-A feature touches: model -> DSL -> render -> validate -> snapshot -> example
--> golden -> FEATURES.md. Skipping a layer creates silent drift (e.g. SQL
-renders but the snapshot is wrong, so future diffs miss it). Use the
-checklist in section 5 every time.
+A feature touches: model (with JSON tag) -> DSL -> render -> validate ->
+example -> golden -> FEATURES.md. The model is the single source of truth —
+the snapshot is just `json.Marshal` of the model with deterministic sorting,
+so there is no separate snapshot layer to keep in sync. Skipping the render
+step means the feature exists in the model/snapshot but never reaches SQL.
 
 ### 9.4 Regenerate, don't hand-edit golden files
 
@@ -513,8 +519,9 @@ verify — let it run.
   test, future introspection). See section 4.4.
 - **Forgetting to sort** a new collection makes output non-deterministic and
   breaks golden tests intermittently. See section 4.5.
-- **Adding a field to SQL but not the snapshot** makes the feature invisible
-  to future diffs. See section 4.6.
+- **Forgetting to add a JSON tag** when adding a model field means the
+  feature renders to SQL but is invisible to the snapshot (and therefore to
+  future diffs). The model is the single source of truth — see section 4.6.
 - **Editing golden files by hand** hides regressions. Regenerate. See 9.4.
 - **Coupling the render test to the example** made the test brittle; they're
   now decoupled. Keep them decoupled. See section 6.
@@ -559,10 +566,8 @@ When you change the state, update FEATURES.md first, then this section.
 | `pg/table.go`                           | `Table`, table elements, constraints, exclusion   |
 | `pg/schema.go`                          | namespaces, extensions, enums, sequences, types, domains |
 | `pg/defaults.go`                        | safe default helpers (string/int/bool/json/array/date) |
-| `internal/ast/schema.go`                | shared schema core structs                        |
-| `internal/dialects/pg/pgschema/schema.go` | PG schema envelope structs                      |
+| `internal/ast/schema.go`                | shared schema core structs (carry JSON tags)      |
+| `internal/dialects/pg/pgschema/schema.go` | PG schema envelope + snapshot JSON function     |
 | `internal/dialects/pg/render/postgres.go` | PG SQL rendering + all validation               |
-| `internal/snapshot/snapshot.go`         | shared snapshot JSON                              |
-| `internal/dialects/pg/pgsnapshot/snapshot.go` | PG snapshot envelope                        |
 | `examples/basic/`                       | end-to-end example + sqlc config                  |
 | `internal/dialects/pg/render/testdata/` | renderer golden files                             |

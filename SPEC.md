@@ -308,17 +308,12 @@ gosqlkit/
 
   internal/dialects/pg/            PostgreSQL internal machinery
     pgschema/
-      schema.go
-    pgsnapshot/
-      snapshot.go
+      schema.go                    PG schema envelope + snapshot JSON
     render/
       postgres.go
 
   internal/ast/
     schema.go
-
-  internal/snapshot/
-    snapshot.go
 ```
 
 Core flow:
@@ -344,9 +339,8 @@ CLI layering follows the same broad shape as `tyche`:
 - `kit` owns dialect-neutral provider registration, lookup, aliases, and capabilities.
 - Dialect packages such as `pg` own their schema DSL, registry, renderer selection, and snapshot dialect marker.
 - `internal/ast` owns the shared schema core: tables, columns, constraints, and indexes.
-- Dialect-specific schema envelopes, such as `internal/dialects/pg/pgschema`, own database-specific objects such as PostgreSQL namespaces, extensions, and enums.
-- Dialect-specific snapshots, such as `internal/dialects/pg/pgsnapshot`, wrap shared table snapshots with database-specific schema objects.
-- `pg`, `kit`, `internal/ast`, `internal/dialects`, `internal/snapshot` do not import CLI packages.
+- Dialect-specific schema envelopes, such as `internal/dialects/pg/pgschema`, own database-specific objects such as PostgreSQL namespaces, extensions, and enums. The model types carry JSON tags directly so the snapshot is the model serialised — no separate snapshot conversion layer.
+- `pg`, `kit`, `internal/ast`, `internal/dialects` do not import CLI packages.
 - New CLI commands should first become app-layer functions, then thin CLI adapters.
 
 ## Design principles

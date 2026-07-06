@@ -42,17 +42,17 @@
     {
       "name": "email",
       "baseType": "text",
-      "check": "value ~ '^[^@]+@[^@]+$'",
-      "notNull": true
+      "notNull": true,
+      "check": "value ~ '^[^@]+@[^@]+$'"
     }
   ],
   "sequences": [
     {
-      "startWith": 1000,
-      "cache": 1,
       "schema": "billing",
       "name": "order_number_seq",
-      "increment": 1
+      "increment": 1,
+      "startWith": 1000,
+      "cache": 1
     }
   ],
   "tables": [
@@ -240,10 +240,10 @@
       "columns": [
         {
           "identity": {
-            "cache": 20,
             "name": "events_id_seq",
             "type": "always",
-            "increment": 1
+            "increment": 1,
+            "cache": 20
           },
           "name": "id",
           "type": "integer",

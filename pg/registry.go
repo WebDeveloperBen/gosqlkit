@@ -5,7 +5,6 @@ import (
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
-	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgsnapshot"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/render"
 	"github.com/webdeveloperben/gosqlkit/kit"
 )
@@ -95,7 +94,7 @@ func SnapshotJSON() ([]byte, error) {
 		return nil, err
 	}
 
-	return pgsnapshot.JSON(schema)
+	return pgschema.JSON("postgresql", schema)
 }
 
 func MustRender() string {
