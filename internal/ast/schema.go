@@ -43,13 +43,13 @@ type Generated struct {
 }
 
 type Identity struct {
-	Name      string `json:"name,omitempty"`
-	Type      string `json:"type"`
-	Increment int64  `json:"increment,omitempty"`
 	MinValue  *int64 `json:"minValue,omitempty"`
 	MaxValue  *int64 `json:"maxValue,omitempty"`
 	StartWith *int64 `json:"startWith,omitempty"`
 	Cache     *int64 `json:"cache,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Type      string `json:"type"`
+	Increment int64  `json:"increment,omitempty"`
 	Cycle     bool   `json:"cycle,omitempty"`
 }
 

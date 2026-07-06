@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"text/template"
 )
 
 type GenerateOptions struct {
@@ -21,9 +22,10 @@ type GenerateOptions struct {
 }
 
 type GenerateResult struct {
-	Out     string `json:"out,omitempty"`
-	Package string `json:"package"`
-	Checked bool   `json:"checked"`
+	Out      string   `json:"out,omitempty"`
+	Package  string   `json:"package,omitempty"`
+	Packages []string `json:"packages,omitempty"`
+	Checked  bool     `json:"checked"`
 }
 
 type SnapshotOptions struct {
@@ -36,9 +38,10 @@ type SnapshotOptions struct {
 }
 
 type SnapshotResult struct {
-	Out     string `json:"out,omitempty"`
-	Package string `json:"package"`
-	Checked bool   `json:"checked"`
+	Out      string   `json:"out,omitempty"`
+	Package  string   `json:"package,omitempty"`
+	Packages []string `json:"packages,omitempty"`
+	Checked  bool     `json:"checked"`
 }
 
 func Generate(opts GenerateOptions) (*GenerateResult, error) {
@@ -62,7 +65,12 @@ func Generate(opts GenerateOptions) (*GenerateResult, error) {
 		return nil, err
 	}
 
-	sql, err := runPackageProgram(importPath, moduleDir, fmt.Sprintf(`sql, err := kit.RenderSQL(%q)
+	kitImportPath, err := resolveKitImportPath(root)
+	if err != nil {
+		return nil, err
+	}
+
+	sql, err := runPackageProgram([]string{importPath}, kitImportPath, moduleDir, fmt.Sprintf(`sql, err := kit.RenderSQL(%q)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -92,6 +100,63 @@ func Generate(opts GenerateOptions) (*GenerateResult, error) {
 	return &GenerateResult{Package: importPath}, nil
 }
 
+func GenerateWithConfig(config *Config, opts GenerateOptions) (*GenerateResult, error) {
+	if opts.Stdout == nil {
+		opts.Stdout = io.Discard
+	}
+
+	root, err := ResolveRoot(config.RootDir())
+	if err != nil {
+		return nil, err
+	}
+
+	importPaths, moduleDir, err := resolvePackages(root, config.SchemaPaths())
+	if err != nil {
+		return nil, err
+	}
+
+	kitImportPath, err := resolveKitImportPath(root)
+	if err != nil {
+		return nil, err
+	}
+
+	d := dialect(config.Dialect)
+	sql, err := runPackageProgram(importPaths, kitImportPath, moduleDir, fmt.Sprintf(`sql, err := kit.RenderSQL(%q)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Print(sql)`, d))
+	if err != nil {
+		return nil, err
+	}
+
+	out := config.SQLPath()
+	if opts.Out != "" {
+		out = config.ResolvePath(opts.Out)
+	}
+	if opts.Check {
+		if out == "" {
+			return nil, errors.New("generate --check requires --out or config out.sql")
+		}
+		if err := checkOutput(out, sql); err != nil {
+			return nil, err
+		}
+		return &GenerateResult{Checked: true, Out: out, Packages: importPaths}, nil
+	}
+	if out != "" {
+		if err := writeOutput(out, sql); err != nil {
+			return nil, err
+		}
+		return &GenerateResult{Out: out, Packages: importPaths}, nil
+	}
+
+	if _, err := io.WriteString(opts.Stdout, sql); err != nil {
+		return nil, err
+	}
+	return &GenerateResult{Packages: importPaths}, nil
+}
+
 func Snapshot(opts SnapshotOptions) (*SnapshotResult, error) {
 	if opts.Package == "" {
 		return nil, errors.New("schema package is required")
@@ -113,7 +178,12 @@ func Snapshot(opts SnapshotOptions) (*SnapshotResult, error) {
 		return nil, err
 	}
 
-	json, err := runPackageProgram(importPath, moduleDir, fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
+	kitImportPath, err := resolveKitImportPath(root)
+	if err != nil {
+		return nil, err
+	}
+
+	json, err := runPackageProgram([]string{importPath}, kitImportPath, moduleDir, fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -146,6 +216,66 @@ func Snapshot(opts SnapshotOptions) (*SnapshotResult, error) {
 	return &SnapshotResult{Package: importPath}, nil
 }
 
+func SnapshotWithConfig(config *Config, opts SnapshotOptions) (*SnapshotResult, error) {
+	if opts.Stdout == nil {
+		opts.Stdout = io.Discard
+	}
+
+	root, err := ResolveRoot(config.RootDir())
+	if err != nil {
+		return nil, err
+	}
+
+	importPaths, moduleDir, err := resolvePackages(root, config.SchemaPaths())
+	if err != nil {
+		return nil, err
+	}
+
+	kitImportPath, err := resolveKitImportPath(root)
+	if err != nil {
+		return nil, err
+	}
+
+	d := dialect(config.Dialect)
+	json, err := runPackageProgram(importPaths, kitImportPath, moduleDir, fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if _, err := os.Stdout.Write(data); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}`, d))
+	if err != nil {
+		return nil, err
+	}
+
+	out := config.SnapshotPath()
+	if opts.Out != "" {
+		out = config.ResolvePath(opts.Out)
+	}
+	if opts.Check {
+		if out == "" {
+			return nil, errors.New("snapshot --check requires --out or config out.snapshot")
+		}
+		if err := checkOutput(out, json); err != nil {
+			return nil, err
+		}
+		return &SnapshotResult{Checked: true, Out: out, Packages: importPaths}, nil
+	}
+	if out != "" {
+		if err := writeOutput(out, json); err != nil {
+			return nil, err
+		}
+		return &SnapshotResult{Out: out, Packages: importPaths}, nil
+	}
+
+	if _, err := io.WriteString(opts.Stdout, json); err != nil {
+		return nil, err
+	}
+	return &SnapshotResult{Packages: importPaths}, nil
+}
+
 func ResolveRoot(root string) (string, error) {
 	if root != "" {
 		return root, nil
@@ -169,18 +299,76 @@ func resolvePackage(root, pkg string) (importPath string, moduleDir string, err 
 		return "", "", commandError("go list package", err)
 	}
 
-	moduleCmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
-	moduleCmd.Dir = root
-	moduleOutput, err := moduleCmd.Output()
+	moduleDir, err = resolveModuleDir(root)
+	if err != nil {
+		return "", "", err
+	}
+
+	return strings.TrimSpace(string(importOutput)), moduleDir, nil
+}
+
+func resolvePackages(root string, paths []string) (importPaths []string, moduleDir string, err error) {
+	moduleDir, err = resolveModuleDir(root)
+	if err != nil {
+		return nil, "", err
+	}
+
+	seen := map[string]struct{}{}
+	for _, path := range paths {
+		// #nosec G204 -- path is a user-supplied Go package path from the config file.
+		listCmd := exec.Command("go", "list", "-f", "{{.ImportPath}}", path)
+		listCmd.Dir = root
+		output, err := listCmd.Output()
+		if err != nil {
+			return nil, "", commandError(fmt.Sprintf("go list package %q", path), err)
+		}
+		importPath := strings.TrimSpace(string(output))
+		if _, ok := seen[importPath]; ok {
+			continue
+		}
+		seen[importPath] = struct{}{}
+		importPaths = append(importPaths, importPath)
+	}
+
+	return importPaths, moduleDir, nil
+}
+
+func resolveModule(root string) (modulePath string, moduleDir string, err error) {
+	// #nosec G204 -- go list is a fixed command, not user input.
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Path}}\n{{.Dir}}")
+	cmd.Dir = root
+	output, err := cmd.Output()
 	if err != nil {
 		return "", "", commandError("go list module", err)
 	}
-
-	return strings.TrimSpace(string(importOutput)), strings.TrimSpace(string(moduleOutput)), nil
+	lines := strings.SplitN(strings.TrimSpace(string(output)), "\n", 2)
+	if len(lines) < 2 {
+		return "", "", fmt.Errorf("unexpected go list -m output: %q", string(output))
+	}
+	return lines[0], lines[1], nil
 }
 
-func runPackageProgram(importPath, moduleDir, body string) (string, error) {
-	tempDir, err := os.MkdirTemp(moduleDir, "gosqlkit-generate-*")
+func resolveModuleDir(root string) (string, error) {
+	// #nosec G204 -- go list is a fixed command, not user input.
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
+	cmd.Dir = root
+	output, err := cmd.Output()
+	if err != nil {
+		return "", commandError("go list module", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func resolveKitImportPath(root string) (string, error) {
+	modulePath, _, err := resolveModule(root)
+	if err != nil {
+		return "", err
+	}
+	return modulePath + "/kit", nil
+}
+
+func runPackageProgram(importPaths []string, kitImportPath, moduleDir, body string) (string, error) {
+	tempDir, err := os.MkdirTemp("", "gosqlkit-generate-*")
 	if err != nil {
 		return "", err
 	}
@@ -188,32 +376,17 @@ func runPackageProgram(importPath, moduleDir, body string) (string, error) {
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	source := fmt.Sprintf(`package main
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/webdeveloperben/gosqlkit/kit"
-	_ "%s"
-)
-
-func main() {
-%s
-}
-`, importPath, indent(body, "\t"))
+	source, err := renderGeneratorProgram(importPaths, kitImportPath, body)
+	if err != nil {
+		return "", err
+	}
 
 	if err := os.WriteFile(filepath.Join(tempDir, "main.go"), []byte(source), 0o600); err != nil {
 		return "", err
 	}
 
-	rel, err := filepath.Rel(moduleDir, tempDir)
-	if err != nil {
-		return "", err
-	}
-
-	// #nosec G204 -- rel points at the generated temporary program under moduleDir.
-	cmd := exec.Command("go", "run", "./"+filepath.ToSlash(rel))
+	// #nosec G204 -- tempDir points at the generated temporary program in the OS temp dir.
+	cmd := exec.Command("go", "run", filepath.Join(tempDir, "main.go"))
 	cmd.Dir = moduleDir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -223,6 +396,28 @@ func main() {
 	}
 
 	return stdout.String(), nil
+}
+
+func renderGeneratorProgram(importPaths []string, kitImportPath, body string) (string, error) {
+	tmpl, err := template.New("generator").Parse(generatorTemplate)
+	if err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	if err := tmpl.Execute(&b, struct {
+		KitImportPath string
+		Body          string
+		ImportPaths   []string
+	}{
+		KitImportPath: kitImportPath,
+		ImportPaths:   importPaths,
+		Body:          indent(body, "\t"),
+	}); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
 }
 
 func dialect(value string) string {
@@ -269,3 +464,20 @@ func checkOutput(path, content string) error {
 	}
 	return nil
 }
+
+const generatorTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+
+	"{{.KitImportPath}}"
+{{- range .ImportPaths}}
+	_ {{printf "%q" .}}
+{{- end}}
+)
+
+func main() {
+{{.Body}}
+}
+`

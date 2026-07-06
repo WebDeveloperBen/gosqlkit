@@ -45,18 +45,38 @@ var Users = pg.Table("users",
 )
 ```
 
-Generate SQL and snapshots:
+Configure `gosqlkit.yaml` in your project:
+
+```yaml
+version: "1"
+dialect: postgresql
+schema: "schema"
+out:
+  sql: "db/schema.generated.sql"
+  snapshot: "db/schema.snapshot.json"
+```
+
+Generate SQL and snapshots (reads `gosqlkit.yaml` — no args needed):
 
 ```bash
-go run ./cmd/gosqlkit generate --out db/schema.generated.sql ./schema
-go run ./cmd/gosqlkit snapshot --out db/schema.snapshot.json ./schema
+gosqlkit generate
+gosqlkit snapshot
 ```
 
 Check committed output is current (CI gate):
 
 ```bash
-go run ./cmd/gosqlkit generate --out db/schema.generated.sql --check ./schema
-go run ./cmd/gosqlkit snapshot --out db/schema.snapshot.json --check ./schema
+gosqlkit generate --check
+gosqlkit snapshot --check
+```
+
+Schema can be a single path or a list of paths:
+
+```yaml
+schema:
+  - "schema/users"
+  - "schema/billing"
+  - "schema/events"
 ```
 
 Then feed the generated SQL to `sqlc`:
@@ -105,20 +125,17 @@ as an integration with `pg-schema-diff`.
 ```text
 pg/                              public PostgreSQL DSL (user import path)
 kit/                             dialect-neutral provider registry
-internal/ast/                    shared schema core (dialect-neutral)
-internal/snapshot/               shared snapshot JSON format
+internal/ast/                    shared schema core (carries JSON tags = snapshot)
 internal/dialects/pg/            PostgreSQL internal machinery:
-  pgschema/                      PG schema envelope (namespaces, enums, etc.)
-  pgsnapshot/                    PG snapshot envelope
+  pgschema/                      PG schema envelope + snapshot JSON function
   render/                        PG SQL renderer + validation
 internal/cli/                    Kong CLI commands
-internal/app/                    use cases (plain Go, no CLI dep)
+internal/app/                    use cases + config file parsing
 cmd/gosqlkit/                    process entrypoint
 ```
 
-Adding a new dialect = add `internal/dialects/<name>/` with `schema/`,
-`snapshot/`, and `render/` sub-packages, plus a top-level `<name>/` package
-for the public DSL.
+Adding a new dialect = add `internal/dialects/<name>/` with `schema/` and
+`render/` sub-packages, plus a top-level `<name>/` package for the public DSL.
 
 ## Testing
 

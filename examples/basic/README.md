@@ -1,13 +1,15 @@
 # gosqlkit basic example
 
-This example shows the phase 1 workflow:
+This example shows the schema-layer workflow:
 
 ```bash
-go run ../../cmd/gosqlkit generate --out db/schema.generated.sql ./schema
-go run ../../cmd/gosqlkit generate --out db/schema.generated.sql --check ./schema
-go run ../../cmd/gosqlkit snapshot --out db/schema.snapshot.json ./schema
-go run ../../cmd/gosqlkit snapshot --out db/schema.snapshot.json --check ./schema
+cd examples/basic
+go run ../../cmd/gosqlkit generate
+go run ../../cmd/gosqlkit generate --check
+go run ../../cmd/gosqlkit snapshot
+go run ../../cmd/gosqlkit snapshot --check
 sqlc generate
 ```
 
-The schema is declared in Go, rendered to reviewable PostgreSQL SQL, and then used as the schema input for `sqlc`.
+The schema is declared in Go, configured via `gosqlkit.yaml`, rendered to
+reviewable PostgreSQL SQL, and then used as the schema input for `sqlc`.

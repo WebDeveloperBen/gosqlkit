@@ -62,20 +62,20 @@ type Domain struct {
 	Name     string `json:"name"`
 	BaseType string `json:"baseType"`
 	Default  string `json:"default,omitempty"`
-	NotNull  bool   `json:"notNull,omitempty"`
 	Check    string `json:"check,omitempty"`
+	NotNull  bool   `json:"notNull,omitempty"`
 }
 
 type Sequence struct {
-	Schema    string `json:"schema,omitempty"`
-	Name      string `json:"name"`
-	Increment int64  `json:"increment,omitempty"`
 	MinValue  *int64 `json:"minValue,omitempty"`
 	MaxValue  *int64 `json:"maxValue,omitempty"`
 	StartWith *int64 `json:"startWith,omitempty"`
 	Cache     *int64 `json:"cache,omitempty"`
-	Cycle     bool   `json:"cycle,omitempty"`
+	Schema    string `json:"schema,omitempty"`
+	Name      string `json:"name"`
 	OwnedBy   string `json:"ownedBy,omitempty"`
+	Increment int64  `json:"increment,omitempty"`
+	Cycle     bool   `json:"cycle,omitempty"`
 }
 
 func JSON(dialect string, schema Schema) ([]byte, error) {

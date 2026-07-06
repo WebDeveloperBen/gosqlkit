@@ -33,22 +33,26 @@ tasks:
   generate:
     desc: Regenerate the checked-in example schema SQL
     cmds:
-      - go run ./cmd/gosqlkit generate --out "{{.EXAMPLE_SQL}}" ./{{.EXAMPLE_SCHEMA}}
+      - cmd: "cd examples/basic && go run ../../cmd/gosqlkit generate"
+        ignore_error: false
 
   generate:check:
     desc: Check the checked-in example schema SQL is current
     cmds:
-      - go run ./cmd/gosqlkit generate --out "{{.EXAMPLE_SQL}}" --check ./{{.EXAMPLE_SCHEMA}}
+      - cmd: "cd examples/basic && go run ../../cmd/gosqlkit generate --check"
+        ignore_error: false
 
   snapshot:
     desc: Regenerate the checked-in example schema snapshot JSON
     cmds:
-      - go run ./cmd/gosqlkit snapshot --out "{{.EXAMPLE_SNAPSHOT}}" ./{{.EXAMPLE_SCHEMA}}
+      - cmd: "cd examples/basic && go run ../../cmd/gosqlkit snapshot"
+        ignore_error: false
 
   snapshot:check:
     desc: Check the checked-in example schema snapshot JSON is current
     cmds:
-      - go run ./cmd/gosqlkit snapshot --out "{{.EXAMPLE_SNAPSHOT}}" --check ./{{.EXAMPLE_SCHEMA}}
+      - cmd: "cd examples/basic && go run ../../cmd/gosqlkit snapshot --check"
+        ignore_error: false
 
   sqlc:check:
     desc: Validate the example schema and queries with sqlc in a temp directory
@@ -154,10 +158,10 @@ tasks:
     cmds:
       - "{{.BIN}} --help"
       - "{{.BIN}} version"
+      - "cd examples/basic && {{.BIN}} generate --check"
+      - "cd examples/basic && {{.BIN}} snapshot --check"
       - "{{.BIN}} generate ./{{.EXAMPLE_SCHEMA}} > /dev/null"
       - "{{.BIN}} generate --out {{.EXAMPLE_SQL}} --check ./{{.EXAMPLE_SCHEMA}}"
-      - "{{.BIN}} snapshot ./{{.EXAMPLE_SCHEMA}} > /dev/null"
-      - "{{.BIN}} snapshot --out {{.EXAMPLE_SNAPSHOT}} --check ./{{.EXAMPLE_SCHEMA}}"
 
   verify:lint:
     desc: Run lint checks

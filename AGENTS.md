@@ -249,11 +249,23 @@ The snapshot is what future migration diffing will consume.
 ### 4.7 SQL generation runs a generated Go program, not reflection
 
 `internal/app/generate.go` doesn't load the user's schema package via
-reflection. It writes a tiny `package main` into a temp dir under the module
-root, blank-imports the user's schema package (which triggers `pg` registry
-side-effects via `var` declarations), calls `kit.RenderSQL`/`kit.SnapshotJSON`,
-and `go run`s it. This is why schema declarations are package-level `var`s
-and why the registry uses `init()` + `sync.Mutex`.
+reflection. It writes a tiny `package main` into the OS temp dir, blank-imports
+the user's schema package(s) (which triggers `pg` registry side-effects via
+`var` declarations), calls `kit.RenderSQL`/`kit.SnapshotJSON`, and `go run`s
+it with `cmd.Dir` set to the module root so imports resolve. The user's
+project directory is not touched. This is why schema declarations are
+package-level `var`s and why the registry uses `init()` + `sync.Mutex`.
+
+The generated program's import path for `kit` is discovered dynamically via
+`go list -m` (not hardcoded), so the repo can be renamed or forked without
+breaking generation.
+
+The schema source paths come from `gosqlkit.yaml` (the config file). The CLI
+discovers the config by searching the current directory and parents, reads
+the schema paths from it, resolves them to Go import paths via `go list`, and
+generates a program that blank-imports all of them. Multiple schema paths are
+supported — the generated program imports all packages, flattening their
+declarations into one registry.
 
 Don't try to replace this with `plugin` or reflection — the `go run` approach
 is deliberate, cross-platform, and keeps the user's build tags intact.
@@ -346,9 +358,9 @@ renderer. Don't re-couple them.
 task                  # = task verify (the full local gate)
 task test             # go test ./...
 task build            # build the CLI into bin/
-task generate         # regenerate example SQL
+task generate         # regenerate example SQL (reads gosqlkit.yaml)
 task generate:check   # fail if committed SQL is stale (CI gate)
-task snapshot         # regenerate example snapshot JSON
+task snapshot         # regenerate example snapshot JSON (reads gosqlkit.yaml)
 task snapshot:check   # fail if committed snapshot is stale (CI gate)
 task fmt              # gofumpt -w .
 task fmt:check        # fail if files need formatting
@@ -560,6 +572,7 @@ When you change the state, update FEATURES.md first, then this section.
 | `internal/cli/root.go`                  | Kong CLI struct, `Run`, exit mapping              |
 | `internal/cli/{generate,snapshot,version}.go` | command structs calling `internal/app`     |
 | `internal/app/generate.go`              | `Generate`/`Snapshot` use cases, `go run` harness |
+| `internal/app/config.go`               | `gosqlkit.yaml` config parsing and discovery     |
 | `kit/registry.go`                       | dialect-neutral provider registry                 |
 | `pg/registry.go`                        | PG provider + in-memory schema registry           |
 | `pg/column.go`                          | column constructors + column builder methods      |

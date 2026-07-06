@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/alecthomas/kong"
+	"github.com/webdeveloperben/gosqlkit/internal/app"
 )
 
 type CLI struct {
@@ -131,4 +133,19 @@ func runHelp() (int, error) {
 	}
 	_, _ = parser.Parse([]string{"--help"})
 	return 0, nil
+}
+
+func discoverConfigPath(root string) (string, error) {
+	dir := root
+	for {
+		candidate := filepath.Join(dir, app.ConfigName)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no %s found in %s or any parent directory", app.ConfigName, root)
+		}
+		dir = parent
+	}
 }
