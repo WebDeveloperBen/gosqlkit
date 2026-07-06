@@ -1,49 +1,121 @@
 # golangci-lint v2 configuration.
 #
-# `default: standard` enables errcheck, govet, ineffassign, staticcheck, and
-# unused — the set the project is kept clean against. Generated code and the
-# servergen code emitters are excluded from style/perf linters: the emitters
-# build Go source by string concatenation, which trips "inefficient string
-# concatenation"-style checks, but the cost is irrelevant for code that runs
-# once at build time and the concatenated form is far more readable.
+# Formatting is intentionally owned by Taskfile.yml:
+#   task fmt
+#   task fmt:check
+#
+# Rewrite/refactor tools are intentionally kept out of normal lint:
+#   task modernize
+#   task fix:fieldalignment
+#
+# This config is for correctness, security, docs, and low-noise hygiene.
 version: "2"
 
 run:
   timeout: 5m
+  tests: true
+  modules-download-mode: readonly
 
 linters:
+  # `standard` includes the usual baseline: errcheck, govet, ineffassign,
+  # staticcheck, and unused.
   default: standard
 
   enable:
     # Error handling / correctness.
+    - durationcheck
+    - errchkjson
     - errorlint
+    - makezero
     - nilerr
     - nilnil
     - nilnesserr
+    - nosprintfhostport
+    - unconvert
+    - wastedassign
 
     # Resource leaks.
     - bodyclose
-    - sqlclosecheck
     - rowserrcheck
+    - sqlclosecheck
+
+    # Security / suspicious input.
+    - bidichk
+    - gosec
+
+    # Documentation / comments.
+    - dupword
+    - godoclint
+    - godot
 
     # Low-noise hygiene.
+    - asciicheck
     - copyloopvar
+    - gocheckcompilerdirectives
+    - gocritic
     - misspell
     - nolintlint
+    - perfsprint
+    - predeclared
 
-    # Security. Expect a few suppressions, but worth it.
-    - gosec
+  settings:
+    godoclint:
+      # `basic` covers package-doc shape, single package doc, exported symbol
+      # doc comments starting with the symbol name, and deprecation formatting.
+      default: basic
+      enable:
+        - max-len
+      options:
+        max-len:
+          length: 100
+
+    godot:
+      scope: declarations
+      period: true
+      capital: false
+      exclude:
+        - "(?i)^todo:"
+        - "(?i)^fixme:"
+        - "(?i)^note:"
+
+    gocritic:
+      # Keep gocritic useful but avoid high-churn style/opinionated checks.
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeExprCopy
+        - rangeValCopy
+
+    nolintlint:
+      require-specific: true
+      require-explanation: true
+      allow-unused: false
+
+    predeclared:
+      ignore:
+        - new
 
   exclusions:
     generated: lax
+    warn-unused: true
 
     paths:
       - servergen/testdata
       - '.*_gen\.go$'
 
     rules:
-      - path: servergen/(generator|generator_emit|generator_analysis)\.go
+      # These files intentionally build generated Go source via readable string
+      # composition. Perf/style suggestions here tend to make the emitter harder
+      # to maintain without improving runtime behaviour.
+      - path: 'servergen/(generator|generator_emit|generator_analysis)\.go'
         linters:
-          - perfsprint
           - gocritic
           - gosec
+          - perfsprint
+
+issues:
+  # Show the full set of issues instead of truncating once a linter gets noisy.
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,6 +1,7 @@
 package render
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -636,7 +637,7 @@ func parseQualifiedIdentifier(kind, value string) ([]string, error) {
 
 func validateExtensionName(value string) error {
 	if value == "" {
-		return fmt.Errorf("extension identifier must not be empty")
+		return errors.New("extension identifier must not be empty")
 	}
 	for _, r := range value {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
