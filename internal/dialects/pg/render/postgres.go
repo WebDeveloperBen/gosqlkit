@@ -31,7 +31,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, role := range roles {
 		renderRole(&b, role)
-		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -44,7 +44,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		b.WriteString("CREATE SCHEMA ")
 		b.WriteString(namespace.Name)
 		b.WriteString(";\n")
-		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -55,7 +55,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, extension := range extensions {
 		renderExtension(&b, extension)
-		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -66,7 +66,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, enum := range enums {
 		renderEnum(&b, enum)
-		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -79,7 +79,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderCompositeType(&b, compositeType); err != nil {
 			return "", err
 		}
-		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -92,7 +92,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderDomain(&b, domain); err != nil {
 			return "", err
 		}
-		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -103,7 +103,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, sequence := range sequences {
 		renderSequence(&b, sequence)
-		if i < len(sequences)-1 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(sequences)-1 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -115,16 +115,17 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, function := range functions {
 		renderFunction(&b, function)
 		renderFunctionComment(&b, function)
-		if i < len(functions)-1 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+		if i < len(functions)-1 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
 
+	hasPostTableObjects := len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0
 	for i, table := range tables {
 		if err := renderTable(&b, table); err != nil {
 			return "", err
 		}
-		if i < len(tables)-1 || len(table.Indexes) > 0 || hasComments(table) {
+		if i < len(tables)-1 || len(table.Indexes) > 0 || hasComments(table) || hasRLS(table) || (i == len(tables)-1 && hasPostTableObjects) {
 			b.WriteString("\n")
 		}
 
@@ -136,7 +137,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 			if err := renderIndex(&b, renderTableName(table), index); err != nil {
 				return "", err
 			}
-			if j < len(indexes)-1 || i < len(tables)-1 || hasComments(table) {
+			if j < len(indexes)-1 || i < len(tables)-1 || hasComments(table) || hasRLS(table) || (i == len(tables)-1 && hasPostTableObjects) {
 				b.WriteString("\n")
 			}
 		}
@@ -144,14 +145,30 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderComments(&b, table); err != nil {
 			return "", err
 		}
-		if hasComments(table) && i < len(tables)-1 {
+		if hasComments(table) && (i < len(tables)-1 || hasRLS(table) || (i == len(tables)-1 && hasPostTableObjects)) {
+			b.WriteString("\n")
+		}
+
+		renderTableRLS(&b, table)
+		if hasRLS(table) && (i < len(tables)-1 || (i == len(tables)-1 && hasPostTableObjects)) {
 			b.WriteString("\n")
 		}
 	}
 
-	hasViews := len(schema.Views) > 0 || len(schema.MaterializedViews) > 0
-	lastTableHasOutput := len(tables) > 0 && (hasComments(tables[len(tables)-1]) || len(tables[len(tables)-1].Indexes) > 0)
-	if hasViews && lastTableHasOutput {
+	policies := append([]pgschema.Policy(nil), schema.Policies...)
+	sort.SliceStable(policies, func(i, j int) bool {
+		return policyKey(policies[i]) < policyKey(policies[j])
+	})
+	for i, policy := range policies {
+		renderPolicy(&b, policy)
+		if i < len(policies)-1 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	hasViews := len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0
+	lastTableHasOutput := len(tables) > 0 && (hasComments(tables[len(tables)-1]) || len(tables[len(tables)-1].Indexes) > 0 || hasRLS(tables[len(tables)-1]))
+	if len(policies) == 0 && hasViews && lastTableHasOutput {
 		b.WriteString("\n")
 	}
 
@@ -162,7 +179,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, view := range views {
 		renderView(&b, view)
 		renderViewComment(&b, view)
-		if i < len(views)-1 || len(schema.MaterializedViews) > 0 {
+		if i < len(views)-1 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -174,7 +191,18 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, mv := range materializedViews {
 		renderMaterializedView(&b, mv)
 		renderMaterializedViewComment(&b, mv)
-		if i < len(materializedViews)-1 {
+		if i < len(materializedViews)-1 || len(schema.Triggers) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	triggers := append([]pgschema.Trigger(nil), schema.Triggers...)
+	sort.SliceStable(triggers, func(i, j int) bool {
+		return triggerKey(triggers[i]) < triggerKey(triggers[j])
+	})
+	for i, trigger := range triggers {
+		renderTrigger(&b, trigger)
+		if i < len(triggers)-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -632,6 +660,20 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 	}
 
+	triggerNames := map[string]struct{}{}
+	for _, trigger := range schema.Triggers {
+		if err := validateTrigger(trigger, triggerNames, tableNames, tableColumns, viewNames); err != nil {
+			return err
+		}
+	}
+
+	policyNames := map[string]struct{}{}
+	for _, policy := range schema.Policies {
+		if err := validatePolicy(policy, policyNames, tableNames); err != nil {
+			return err
+		}
+	}
+
 	return validateReferences(schema.Tables, tableColumns)
 }
 
@@ -809,6 +851,104 @@ func renderFunctionComment(b *strings.Builder, function pgschema.Function) {
 	if function.Comment != "" {
 		fmt.Fprintf(b, "COMMENT ON FUNCTION %s(%s) IS %s;\n", renderQualifiedName(function.Schema, function.Name), renderFunctionIdentityArguments(function), quoteLiteral(function.Comment))
 	}
+}
+
+func renderTrigger(b *strings.Builder, trigger pgschema.Trigger) {
+	b.WriteString("CREATE ")
+	if trigger.Constraint {
+		b.WriteString("CONSTRAINT ")
+	}
+	b.WriteString("TRIGGER ")
+	b.WriteString(trigger.Name)
+	b.WriteString("\n")
+	b.WriteString(strings.ToUpper(trigger.Timing))
+	b.WriteString(" ")
+	b.WriteString(renderTriggerEvents(trigger))
+	b.WriteString(" ON ")
+	b.WriteString(renderReferencedTable(trigger.Target))
+	if trigger.ReferencedTable != "" {
+		b.WriteString("\nFROM ")
+		b.WriteString(renderReferencedTable(trigger.ReferencedTable))
+	}
+	if trigger.Deferrable {
+		b.WriteString(renderDeferrable(true, trigger.Initially))
+	}
+	level := trigger.Level
+	if level == "" {
+		if trigger.Constraint || strings.EqualFold(trigger.Timing, "INSTEAD OF") {
+			level = "ROW"
+		} else {
+			level = "STATEMENT"
+		}
+	}
+	b.WriteString("\nFOR EACH ")
+	b.WriteString(strings.ToUpper(level))
+	if trigger.When != "" {
+		b.WriteString("\nWHEN (")
+		b.WriteString(trigger.When)
+		b.WriteString(")")
+	}
+	b.WriteString("\nEXECUTE FUNCTION ")
+	b.WriteString(renderReferencedTable(trigger.Function))
+	b.WriteString("(")
+	args := make([]string, 0, len(trigger.Arguments))
+	for _, arg := range trigger.Arguments {
+		args = append(args, quoteLiteral(arg))
+	}
+	b.WriteString(strings.Join(args, ", "))
+	b.WriteString(");\n")
+}
+
+func renderTriggerEvents(trigger pgschema.Trigger) string {
+	events := normalisedTriggerEvents(trigger.Events)
+	parts := make([]string, 0, len(events))
+	for _, event := range events {
+		if event == "UPDATE" && len(trigger.Columns) > 0 {
+			parts = append(parts, "UPDATE OF "+strings.Join(trigger.Columns, ", "))
+			continue
+		}
+		parts = append(parts, event)
+	}
+	return strings.Join(parts, " OR ")
+}
+
+func renderTableRLS(b *strings.Builder, table ast.Table) {
+	if table.RowLevelSecurity {
+		fmt.Fprintf(b, "ALTER TABLE %s ENABLE ROW LEVEL SECURITY;\n", renderTableName(table))
+	}
+	if table.ForceRLS {
+		fmt.Fprintf(b, "ALTER TABLE %s FORCE ROW LEVEL SECURITY;\n", renderTableName(table))
+	}
+}
+
+func renderPolicy(b *strings.Builder, policy pgschema.Policy) {
+	b.WriteString("CREATE POLICY ")
+	b.WriteString(policy.Name)
+	b.WriteString(" ON ")
+	b.WriteString(renderReferencedTable(policy.Table))
+	if policy.Mode != "" {
+		b.WriteString("\nAS ")
+		b.WriteString(strings.ToUpper(policy.Mode))
+	}
+	if policy.Command != "" {
+		b.WriteString("\nFOR ")
+		b.WriteString(strings.ToUpper(policy.Command))
+	}
+	if len(policy.Roles) > 0 {
+		b.WriteString("\nTO ")
+		b.WriteString(strings.Join(sortedStrings(policy.Roles), ", "))
+	}
+	if policy.Using != "" {
+		b.WriteString("\nUSING (")
+		b.WriteString(policy.Using)
+		b.WriteString(")")
+	}
+	if policy.WithCheck != "" {
+		b.WriteString("\nWITH CHECK (")
+		b.WriteString(policy.WithCheck)
+		b.WriteString(")")
+	}
+	b.WriteString(";\n")
 }
 
 func renderView(b *strings.Builder, view pgschema.View) {
@@ -1374,6 +1514,10 @@ func hasComments(table ast.Table) bool {
 	return false
 }
 
+func hasRLS(table ast.Table) bool {
+	return table.RowLevelSecurity || table.ForceRLS
+}
+
 func renderComments(b *strings.Builder, table ast.Table) error {
 	if table.Comment != "" {
 		fmt.Fprintf(b, "COMMENT ON TABLE %s IS %s;\n", renderTableName(table), quoteLiteral(table.Comment))
@@ -1629,6 +1773,256 @@ func validateFunctionArguments(function pgschema.Function) error {
 	return nil
 }
 
+func validateTrigger(trigger pgschema.Trigger, names map[string]struct{}, tableNames map[string]struct{}, tableColumns map[string]map[string]struct{}, viewNames map[string]struct{}) error {
+	if err := validateIdentifier("trigger", trigger.Name); err != nil {
+		return err
+	}
+	targetKey, targetKind, err := validateTriggerTarget(trigger.Target, tableNames, viewNames)
+	if err != nil {
+		return fmt.Errorf("trigger %q: %w", trigger.Name, err)
+	}
+	key := targetKey + "." + trigger.Name
+	if _, ok := names[key]; ok {
+		return fmt.Errorf("duplicate trigger %q on %q", trigger.Name, renderReferencedTable(trigger.Target))
+	}
+	names[key] = struct{}{}
+	if _, err := parseQualifiedIdentifier("trigger function", trigger.Function); err != nil {
+		return fmt.Errorf("trigger %q: %w", trigger.Name, err)
+	}
+	if err := validateTriggerTiming(trigger); err != nil {
+		return err
+	}
+	events, err := validateTriggerEvents(trigger)
+	if err != nil {
+		return err
+	}
+	level := strings.ToUpper(trigger.Level)
+	switch level {
+	case "", "ROW", "STATEMENT":
+	default:
+		return fmt.Errorf("trigger %q level must be ROW or STATEMENT, got %q", trigger.Name, trigger.Level)
+	}
+	if trigger.When != "" && strings.TrimSpace(trigger.When) != trigger.When {
+		return fmt.Errorf("trigger %q WHEN expression must not have leading or trailing whitespace", trigger.Name)
+	}
+	if len(trigger.Columns) > 0 {
+		if len(events) != 1 || events[0] != "UPDATE" {
+			return fmt.Errorf("trigger %q UPDATE OF columns require exactly one UPDATE event", trigger.Name)
+		}
+		columns, ok := tableColumns[targetKey]
+		if !ok {
+			return fmt.Errorf("trigger %q UPDATE OF columns can only be validated for table targets", trigger.Name)
+		}
+		seenColumns := map[string]struct{}{}
+		for _, column := range trigger.Columns {
+			if err := validateIdentifier("trigger update column", column); err != nil {
+				return fmt.Errorf("trigger %q: %w", trigger.Name, err)
+			}
+			if _, ok := seenColumns[column]; ok {
+				return fmt.Errorf("trigger %q has duplicate update column %q", trigger.Name, column)
+			}
+			seenColumns[column] = struct{}{}
+			if _, ok := columns[column]; !ok {
+				return fmt.Errorf("trigger %q references unknown update column %q on %q", trigger.Name, column, renderReferencedTable(trigger.Target))
+			}
+		}
+	}
+	if strings.EqualFold(trigger.Timing, "INSTEAD OF") {
+		if targetKind != "view" {
+			return fmt.Errorf("trigger %q INSTEAD OF timing requires a view target", trigger.Name)
+		}
+		if level != "" && level != "ROW" {
+			return fmt.Errorf("trigger %q INSTEAD OF triggers must be FOR EACH ROW", trigger.Name)
+		}
+	}
+	if containsString(events, "TRUNCATE") && level == "ROW" {
+		return fmt.Errorf("trigger %q TRUNCATE triggers must be FOR EACH STATEMENT", trigger.Name)
+	}
+	if err := validateConstraintTrigger(trigger, events, level, targetKind, tableNames); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateTriggerTarget(target string, tableNames map[string]struct{}, viewNames map[string]struct{}) (string, string, error) {
+	key, err := referenceKey("", target)
+	if err != nil {
+		return "", "", err
+	}
+	if _, ok := tableNames[key]; ok {
+		return key, "table", nil
+	}
+	if _, ok := viewNames[key]; ok {
+		return key, "view", nil
+	}
+	return "", "", fmt.Errorf("references unknown trigger target %q", renderReferencedTable(target))
+}
+
+func validateTriggerTiming(trigger pgschema.Trigger) error {
+	switch strings.ToUpper(trigger.Timing) {
+	case "BEFORE", "AFTER", "INSTEAD OF":
+		return nil
+	case "":
+		return fmt.Errorf("trigger %q must have a timing", trigger.Name)
+	default:
+		return fmt.Errorf("trigger %q timing must be BEFORE, AFTER, or INSTEAD OF, got %q", trigger.Name, trigger.Timing)
+	}
+}
+
+func validateTriggerEvents(trigger pgschema.Trigger) ([]string, error) {
+	events := normalisedTriggerEvents(trigger.Events)
+	if len(events) == 0 {
+		return nil, fmt.Errorf("trigger %q must have at least one event", trigger.Name)
+	}
+	seen := map[string]struct{}{}
+	for _, event := range events {
+		switch event {
+		case "INSERT", "UPDATE", "DELETE", "TRUNCATE":
+		default:
+			return nil, fmt.Errorf("trigger %q event must be INSERT, UPDATE, DELETE, or TRUNCATE, got %q", trigger.Name, event)
+		}
+		if _, ok := seen[event]; ok {
+			return nil, fmt.Errorf("trigger %q has duplicate event %q", trigger.Name, event)
+		}
+		seen[event] = struct{}{}
+	}
+	return events, nil
+}
+
+func validateConstraintTrigger(trigger pgschema.Trigger, events []string, level, targetKind string, tableNames map[string]struct{}) error {
+	if !trigger.Constraint {
+		if trigger.ReferencedTable != "" {
+			return fmt.Errorf("trigger %q FROM table requires a constraint trigger", trigger.Name)
+		}
+		if trigger.Deferrable || trigger.Initially != "" {
+			return fmt.Errorf("trigger %q deferrability requires a constraint trigger", trigger.Name)
+		}
+		return nil
+	}
+	if targetKind != "table" {
+		return fmt.Errorf("trigger %q constraint triggers require a table target", trigger.Name)
+	}
+	if !strings.EqualFold(trigger.Timing, "AFTER") {
+		return fmt.Errorf("trigger %q constraint triggers must be AFTER triggers", trigger.Name)
+	}
+	if level != "" && level != "ROW" {
+		return fmt.Errorf("trigger %q constraint triggers must be FOR EACH ROW", trigger.Name)
+	}
+	if containsString(events, "TRUNCATE") {
+		return fmt.Errorf("trigger %q constraint triggers cannot use TRUNCATE", trigger.Name)
+	}
+	if trigger.ReferencedTable != "" {
+		key, err := referenceKey("", trigger.ReferencedTable)
+		if err != nil {
+			return fmt.Errorf("trigger %q FROM table: %w", trigger.Name, err)
+		}
+		if _, ok := tableNames[key]; !ok {
+			return fmt.Errorf("trigger %q references unknown FROM table %q", trigger.Name, renderReferencedTable(trigger.ReferencedTable))
+		}
+	}
+	if err := validateInitially(trigger.Initially); err != nil {
+		return fmt.Errorf("trigger %q: %w", trigger.Name, err)
+	}
+	if trigger.Initially != "" && !trigger.Deferrable {
+		return fmt.Errorf("trigger %q INITIALLY requires DEFERRABLE", trigger.Name)
+	}
+	return nil
+}
+
+func validatePolicy(policy pgschema.Policy, names map[string]struct{}, tableNames map[string]struct{}) error {
+	if err := validateIdentifier("policy", policy.Name); err != nil {
+		return err
+	}
+	tableKey, err := referenceKey("", policy.Table)
+	if err != nil {
+		return fmt.Errorf("policy %q: %w", policy.Name, err)
+	}
+	if _, ok := tableNames[tableKey]; !ok {
+		return fmt.Errorf("policy %q references unknown table %q", policy.Name, renderReferencedTable(policy.Table))
+	}
+	key := tableKey + "." + policy.Name
+	if _, ok := names[key]; ok {
+		return fmt.Errorf("duplicate policy %q on %q", policy.Name, renderReferencedTable(policy.Table))
+	}
+	names[key] = struct{}{}
+	switch strings.ToUpper(policy.Command) {
+	case "", "ALL", "SELECT", "INSERT", "UPDATE", "DELETE":
+	default:
+		return fmt.Errorf("policy %q command must be ALL, SELECT, INSERT, UPDATE, or DELETE, got %q", policy.Name, policy.Command)
+	}
+	switch strings.ToUpper(policy.Mode) {
+	case "", "PERMISSIVE", "RESTRICTIVE":
+	default:
+		return fmt.Errorf("policy %q mode must be PERMISSIVE or RESTRICTIVE, got %q", policy.Name, policy.Mode)
+	}
+	if policy.Using != "" && strings.TrimSpace(policy.Using) != policy.Using {
+		return fmt.Errorf("policy %q USING expression must not have leading or trailing whitespace", policy.Name)
+	}
+	if policy.WithCheck != "" && strings.TrimSpace(policy.WithCheck) != policy.WithCheck {
+		return fmt.Errorf("policy %q WITH CHECK expression must not have leading or trailing whitespace", policy.Name)
+	}
+	if err := validatePolicyRoles(policy); err != nil {
+		return err
+	}
+	return validatePolicyExpressions(policy)
+}
+
+func validatePolicyRoles(policy pgschema.Policy) error {
+	seen := map[string]struct{}{}
+	for _, role := range policy.Roles {
+		if err := validatePolicyRole(role); err != nil {
+			return fmt.Errorf("policy %q: %w", policy.Name, err)
+		}
+		normalised := strings.ToLower(role)
+		if _, ok := seen[normalised]; ok {
+			return fmt.Errorf("policy %q has duplicate role %q", policy.Name, role)
+		}
+		seen[normalised] = struct{}{}
+	}
+	return nil
+}
+
+func validatePolicyRole(role string) error {
+	switch strings.ToUpper(role) {
+	case "PUBLIC", "CURRENT_ROLE", "CURRENT_USER", "SESSION_USER":
+		return nil
+	default:
+		return validateIdentifier("policy role", role)
+	}
+}
+
+func validatePolicyExpressions(policy pgschema.Policy) error {
+	switch strings.ToUpper(policy.Command) {
+	case "INSERT":
+		if policy.Using != "" {
+			return fmt.Errorf("policy %q INSERT policies cannot have a USING expression", policy.Name)
+		}
+	case "SELECT", "DELETE":
+		if policy.WithCheck != "" {
+			return fmt.Errorf("policy %q %s policies cannot have a WITH CHECK expression", policy.Name, strings.ToUpper(policy.Command))
+		}
+	}
+	return nil
+}
+
+func normalisedTriggerEvents(events []string) []string {
+	out := make([]string, 0, len(events))
+	for _, event := range events {
+		out = append(out, strings.ToUpper(event))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
+}
+
 func validateViewQuery(query string) error {
 	if strings.TrimSpace(query) != query {
 		return errors.New("query must not have leading or trailing whitespace")
@@ -1651,6 +2045,22 @@ func validateConfigKey(kind, value string) error {
 
 func functionKey(function pgschema.Function) string {
 	return qualifiedName(function.Schema, function.Name) + "(" + renderFunctionIdentityArguments(function) + ")"
+}
+
+func triggerKey(trigger pgschema.Trigger) string {
+	key, err := referenceKey("", trigger.Target)
+	if err != nil {
+		return trigger.Target + "." + trigger.Name
+	}
+	return key + "." + trigger.Name
+}
+
+func policyKey(policy pgschema.Policy) string {
+	key, err := referenceKey("", policy.Table)
+	if err != nil {
+		return policy.Table + "." + policy.Name
+	}
+	return key + "." + policy.Name
 }
 
 func renderFunctionIdentityArguments(function pgschema.Function) string {

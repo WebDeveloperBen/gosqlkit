@@ -332,6 +332,17 @@ func (d *Definition) Comment(text string) *Definition {
 	return d
 }
 
+func (d *Definition) EnableRLS() *Definition {
+	d.def.RowLevelSecurity = true
+	return d
+}
+
+func (d *Definition) ForceRLS() *Definition {
+	d.def.RowLevelSecurity = true
+	d.def.ForceRLS = true
+	return d
+}
+
 func (c *CheckDef) apply(table *ast.Table) {
 	table.Checks = append(table.Checks, c.def)
 }

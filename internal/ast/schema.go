@@ -16,6 +16,8 @@ type Table struct {
 	Checks            []Check                `json:"checks,omitempty"`
 	Exclusions        []ExclusionConstraint  `json:"exclusions,omitempty"`
 	Indexes           []Index                `json:"indexes,omitempty"`
+	RowLevelSecurity  bool                   `json:"rowLevelSecurity,omitempty"`
+	ForceRLS          bool                   `json:"forceRls,omitempty"`
 }
 
 type Column struct {

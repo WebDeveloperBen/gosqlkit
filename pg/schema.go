@@ -46,6 +46,14 @@ type FunctionArgumentDef struct {
 	def pgschema.FunctionArgument
 }
 
+type TriggerDef struct {
+	def *pgschema.Trigger
+}
+
+type PolicyDef struct {
+	def *pgschema.Policy
+}
+
 func Namespace(name string) *NamespaceDef {
 	namespace := pgschema.Namespace{Name: name}
 	registerNamespace(namespace)
@@ -69,72 +77,72 @@ func Role(name string) *RoleDef {
 }
 
 func (r *RoleDef) Login() *RoleDef {
-	r.def.Login = roleBool(true)
+	r.def.Login = new(true)
 	return r
 }
 
 func (r *RoleDef) NoLogin() *RoleDef {
-	r.def.Login = roleBool(false)
+	r.def.Login = new(false)
 	return r
 }
 
 func (r *RoleDef) Superuser() *RoleDef {
-	r.def.Superuser = roleBool(true)
+	r.def.Superuser = new(true)
 	return r
 }
 
 func (r *RoleDef) NoSuperuser() *RoleDef {
-	r.def.Superuser = roleBool(false)
+	r.def.Superuser = new(false)
 	return r
 }
 
 func (r *RoleDef) CreateDB() *RoleDef {
-	r.def.CreateDB = roleBool(true)
+	r.def.CreateDB = new(true)
 	return r
 }
 
 func (r *RoleDef) NoCreateDB() *RoleDef {
-	r.def.CreateDB = roleBool(false)
+	r.def.CreateDB = new(false)
 	return r
 }
 
 func (r *RoleDef) CreateRole() *RoleDef {
-	r.def.CreateRole = roleBool(true)
+	r.def.CreateRole = new(true)
 	return r
 }
 
 func (r *RoleDef) NoCreateRole() *RoleDef {
-	r.def.CreateRole = roleBool(false)
+	r.def.CreateRole = new(false)
 	return r
 }
 
 func (r *RoleDef) Inherit() *RoleDef {
-	r.def.Inherit = roleBool(true)
+	r.def.Inherit = new(true)
 	return r
 }
 
 func (r *RoleDef) NoInherit() *RoleDef {
-	r.def.Inherit = roleBool(false)
+	r.def.Inherit = new(false)
 	return r
 }
 
 func (r *RoleDef) Replication() *RoleDef {
-	r.def.Replication = roleBool(true)
+	r.def.Replication = new(true)
 	return r
 }
 
 func (r *RoleDef) NoReplication() *RoleDef {
-	r.def.Replication = roleBool(false)
+	r.def.Replication = new(false)
 	return r
 }
 
 func (r *RoleDef) BypassRLS() *RoleDef {
-	r.def.BypassRLS = roleBool(true)
+	r.def.BypassRLS = new(true)
 	return r
 }
 
 func (r *RoleDef) NoBypassRLS() *RoleDef {
-	r.def.BypassRLS = roleBool(false)
+	r.def.BypassRLS = new(false)
 	return r
 }
 
@@ -205,10 +213,6 @@ func (e *EnumDef) TypeName() string {
 		return e.def.Name
 	}
 	return strings.Join([]string{e.def.Schema, e.def.Name}, ".")
-}
-
-func roleBool(value bool) *bool {
-	return &value
 }
 
 func CompositeType(name string, attributes ...*CompositeAttributeDef) *CompositeTypeDef {
@@ -326,12 +330,12 @@ func (f *FunctionDef) Volatile() *FunctionDef {
 }
 
 func (f *FunctionDef) Strict() *FunctionDef {
-	f.def.Strict = roleBool(true)
+	f.def.Strict = new(true)
 	return f
 }
 
 func (f *FunctionDef) CalledOnNullInput() *FunctionDef {
-	f.def.Strict = roleBool(false)
+	f.def.Strict = new(false)
 	return f
 }
 
@@ -406,6 +410,169 @@ func (a *FunctionArgumentDef) Variadic() *FunctionArgumentDef {
 func (a *FunctionArgumentDef) Default(expression string) *FunctionArgumentDef {
 	a.def.Default = expression
 	return a
+}
+
+func Trigger(name, target, function string) *TriggerDef {
+	trigger := &pgschema.Trigger{Name: name, Target: target, Function: function}
+	registerTrigger(trigger)
+	return &TriggerDef{def: trigger}
+}
+
+func (t *TriggerDef) Before() *TriggerDef {
+	t.def.Timing = "BEFORE"
+	return t
+}
+
+func (t *TriggerDef) After() *TriggerDef {
+	t.def.Timing = "AFTER"
+	return t
+}
+
+func (t *TriggerDef) InsteadOf() *TriggerDef {
+	t.def.Timing = "INSTEAD OF"
+	return t
+}
+
+func (t *TriggerDef) Insert() *TriggerDef {
+	t.def.Events = append(t.def.Events, "INSERT")
+	return t
+}
+
+func (t *TriggerDef) Update() *TriggerDef {
+	t.def.Events = append(t.def.Events, "UPDATE")
+	return t
+}
+
+func (t *TriggerDef) UpdateOf(columns ...string) *TriggerDef {
+	t.def.Events = append(t.def.Events, "UPDATE")
+	t.def.Columns = append(t.def.Columns, columns...)
+	return t
+}
+
+func (t *TriggerDef) Delete() *TriggerDef {
+	t.def.Events = append(t.def.Events, "DELETE")
+	return t
+}
+
+func (t *TriggerDef) Truncate() *TriggerDef {
+	t.def.Events = append(t.def.Events, "TRUNCATE")
+	return t
+}
+
+func (t *TriggerDef) ForEachRow() *TriggerDef {
+	t.def.Level = "ROW"
+	return t
+}
+
+func (t *TriggerDef) ForEachStatement() *TriggerDef {
+	t.def.Level = "STATEMENT"
+	return t
+}
+
+func (t *TriggerDef) When(expression string) *TriggerDef {
+	t.def.When = expression
+	return t
+}
+
+func (t *TriggerDef) Args(args ...string) *TriggerDef {
+	t.def.Arguments = append(t.def.Arguments, args...)
+	return t
+}
+
+func (t *TriggerDef) Constraint() *TriggerDef {
+	t.def.Constraint = true
+	return t
+}
+
+func (t *TriggerDef) From(table string) *TriggerDef {
+	t.def.ReferencedTable = table
+	return t
+}
+
+func (t *TriggerDef) Deferrable() *TriggerDef {
+	t.def.Deferrable = true
+	if t.def.Initially == "" {
+		t.def.Initially = "IMMEDIATE"
+	}
+	return t
+}
+
+func (t *TriggerDef) InitiallyDeferred() *TriggerDef {
+	t.def.Deferrable = true
+	t.def.Initially = "DEFERRED"
+	return t
+}
+
+func (t *TriggerDef) InitiallyImmediate() *TriggerDef {
+	t.def.Deferrable = true
+	t.def.Initially = "IMMEDIATE"
+	return t
+}
+
+func (t *TriggerDef) PreviousName(name string) *TriggerDef {
+	t.def.PreviousName = name
+	return t
+}
+
+func Policy(name, table string) *PolicyDef {
+	policy := &pgschema.Policy{Name: name, Table: table}
+	registerPolicy(policy)
+	return &PolicyDef{def: policy}
+}
+
+func (p *PolicyDef) Permissive() *PolicyDef {
+	p.def.Mode = "PERMISSIVE"
+	return p
+}
+
+func (p *PolicyDef) Restrictive() *PolicyDef {
+	p.def.Mode = "RESTRICTIVE"
+	return p
+}
+
+func (p *PolicyDef) All() *PolicyDef {
+	p.def.Command = "ALL"
+	return p
+}
+
+func (p *PolicyDef) Select() *PolicyDef {
+	p.def.Command = "SELECT"
+	return p
+}
+
+func (p *PolicyDef) Insert() *PolicyDef {
+	p.def.Command = "INSERT"
+	return p
+}
+
+func (p *PolicyDef) Update() *PolicyDef {
+	p.def.Command = "UPDATE"
+	return p
+}
+
+func (p *PolicyDef) Delete() *PolicyDef {
+	p.def.Command = "DELETE"
+	return p
+}
+
+func (p *PolicyDef) To(roles ...string) *PolicyDef {
+	p.def.Roles = append(p.def.Roles, roles...)
+	return p
+}
+
+func (p *PolicyDef) Using(expression string) *PolicyDef {
+	p.def.Using = expression
+	return p
+}
+
+func (p *PolicyDef) WithCheck(expression string) *PolicyDef {
+	p.def.WithCheck = expression
+	return p
+}
+
+func (p *PolicyDef) PreviousName(name string) *PolicyDef {
+	p.def.PreviousName = name
+	return p
 }
 
 type ViewDef struct {

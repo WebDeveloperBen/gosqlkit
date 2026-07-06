@@ -73,8 +73,8 @@ Legend:
 - `[x]` Views.
 - `[x]` Materialized views.
 - `[x]` Functions.
-- `[ ]` Triggers.
-- `[ ]` Row-level security policies.
+- `[x]` Triggers.
+- `[x]` Row-level security policies.
 - `[x]` Roles.
 - `[x]` Domains.
 - `[x]` Composite types.
@@ -184,14 +184,14 @@ Missing common PostgreSQL types:
 
 ## RLS, Roles, and Policies
 
-- `[ ]` Enable row-level security on a table.
-- `[ ]` Force row-level security.
+- `[x]` Enable row-level security on a table.
+- `[x]` Force row-level security.
 - `[x]` Create roles.
-- `[ ]` Policy `AS PERMISSIVE` / `AS RESTRICTIVE`.
-- `[ ]` Policy command: `ALL`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`.
-- `[ ]` Policy target roles.
-- `[ ]` Policy `USING` expression.
-- `[ ]` Policy `WITH CHECK` expression.
+- `[x]` Policy `AS PERMISSIVE` / `AS RESTRICTIVE`.
+- `[x]` Policy command: `ALL`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`.
+- `[x]` Policy target roles.
+- `[x]` Policy `USING` expression.
+- `[x]` Policy `WITH CHECK` expression.
 
 ## Views and Materialized Views
 
@@ -349,7 +349,7 @@ Other provider requirement:
 - `[x]` Unknown referenced column validation.
 - `[ ]` Invalid default expression validation where practical.
 - `[ ]` Invalid generated-column expression validation where practical.
-- `[ ]` Invalid RLS policy validation.
+- `[x]` Invalid RLS policy validation.
 - `[ ]` Validation diagnostics with actionable messages.
 
 ## Testing Requirements
@@ -368,7 +368,8 @@ Other provider requirement:
 - `[x]` View rendering tests.
 - `[x]` Role rendering tests.
 - `[x]` Function rendering tests.
-- `[ ]` RLS policy rendering tests.
+- `[x]` Trigger rendering tests.
+- `[x]` RLS policy rendering tests.
 - `[ ]` Diff fixture tests.
 - `[ ]` Destructive-change fixture tests.
 - `[ ]` Integration test against live PostgreSQL.
@@ -387,15 +388,15 @@ Other provider requirement:
 8. Add database introspection and drift checks.
 9. Integrate `pg-schema-diff` or another PostgreSQL diff engine.
 10. Add migration file generation and destructive-change guardrails.
-11. Expand into triggers, RLS, partitioning, grants, and other advanced PostgreSQL features.
+11. Expand into partitioning, grants, and other advanced PostgreSQL features.
 
 ## Drizzle Reference Notes
 
 The Drizzle source is useful as a requirements reference, not as an implementation blueprint. Important patterns to carry forward:
 
-- PostgreSQL schema declarations include more than tables: enums, schemas, sequences, views, materialized views, roles, policies, and relations.
+- PostgreSQL schema declarations include more than tables: enums, schemas, sequences, views, materialized views, roles, functions, triggers, policies, and relations.
 - The serializer collects exported objects into typed groups before producing a snapshot.
-- The snapshot stores columns, indexes, foreign keys, composite primary keys, unique constraints, policies, check constraints, RLS state, views, sequences, roles, and metadata.
+- The snapshot stores columns, indexes, foreign keys, composite primary keys, unique constraints, policies, check constraints, RLS state, views, sequences, roles, functions, triggers, and metadata.
 - Index modelling needs to account for methods, expressions, operator classes, sort direction, null ordering, partial predicates, concurrent creation, and storage parameters.
 - Defaults and generated expressions need structured handling, not just raw strings.
 - Migration-quality diffing needs stable metadata and object identity, not only generated SQL text.

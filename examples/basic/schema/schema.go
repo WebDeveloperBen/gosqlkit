@@ -26,6 +26,14 @@ var NormaliseEmail = pg.Function("normalise_email", "text", "SELECT lower(trim(e
 	Immutable().
 	Strict()
 
+var SetUpdatedAt = pg.Function(
+	"set_updated_at",
+	"trigger",
+	"BEGIN\n    NEW.updated_at = now();\n    RETURN NEW;\nEND",
+).
+	Language("plpgsql").
+	Volatile()
+
 var Money = pg.CompositeTypeInSchema(
 	"billing", "money",
 	pg.CompositeAttribute("amount", "numeric(10, 2)"),
@@ -38,19 +46,28 @@ var Email = pg.Domain("email", "text").
 
 var Users = pg.Table(
 	"users",
-	pg.UUID("id").
-		PrimaryKey().
-		Default("gen_random_uuid()"),
-	pg.Text("email").
-		NotNull(),
+	pg.UUID("id").PrimaryKey().Default("gen_random_uuid()"),
+	pg.Text("email").NotNull(),
 	pg.Text("display_name"),
 	pg.Inet("last_login_ip"),
 	pg.Text("tags").Array(),
-	pg.TimestampTZ("created_at").
-		NotNull().
-		Default("now()"),
+	pg.TimestampTZ("created_at").NotNull().Default("now()"),
+	pg.TimestampTZ("updated_at").NotNull().Default("now()"),
 	pg.Unique("users_email_unique", "email"),
-).Comment("Application users.")
+).
+	Comment("Application users.").
+	EnableRLS()
+
+var UsersSetUpdatedAt = pg.Trigger("users_set_updated_at", "users", "set_updated_at").
+	Before().
+	UpdateOf("email", "display_name").
+	ForEachRow().
+	When("OLD.* IS DISTINCT FROM NEW.*")
+
+var UsersReadSelfPolicy = pg.Policy("users_read_self", "users").
+	Select().
+	To("app_reader").
+	Using("id = current_setting('app.user_id')::uuid")
 
 var Invoices = pg.TableInSchema(
 	"billing", "invoices",

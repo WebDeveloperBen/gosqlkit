@@ -33,6 +33,8 @@ type Capabilities struct {
 	MaterializedViews bool
 	Roles             bool
 	Functions         bool
+	Triggers          bool
+	RLS               bool
 }
 
 var registry = struct {

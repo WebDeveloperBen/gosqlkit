@@ -251,15 +251,12 @@ Current implementation status:
   - Golden-style SQL output tests
   - `sqlc` compatibility example
 - Not implemented yet:
-  - RLS, triggers
   - Migration diff integration
 
 ## Later scope
 
 Future versions may support:
 
-- Triggers
-- RLS policies
 - Grants
 - Partitioned tables
 - Tablespaces
@@ -462,7 +459,7 @@ Deliverables:
 
 ### Phase 5: Advanced PostgreSQL support
 
-Add support for remaining advanced PostgreSQL objects such as RLS and triggers.
+Add support for remaining advanced PostgreSQL objects such as partitioned tables and grants.
 
 ## Open questions
 

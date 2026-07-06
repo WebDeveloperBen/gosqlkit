@@ -95,6 +95,13 @@ func TestPostgresRender(t *testing.T) {
 				},
 			},
 			{
+				Name:       "set_updated_at",
+				Language:   "plpgsql",
+				ReturnType: "trigger",
+				Body:       "BEGIN\n    NEW.updated_at = now();\n    RETURN NEW;\nEND",
+				Volatility: "VOLATILE",
+			},
+			{
 				Schema:     "billing",
 				Name:       "invoice_total_cents",
 				Language:   "sql",
@@ -115,8 +122,9 @@ func TestPostgresRender(t *testing.T) {
 		},
 		Tables: []ast.Table{
 			{
-				Name:    "users",
-				Comment: "Application users.",
+				Name:             "users",
+				Comment:          "Application users.",
+				RowLevelSecurity: true,
 				Columns: []ast.Column{
 					{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
 					{Name: "email", Type: "text", NotNull: true},
@@ -124,6 +132,7 @@ func TestPostgresRender(t *testing.T) {
 					{Name: "last_login_ip", Type: "inet"},
 					{Name: "tags", Type: "text[]"},
 					{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
+					{Name: "updated_at", Type: "timestamptz", NotNull: true, Default: "now()"},
 				},
 				UniqueConstraints: []ast.UniqueConstraint{
 					{Name: "users_email_unique", Columns: []string{"email"}},
@@ -280,6 +289,28 @@ func TestPostgresRender(t *testing.T) {
 				Name:   "pending_events",
 				Query:  "SELECT * FROM events WHERE created_at > now() - interval '1 day'",
 				NoData: true,
+			},
+		},
+		Triggers: []pgschema.Trigger{
+			{
+				Name:     "users_set_updated_at",
+				Target:   "users",
+				Function: "set_updated_at",
+				Timing:   "BEFORE",
+				Level:    "ROW",
+				Events:   []string{"UPDATE"},
+				Columns:  []string{"email", "display_name"},
+				When:     "OLD.* IS DISTINCT FROM NEW.*",
+			},
+		},
+		Policies: []pgschema.Policy{
+			{
+				Name:    "users_read_self",
+				Table:   "users",
+				Command: "SELECT",
+				Mode:    "PERMISSIVE",
+				Roles:   []string{"app_reader"},
+				Using:   "id = current_setting('app.user_id')::uuid",
 			},
 		},
 	}
@@ -664,5 +695,99 @@ func TestPostgresRejectsFunctionBodyDollarQuoteDelimiter(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), `body must not contain $$`) {
 		t.Fatalf("expected dollar quote delimiter error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsDuplicateTriggerOnTarget(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+		Triggers: []pgschema.Trigger{
+			{Name: "users_touch", Target: "users", Function: "touch", Timing: "BEFORE", Events: []string{"UPDATE"}},
+			{Name: "users_touch", Target: "users", Function: "touch", Timing: "BEFORE", Events: []string{"INSERT"}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `duplicate trigger "users_touch" on "users"`) {
+		t.Fatalf("expected duplicate trigger error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsTriggerUnknownTarget(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Triggers: []pgschema.Trigger{
+			{Name: "users_touch", Target: "users", Function: "touch", Timing: "BEFORE", Events: []string{"UPDATE"}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown trigger target "users"`) {
+		t.Fatalf("expected unknown trigger target error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsTriggerUnknownUpdateColumn(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+		Triggers: []pgschema.Trigger{
+			{Name: "users_touch", Target: "users", Function: "touch", Timing: "BEFORE", Events: []string{"UPDATE"}, Columns: []string{"email"}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown update column "email"`) {
+		t.Fatalf("expected unknown trigger update column error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsDuplicatePolicyOnTable(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+		Policies: []pgschema.Policy{
+			{Name: "users_read", Table: "users", Command: "SELECT", Using: "true"},
+			{Name: "users_read", Table: "users", Command: "SELECT", Using: "true"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `duplicate policy "users_read" on "users"`) {
+		t.Fatalf("expected duplicate policy error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsPolicyUnknownTable(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Policies: []pgschema.Policy{
+			{Name: "users_read", Table: "users", Command: "SELECT", Using: "true"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown table "users"`) {
+		t.Fatalf("expected unknown policy table error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsInsertPolicyUsingExpression(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+		Policies: []pgschema.Policy{
+			{Name: "users_insert", Table: "users", Command: "INSERT", Using: "true"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `INSERT policies cannot have a USING expression`) {
+		t.Fatalf("expected INSERT USING policy error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsSelectPolicyWithCheckExpression(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+		Policies: []pgschema.Policy{
+			{Name: "users_read", Table: "users", Command: "SELECT", WithCheck: "true"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `SELECT policies cannot have a WITH CHECK expression`) {
+		t.Fatalf("expected SELECT WITH CHECK policy error, got %v", err)
 	}
 }

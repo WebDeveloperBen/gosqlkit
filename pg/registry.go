@@ -21,6 +21,8 @@ var registry = struct {
 	tables            []*ast.Table
 	views             []*pgschema.View
 	materializedViews []*pgschema.MaterializedView
+	triggers          []*pgschema.Trigger
+	policies          []*pgschema.Policy
 	sync.Mutex
 }{}
 
@@ -48,6 +50,8 @@ func (provider) Dialect() kit.DialectInfo {
 			MaterializedViews: true,
 			Roles:             true,
 			Functions:         true,
+			Triggers:          true,
+			RLS:               true,
 		},
 	}
 }
@@ -101,6 +105,16 @@ func Schema() pgschema.Schema {
 		materializedViews = append(materializedViews, *mv)
 	}
 
+	triggers := make([]pgschema.Trigger, 0, len(registry.triggers))
+	for _, trigger := range registry.triggers {
+		triggers = append(triggers, *trigger)
+	}
+
+	policies := make([]pgschema.Policy, 0, len(registry.policies))
+	for _, policy := range registry.policies {
+		policies = append(policies, *policy)
+	}
+
 	return pgschema.Schema{
 		Namespaces:        namespaces,
 		Extensions:        extensions,
@@ -113,6 +127,8 @@ func Schema() pgschema.Schema {
 		Tables:            tables,
 		Views:             views,
 		MaterializedViews: materializedViews,
+		Triggers:          triggers,
+		Policies:          policies,
 	}
 }
 
@@ -153,6 +169,8 @@ func Reset() {
 	registry.functions = nil
 	registry.views = nil
 	registry.materializedViews = nil
+	registry.triggers = nil
+	registry.policies = nil
 }
 
 func register(table *ast.Table) {
@@ -230,4 +248,18 @@ func registerMaterializedView(mv *pgschema.MaterializedView) {
 	defer registry.Unlock()
 
 	registry.materializedViews = append(registry.materializedViews, mv)
+}
+
+func registerTrigger(trigger *pgschema.Trigger) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.triggers = append(registry.triggers, trigger)
+}
+
+func registerPolicy(policy *pgschema.Policy) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.policies = append(registry.policies, policy)
 }

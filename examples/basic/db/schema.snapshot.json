@@ -26,7 +26,8 @@
     "public.users.email": {},
     "public.users.id": {},
     "public.users.last_login_ip": {},
-    "public.users.tags": {}
+    "public.users.tags": {},
+    "public.users.updated_at": {}
   },
   "compositeTypes": [
     {
@@ -71,7 +72,8 @@
     }
   ],
   "functionMetadata": {
-    "public.normalise_email(text)": {}
+    "public.normalise_email(text)": {},
+    "public.set_updated_at()": {}
   },
   "functions": [
     {
@@ -87,6 +89,13 @@
           "type": "text"
         }
       ]
+    },
+    {
+      "name": "set_updated_at",
+      "language": "plpgsql",
+      "returnType": "trigger",
+      "body": "BEGIN\n    NEW.updated_at = now();\n    RETURN NEW;\nEND",
+      "volatility": "VOLATILE"
     }
   ],
   "materializedViews": [
@@ -104,6 +113,20 @@
       "name": "billing"
     }
   ],
+  "policies": [
+    {
+      "name": "users_read_self",
+      "table": "users",
+      "command": "SELECT",
+      "using": "id = current_setting('app.user_id')::uuid",
+      "roles": [
+        "app_reader"
+      ]
+    }
+  ],
+  "policyMetadata": {
+    "public.users.users_read_self": {}
+  },
   "roleMetadata": {
     "app_reader": {},
     "app_writer": {}
@@ -134,7 +157,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "f27c098cc524e4310d40a4885f9bb61dfe1f8c5f9c5f4e3c6ff5d815ddc9105d",
+  "snapshotId": "d1591320ffc70f49013504d07967ec438236b5f847eefa2544bf3d220f31eb10",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -424,6 +447,12 @@
           "type": "timestamptz",
           "default": "now()",
           "notNull": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "default": "now()",
+          "notNull": true
         }
       ],
       "uniqueConstraints": [
@@ -433,6 +462,27 @@
             "email"
           ]
         }
+      ],
+      "rowLevelSecurity": true
+    }
+  ],
+  "triggerMetadata": {
+    "public.users.users_set_updated_at": {}
+  },
+  "triggers": [
+    {
+      "when": "OLD.* IS DISTINCT FROM NEW.*",
+      "name": "users_set_updated_at",
+      "target": "users",
+      "function": "set_updated_at",
+      "timing": "BEFORE",
+      "level": "ROW",
+      "columns": [
+        "display_name",
+        "email"
+      ],
+      "events": [
+        "UPDATE"
       ]
     }
   ],

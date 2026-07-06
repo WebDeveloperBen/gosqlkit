@@ -1,6 +1,7 @@
 package pg_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/webdeveloperben/gosqlkit/kit"
@@ -21,16 +22,12 @@ func TestProviderRegistersPostgresDialectMetadata(t *testing.T) {
 	}
 	if !info.Capabilities.Tables || !info.Capabilities.Schemas || !info.Capabilities.Extensions ||
 		!info.Capabilities.Enums || !info.Capabilities.AdvancedIndexes || !info.Capabilities.Snapshots ||
-		!info.Capabilities.Roles || !info.Capabilities.Functions {
+		!info.Capabilities.Roles || !info.Capabilities.Functions || !info.Capabilities.Triggers ||
+		!info.Capabilities.RLS {
 		t.Fatalf("unexpected capabilities %#v", info.Capabilities)
 	}
 }
 
 func contains(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, needle)
 }

@@ -39,6 +39,17 @@ AS $$
 SELECT lower(trim(email))
 $$;
 
+CREATE FUNCTION set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END
+$$;
+
 CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     email text NOT NULL,
@@ -46,10 +57,13 @@ CREATE TABLE users (
     last_login_ip inet,
     tags text[],
     created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT users_email_unique UNIQUE (email)
 );
 
 COMMENT ON TABLE users IS 'Application users.';
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE billing.invoices (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -96,6 +110,12 @@ CREATE TABLE events (
 
 CREATE INDEX events_priority_created_at_idx ON events (priority, created_at);
 
+CREATE POLICY users_read_self ON users
+AS PERMISSIVE
+FOR SELECT
+TO app_reader
+USING (id = current_setting('app.user_id')::uuid);
+
 CREATE SECURITY BARRIER VIEW billing.user_invoice_summary (user_id, invoice_count, total_cents) AS
     SELECT user_id, COUNT(*) AS invoice_count, SUM(amount_cents) AS total_cents FROM billing.invoices GROUP BY user_id
 WITH CASCADED CHECK OPTION;
@@ -112,3 +132,9 @@ COMMENT ON MATERIALIZED VIEW cached_bookings IS 'Pre-aggregated booking counts.'
 CREATE MATERIALIZED VIEW pending_events AS
     SELECT * FROM events WHERE created_at > now() - interval '1 day'
 WITH NO DATA;
+
+CREATE TRIGGER users_set_updated_at
+BEFORE UPDATE OF email, display_name ON users
+FOR EACH ROW
+WHEN (OLD.* IS DISTINCT FROM NEW.*)
+EXECUTE FUNCTION set_updated_at();

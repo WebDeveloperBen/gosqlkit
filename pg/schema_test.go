@@ -119,3 +119,100 @@ func TestFunctionDSLRegistersOptions(t *testing.T) {
 		t.Fatalf("unexpected comment %q", function.Comment)
 	}
 }
+
+func TestTriggerDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Trigger("users_touch", "users", "touch_user").
+		Before().
+		UpdateOf("email", "display_name").
+		ForEachRow().
+		When("OLD.* IS DISTINCT FROM NEW.*").
+		Args("updated_at").
+		PreviousName("old_users_touch")
+
+	schema := pg.Schema()
+	if len(schema.Triggers) != 1 {
+		t.Fatalf("triggers len = %d, want 1", len(schema.Triggers))
+	}
+
+	trigger := schema.Triggers[0]
+	if trigger.Name != "users_touch" || trigger.PreviousName != "old_users_touch" {
+		t.Fatalf("unexpected trigger identity %#v", trigger)
+	}
+	if trigger.Target != "users" || trigger.Function != "touch_user" {
+		t.Fatalf("unexpected trigger target/function %#v", trigger)
+	}
+	if trigger.Timing != "BEFORE" || trigger.Level != "ROW" {
+		t.Fatalf("unexpected trigger timing/level %#v", trigger)
+	}
+	if len(trigger.Events) != 1 || trigger.Events[0] != "UPDATE" {
+		t.Fatalf("unexpected trigger events %#v", trigger.Events)
+	}
+	if len(trigger.Columns) != 2 || trigger.Columns[0] != "email" || trigger.Columns[1] != "display_name" {
+		t.Fatalf("unexpected trigger columns %#v", trigger.Columns)
+	}
+	if trigger.When != "OLD.* IS DISTINCT FROM NEW.*" {
+		t.Fatalf("unexpected trigger when %q", trigger.When)
+	}
+	if len(trigger.Arguments) != 1 || trigger.Arguments[0] != "updated_at" {
+		t.Fatalf("unexpected trigger arguments %#v", trigger.Arguments)
+	}
+}
+
+func TestPolicyDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Table("users", pg.UUID("id")).
+		EnableRLS()
+
+	pg.Policy("users_read_self", "users").
+		Permissive().
+		Select().
+		To("app_reader").
+		Using("id = current_setting('app.user_id')::uuid").
+		PreviousName("old_users_read_self")
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 1 {
+		t.Fatalf("tables len = %d, want 1", len(schema.Tables))
+	}
+	if !schema.Tables[0].RowLevelSecurity || schema.Tables[0].ForceRLS {
+		t.Fatalf("unexpected table RLS flags %#v", schema.Tables[0])
+	}
+	if len(schema.Policies) != 1 {
+		t.Fatalf("policies len = %d, want 1", len(schema.Policies))
+	}
+
+	policy := schema.Policies[0]
+	if policy.Name != "users_read_self" || policy.PreviousName != "old_users_read_self" {
+		t.Fatalf("unexpected policy identity %#v", policy)
+	}
+	if policy.Table != "users" || policy.Command != "SELECT" || policy.Mode != "PERMISSIVE" {
+		t.Fatalf("unexpected policy core fields %#v", policy)
+	}
+	if len(policy.Roles) != 1 || policy.Roles[0] != "app_reader" {
+		t.Fatalf("unexpected policy roles %#v", policy.Roles)
+	}
+	if policy.Using != "id = current_setting('app.user_id')::uuid" {
+		t.Fatalf("unexpected USING expression %q", policy.Using)
+	}
+}
+
+func TestTableDSLForceRLSEnablesRLS(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Table("users", pg.UUID("id")).
+		ForceRLS()
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 1 {
+		t.Fatalf("tables len = %d, want 1", len(schema.Tables))
+	}
+	if !schema.Tables[0].RowLevelSecurity || !schema.Tables[0].ForceRLS {
+		t.Fatalf("unexpected table RLS flags %#v", schema.Tables[0])
+	}
+}

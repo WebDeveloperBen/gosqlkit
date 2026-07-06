@@ -29,6 +29,14 @@ type FunctionMetadata struct {
 	Comment string `json:"comment,omitempty"`
 }
 
+type TriggerMetadata struct {
+	Source string `json:"source,omitempty"`
+}
+
+type PolicyMetadata struct {
+	Source string `json:"source,omitempty"`
+}
+
 func buildSchemaMetadata(namespaces []Namespace) map[string]SchemaMetadata {
 	if len(namespaces) == 0 {
 		return nil
@@ -103,6 +111,28 @@ func buildFunctionMetadata(functions []Function) map[string]FunctionMetadata {
 	m := make(map[string]FunctionMetadata, len(functions))
 	for _, fn := range functions {
 		m[functionKey(fn)] = FunctionMetadata{Comment: fn.Comment}
+	}
+	return m
+}
+
+func buildTriggerMetadata(triggers []Trigger) map[string]TriggerMetadata {
+	if len(triggers) == 0 {
+		return nil
+	}
+	m := make(map[string]TriggerMetadata, len(triggers))
+	for _, trigger := range triggers {
+		m[triggerKey(trigger)] = TriggerMetadata{}
+	}
+	return m
+}
+
+func buildPolicyMetadata(policies []Policy) map[string]PolicyMetadata {
+	if len(policies) == 0 {
+		return nil
+	}
+	m := make(map[string]PolicyMetadata, len(policies))
+	for _, policy := range policies {
+		m[policyKey(policy)] = PolicyMetadata{}
 	}
 	return m
 }

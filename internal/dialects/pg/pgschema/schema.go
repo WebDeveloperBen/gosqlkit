@@ -20,6 +20,8 @@ type Schema struct {
 	Tables            []ast.Table        `json:"tables,omitempty"`
 	Views             []View             `json:"views,omitempty"`
 	MaterializedViews []MaterializedView `json:"materializedViews,omitempty"`
+	Triggers          []Trigger          `json:"triggers,omitempty"`
+	Policies          []Policy           `json:"policies,omitempty"`
 }
 
 type Document struct {
@@ -28,6 +30,8 @@ type Document struct {
 	ViewMetadata       map[string]ViewMetadata     `json:"viewMetadata,omitempty"`
 	RoleMetadata       map[string]RoleMetadata     `json:"roleMetadata,omitempty"`
 	FunctionMetadata   map[string]FunctionMetadata `json:"functionMetadata,omitempty"`
+	TriggerMetadata    map[string]TriggerMetadata  `json:"triggerMetadata,omitempty"`
+	PolicyMetadata     map[string]PolicyMetadata   `json:"policyMetadata,omitempty"`
 	SchemaMetadata     map[string]SchemaMetadata   `json:"schemaMetadata,omitempty"`
 	SnapshotID         string                      `json:"snapshotId"`
 	PreviousSnapshotID string                      `json:"previousSnapshotId,omitempty"`
@@ -43,6 +47,8 @@ type Document struct {
 	Tables             []ast.Table                 `json:"tables,omitempty"`
 	Views              []View                      `json:"views,omitempty"`
 	MaterializedViews  []MaterializedView          `json:"materializedViews,omitempty"`
+	Triggers           []Trigger                   `json:"triggers,omitempty"`
+	Policies           []Policy                    `json:"policies,omitempty"`
 	Version            int                         `json:"version"`
 }
 
@@ -61,12 +67,16 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		Tables:            sortedTables(schema.Tables),
 		Views:             sortedViews(schema.Views),
 		MaterializedViews: sortedMaterializedViews(schema.MaterializedViews),
+		Triggers:          sortedTriggers(schema.Triggers),
+		Policies:          sortedPolicies(schema.Policies),
 		SchemaMetadata:    buildSchemaMetadata(schema.Namespaces),
 		TableMetadata:     buildTableMetadata(schema.Tables),
 		ColumnMetadata:    buildColumnMetadata(schema.Tables),
 		ViewMetadata:      buildViewMetadata(schema.Views, schema.MaterializedViews),
 		RoleMetadata:      buildRoleMetadata(schema.Roles),
 		FunctionMetadata:  buildFunctionMetadata(schema.Functions),
+		TriggerMetadata:   buildTriggerMetadata(schema.Triggers),
+		PolicyMetadata:    buildPolicyMetadata(schema.Policies),
 	}
 
 	data, err := json.MarshalIndent(doc, "", "  ")
