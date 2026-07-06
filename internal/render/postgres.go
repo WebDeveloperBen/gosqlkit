@@ -12,6 +12,10 @@ import (
 var identifierPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
 func Postgres(schema ast.Schema) (string, error) {
+	if err := validateSchema(schema); err != nil {
+		return "", err
+	}
+
 	var b strings.Builder
 
 	tables := append([]ast.Table(nil), schema.Tables...)
@@ -42,6 +46,58 @@ func Postgres(schema ast.Schema) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+func validateSchema(schema ast.Schema) error {
+	tableNames := map[string]struct{}{}
+	indexNames := map[string]struct{}{}
+
+	for _, table := range schema.Tables {
+		if err := validateIdentifier("table", table.Name); err != nil {
+			return err
+		}
+		if _, ok := tableNames[table.Name]; ok {
+			return fmt.Errorf("duplicate table %q", table.Name)
+		}
+		tableNames[table.Name] = struct{}{}
+
+		columnNames := map[string]struct{}{}
+		for _, column := range table.Columns {
+			if err := validateIdentifier("column", column.Name); err != nil {
+				return fmt.Errorf("table %q: %w", table.Name, err)
+			}
+			if _, ok := columnNames[column.Name]; ok {
+				return fmt.Errorf("table %q has duplicate column %q", table.Name, column.Name)
+			}
+			columnNames[column.Name] = struct{}{}
+
+			if column.References != nil {
+				if err := validateForeignKeyAction("ON DELETE", column.References.OnDelete); err != nil {
+					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+				}
+				if err := validateForeignKeyAction("ON UPDATE", column.References.OnUpdate); err != nil {
+					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+				}
+			}
+		}
+
+		checkNames := map[string]struct{}{}
+		for _, check := range table.Checks {
+			if _, ok := checkNames[check.Name]; ok {
+				return fmt.Errorf("table %q has duplicate check constraint %q", table.Name, check.Name)
+			}
+			checkNames[check.Name] = struct{}{}
+		}
+
+		for _, index := range table.Indexes {
+			if _, ok := indexNames[index.Name]; ok {
+				return fmt.Errorf("duplicate index %q", index.Name)
+			}
+			indexNames[index.Name] = struct{}{}
+		}
+	}
+
+	return nil
 }
 
 func renderTable(b *strings.Builder, table ast.Table) error {
@@ -156,4 +212,17 @@ func validateIdentifier(kind, value string) error {
 		return fmt.Errorf("%s identifier %q must match %s", kind, value, identifierPattern.String())
 	}
 	return nil
+}
+
+func validateForeignKeyAction(kind, action string) error {
+	if action == "" {
+		return nil
+	}
+
+	switch strings.ToUpper(action) {
+	case "NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT":
+		return nil
+	default:
+		return fmt.Errorf("%s action %q is not supported", kind, action)
+	}
 }

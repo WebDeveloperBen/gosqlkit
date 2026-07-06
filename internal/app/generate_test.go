@@ -1,21 +1,23 @@
-package main
+package app
 
 import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestGenerate(t *testing.T) {
-	t.Setenv("GOCACHE", filepath.Join(t.TempDir(), "gocache"))
-
+func TestGenerateWritesToStdout(t *testing.T) {
 	var stdout bytes.Buffer
-	sql, err := generateFromPackage("github.com/webdeveloperben/pgkit/examples/basic/schema", mustModuleDir(t))
+	_, err := Generate(GenerateOptions{
+		Package: "./examples/basic/schema",
+		Root:    mustModuleDir(t),
+		Stdout:  &stdout,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdout.WriteString(sql)
 
 	want, err := os.ReadFile("../../examples/basic/db/schema.generated.sql")
 	if err != nil {
@@ -23,6 +25,23 @@ func TestGenerate(t *testing.T) {
 	}
 	if stdout.String() != string(want) {
 		t.Fatalf("generated SQL mismatch\n--- got ---\n%s\n--- want ---\n%s", stdout.String(), want)
+	}
+}
+
+func TestGenerateWritesAndChecksOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db", "schema.sql")
+	content := "CREATE TABLE users (id uuid PRIMARY KEY);\n"
+
+	if err := writeOutput(path, content); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkOutput(path, content); err != nil {
+		t.Fatal(err)
+	}
+
+	err := checkOutput(path, "different\n")
+	if err == nil || !strings.Contains(err.Error(), "is out of date") {
+		t.Fatalf("expected out of date error, got %v", err)
 	}
 }
 

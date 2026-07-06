@@ -12,13 +12,13 @@ type Table struct {
 }
 
 type Column struct {
+	References *ForeignKey
 	Name       string
 	Type       string
+	Default    string
 	NotNull    bool
 	PrimaryKey bool
 	Unique     bool
-	Default    string
-	References *ForeignKey
 }
 
 type ForeignKey struct {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted. Phase 1 vertical slice implemented.
 
 ## Executive summary
 
@@ -109,7 +109,8 @@ CREATE TABLE users (
 Example workflow:
 
 ```bash
-pgkit generate ./schema > db/schema.generated.sql
+pgkit generate --out db/schema.generated.sql ./schema
+pgkit generate --out db/schema.generated.sql --check ./schema
 
 pgkit diff \
   --from "$DATABASE_URL" \
@@ -189,7 +190,34 @@ Version 0 should support:
 - Deterministic SQL generation
 - Stable ordering of schema objects
 - CLI command for generation
+- CLI stale-output check for CI
 - Golden-file tests for SQL output
+
+Current implementation status:
+
+- Implemented:
+  - Tables
+  - Columns
+  - Column primary keys
+  - Column unique constraints
+  - Inline foreign keys
+  - Basic indexes
+  - Basic checks
+  - Defaults
+  - Nullable / not-null columns
+  - Common PostgreSQL scalar types listed above
+  - Deterministic table and index ordering
+  - CLI `generate`
+  - CLI `generate --out`
+  - CLI `generate --check`
+  - Golden-style SQL output tests
+  - `sqlc` compatibility example
+- Not implemented yet:
+  - Table-level composite primary keys
+  - Table-level named unique constraints
+  - Multi-column foreign keys
+  - Extensions, enums, views, RLS, triggers, functions
+  - Migration diff integration
 
 ## Later scope
 
@@ -208,6 +236,12 @@ Future versions may support:
 - Comments
 - Rename annotations
 - Destructive-change guards
+- Database introspection
+- Password and OAuth2/token database authentication
+- Provider-pluggable PostgreSQL authentication
+- Azure Database for PostgreSQL Microsoft Entra authentication
+- AWS RDS and Aurora PostgreSQL IAM database authentication
+- Google Cloud SQL for PostgreSQL IAM database authentication
 - Expand/contract migration helpers
 - Goose migration file generation
 - Embedded `pg-schema-diff` integration
@@ -219,6 +253,14 @@ Future versions may support:
 pgkit/
   cmd/pgkit/
     main.go
+
+  internal/cli/
+    root.go
+    generate.go
+    version.go
+
+  internal/app/
+    generate.go
 
   pg/
     table.go
@@ -248,19 +290,34 @@ User Go schema definitions
 → pgkit schema registry
 → internal schema AST
 → deterministic PostgreSQL renderer
+→ internal/app generation use case
+→ internal/cli command adapter
 → schema.generated.sql
 → pg-schema-diff migration generation
 → optional goose migration file
 ```
 
+CLI layering follows the same broad shape as `tyche`:
+
+- `cmd/pgkit` is only the process boundary: call the CLI runner, translate panics/exit codes, and exit.
+- `internal/cli` owns Kong command structs, help text, argument parsing, and exit-code mapping.
+- `internal/app` owns user-facing use cases with plain Go option/result types and no dependency on Kong.
+- `pg`, `internal/ast`, and `internal/render` do not import CLI packages.
+- New CLI commands should first become app-layer functions, then thin CLI adapters.
+
 ## Design principles
 
 - Schema declarations should feel like Go, not stringly typed SQL everywhere.
 - Generated SQL must be deterministic.
+- CLI parsing should stay separate from schema generation and application behaviour.
 - Runtime database access remains explicit SQL via `sqlc`.
 - The schema DSL should expose PostgreSQL features rather than flatten them into a generic abstraction.
 - Migration generation should be review-first, apply-second.
 - Destructive changes should be obvious and guarded.
+- Database connectivity should support both password authentication and short-lived token authentication.
+- Database authentication should be provider-pluggable so Azure, AWS, GCP, hosted PostgreSQL vendors, and self-hosted deployments can be supported without changing schema declarations.
+- OAuth2/Entra/IAM access tokens must be treated as ephemeral secrets and never written to generated artefacts.
+- Provider-specific token lifetimes, username formats, host binding, region binding, and TLS requirements must be explicit in the connection layer.
 - The library should be small enough to understand and extend.
 
 ## Alternatives considered
@@ -346,6 +403,12 @@ Integrate with `pg-schema-diff`.
 Deliverables:
 
 - `pgkit diff`
+- database connection layer for introspection/diff inputs
+- password auth and provider-pluggable token auth
+- Azure Database for PostgreSQL Microsoft Entra token-as-password support
+- AWS RDS/Aurora PostgreSQL IAM token support
+- Google Cloud SQL PostgreSQL IAM auth support
+- custom token command/provider support for other hosted PostgreSQL environments
 - generated migration SQL
 - safety warnings
 - diff output suitable for PR review

@@ -2,6 +2,7 @@ package render_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/webdeveloperben/pgkit/internal/ast"
@@ -59,5 +60,46 @@ func TestPostgresRender(t *testing.T) {
 	}
 	if got != string(want) {
 		t.Fatalf("rendered SQL mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestPostgresRejectsDuplicateColumns(t *testing.T) {
+	_, err := render.Postgres(ast.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "id", Type: "text"},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `duplicate column "id"`) {
+		t.Fatalf("expected duplicate column error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsUnsupportedForeignKeyAction(t *testing.T) {
+	_, err := render.Postgres(ast.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "invoices",
+				Columns: []ast.Column{
+					{
+						Name: "user_id",
+						Type: "uuid",
+						References: &ast.ForeignKey{
+							Table:    "users",
+							Column:   "id",
+							OnDelete: "explode",
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `ON DELETE action "explode" is not supported`) {
+		t.Fatalf("expected unsupported FK action error, got %v", err)
 	}
 }

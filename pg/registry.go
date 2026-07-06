@@ -8,8 +8,8 @@ import (
 )
 
 var registry = struct {
-	sync.Mutex
 	tables []ast.Table
+	sync.Mutex
 }{}
 
 func Schema() ast.Schema {
