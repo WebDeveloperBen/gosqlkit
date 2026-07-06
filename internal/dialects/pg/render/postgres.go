@@ -126,6 +126,36 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		}
 	}
 
+	hasViews := len(schema.Views) > 0 || len(schema.MaterializedViews) > 0
+	lastTableHasOutput := len(tables) > 0 && (hasComments(tables[len(tables)-1]) || len(tables[len(tables)-1].Indexes) > 0)
+	if hasViews && lastTableHasOutput {
+		b.WriteString("\n")
+	}
+
+	views := append([]pgschema.View(nil), schema.Views...)
+	sort.SliceStable(views, func(i, j int) bool {
+		return qualifiedName(views[i].Schema, views[i].Name) < qualifiedName(views[j].Schema, views[j].Name)
+	})
+	for i, view := range views {
+		renderView(&b, view)
+		renderViewComment(&b, view)
+		if i < len(views)-1 || len(schema.MaterializedViews) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	materializedViews := append([]pgschema.MaterializedView(nil), schema.MaterializedViews...)
+	sort.SliceStable(materializedViews, func(i, j int) bool {
+		return qualifiedName(materializedViews[i].Schema, materializedViews[i].Name) < qualifiedName(materializedViews[j].Schema, materializedViews[j].Name)
+	})
+	for i, mv := range materializedViews {
+		renderMaterializedView(&b, mv)
+		renderMaterializedViewComment(&b, mv)
+		if i < len(materializedViews)-1 {
+			b.WriteString("\n")
+		}
+	}
+
 	return b.String(), nil
 }
 
@@ -344,6 +374,71 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 	}
 
+	viewNames := map[string]struct{}{}
+	for _, view := range schema.Views {
+		if view.Schema != "" {
+			if err := validateIdentifier("view schema", view.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateIdentifier("view", view.Name); err != nil {
+			return err
+		}
+		key := qualifiedName(view.Schema, view.Name)
+		if _, ok := viewNames[key]; ok {
+			return fmt.Errorf("duplicate view %q", renderQualifiedName(view.Schema, view.Name))
+		}
+		viewNames[key] = struct{}{}
+		if strings.TrimSpace(view.Query) == "" {
+			return fmt.Errorf("view %q must have a query", renderQualifiedName(view.Schema, view.Name))
+		}
+		if view.CheckOption != "" {
+			switch strings.ToUpper(view.CheckOption) {
+			case "LOCAL", "CASCADED":
+			default:
+				return fmt.Errorf("view %q check option must be LOCAL or CASCADED, got %q", renderQualifiedName(view.Schema, view.Name), view.CheckOption)
+			}
+		}
+		for _, alias := range view.ColumnAliases {
+			if err := validateIdentifier("view column alias", alias); err != nil {
+				return fmt.Errorf("view %q: %w", renderQualifiedName(view.Schema, view.Name), err)
+			}
+		}
+	}
+
+	materializedViewNames := map[string]struct{}{}
+	for _, mv := range schema.MaterializedViews {
+		if mv.Schema != "" {
+			if err := validateIdentifier("materialized view schema", mv.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateIdentifier("materialized view", mv.Name); err != nil {
+			return err
+		}
+		key := qualifiedName(mv.Schema, mv.Name)
+		if _, ok := materializedViewNames[key]; ok {
+			return fmt.Errorf("duplicate materialized view %q", renderQualifiedName(mv.Schema, mv.Name))
+		}
+		materializedViewNames[key] = struct{}{}
+		if strings.TrimSpace(mv.Query) == "" {
+			return fmt.Errorf("materialized view %q must have a query", renderQualifiedName(mv.Schema, mv.Name))
+		}
+		for _, alias := range mv.ColumnAliases {
+			if err := validateIdentifier("materialized view column alias", alias); err != nil {
+				return fmt.Errorf("materialized view %q: %w", renderQualifiedName(mv.Schema, mv.Name), err)
+			}
+		}
+		for key := range mv.With {
+			if err := validateIdentifier("materialized view storage parameter", key); err != nil {
+				return fmt.Errorf("materialized view %q: %w", renderQualifiedName(mv.Schema, mv.Name), err)
+			}
+			if strings.TrimSpace(mv.With[key]) == "" {
+				return fmt.Errorf("materialized view %q storage parameter %q has an empty value", renderQualifiedName(mv.Schema, mv.Name), key)
+			}
+		}
+	}
+
 	tableNames := map[string]struct{}{}
 	tableColumns := map[string]map[string]struct{}{}
 	indexNames := map[string]struct{}{}
@@ -540,6 +635,64 @@ func renderSequence(b *strings.Builder, sequence pgschema.Sequence) {
 		b.WriteString(sequence.OwnedBy)
 	}
 	b.WriteString(";\n")
+}
+
+func renderView(b *strings.Builder, view pgschema.View) {
+	b.WriteString("CREATE ")
+	if view.SecurityBarrier {
+		b.WriteString("SECURITY BARRIER ")
+	}
+	if view.SecurityInvoker {
+		b.WriteString("SECURITY INVOKER ")
+	}
+	b.WriteString("VIEW ")
+	b.WriteString(renderQualifiedName(view.Schema, view.Name))
+	if len(view.ColumnAliases) > 0 {
+		b.WriteString(" (")
+		b.WriteString(strings.Join(view.ColumnAliases, ", "))
+		b.WriteString(")")
+	}
+	b.WriteString(" AS\n    ")
+	b.WriteString(view.Query)
+	if view.CheckOption != "" {
+		b.WriteString("\nWITH ")
+		b.WriteString(strings.ToUpper(view.CheckOption))
+		b.WriteString(" CHECK OPTION")
+	}
+	b.WriteString(";\n")
+}
+
+func renderMaterializedView(b *strings.Builder, mv pgschema.MaterializedView) {
+	b.WriteString("CREATE MATERIALIZED VIEW ")
+	b.WriteString(renderQualifiedName(mv.Schema, mv.Name))
+	if len(mv.ColumnAliases) > 0 {
+		b.WriteString(" (")
+		b.WriteString(strings.Join(mv.ColumnAliases, ", "))
+		b.WriteString(")")
+	}
+	b.WriteString(" AS\n    ")
+	b.WriteString(mv.Query)
+	if len(mv.With) > 0 {
+		b.WriteString("\nWITH (")
+		b.WriteString(renderIndexWith(mv.With))
+		b.WriteString(")")
+	}
+	if mv.NoData {
+		b.WriteString("\nWITH NO DATA")
+	}
+	b.WriteString(";\n")
+}
+
+func renderViewComment(b *strings.Builder, view pgschema.View) {
+	if view.Comment != "" {
+		fmt.Fprintf(b, "COMMENT ON VIEW %s IS %s;\n", renderQualifiedName(view.Schema, view.Name), quoteLiteral(view.Comment))
+	}
+}
+
+func renderMaterializedViewComment(b *strings.Builder, mv pgschema.MaterializedView) {
+	if mv.Comment != "" {
+		fmt.Fprintf(b, "COMMENT ON MATERIALIZED VIEW %s IS %s;\n", renderQualifiedName(mv.Schema, mv.Name), quoteLiteral(mv.Comment))
+	}
 }
 
 func renderCompositeType(b *strings.Builder, compositeType pgschema.CompositeType) error {

@@ -152,3 +152,103 @@ func (d *DomainDef) TypeName() string {
 	}
 	return strings.Join([]string{d.def.Schema, d.def.Name}, ".")
 }
+
+type ViewDef struct {
+	def *pgschema.View
+}
+
+func View(name, query string) *ViewDef {
+	return ViewInSchema("", name, query)
+}
+
+func ViewInSchema(schema, name, query string) *ViewDef {
+	view := &pgschema.View{Schema: schema, Name: name, Query: query}
+	registerView(view)
+	return &ViewDef{def: view}
+}
+
+func (v *ViewDef) Comment(text string) *ViewDef {
+	v.def.Comment = text
+	return v
+}
+
+func (v *ViewDef) CheckOption(option string) *ViewDef {
+	v.def.CheckOption = option
+	return v
+}
+
+func (v *ViewDef) SecurityBarrier() *ViewDef {
+	v.def.SecurityBarrier = true
+	return v
+}
+
+func (v *ViewDef) SecurityInvoker() *ViewDef {
+	v.def.SecurityInvoker = true
+	return v
+}
+
+func (v *ViewDef) Columns(aliases ...string) *ViewDef {
+	v.def.ColumnAliases = append([]string(nil), aliases...)
+	return v
+}
+
+func (v *ViewDef) DependsOn(tables ...string) *ViewDef {
+	v.def.DependsOn = append([]string(nil), tables...)
+	return v
+}
+
+func (v *ViewDef) TypeName() string {
+	if v.def.Schema == "" {
+		return v.def.Name
+	}
+	return strings.Join([]string{v.def.Schema, v.def.Name}, ".")
+}
+
+type MaterializedViewDef struct {
+	def *pgschema.MaterializedView
+}
+
+func MaterializedView(name, query string) *MaterializedViewDef {
+	return MaterializedViewInSchema("", name, query)
+}
+
+func MaterializedViewInSchema(schema, name, query string) *MaterializedViewDef {
+	mv := &pgschema.MaterializedView{Schema: schema, Name: name, Query: query}
+	registerMaterializedView(mv)
+	return &MaterializedViewDef{def: mv}
+}
+
+func (m *MaterializedViewDef) Comment(text string) *MaterializedViewDef {
+	m.def.Comment = text
+	return m
+}
+
+func (m *MaterializedViewDef) With(key, value string) *MaterializedViewDef {
+	if m.def.With == nil {
+		m.def.With = make(map[string]string)
+	}
+	m.def.With[key] = value
+	return m
+}
+
+func (m *MaterializedViewDef) NoData() *MaterializedViewDef {
+	m.def.NoData = true
+	return m
+}
+
+func (m *MaterializedViewDef) Columns(aliases ...string) *MaterializedViewDef {
+	m.def.ColumnAliases = append([]string(nil), aliases...)
+	return m
+}
+
+func (m *MaterializedViewDef) DependsOn(tables ...string) *MaterializedViewDef {
+	m.def.DependsOn = append([]string(nil), tables...)
+	return m
+}
+
+func (m *MaterializedViewDef) TypeName() string {
+	if m.def.Schema == "" {
+		return m.def.Name
+	}
+	return strings.Join([]string{m.def.Schema, m.def.Name}, ".")
+}

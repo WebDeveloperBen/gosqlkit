@@ -69,3 +69,20 @@ CREATE TABLE events (
 );
 
 CREATE INDEX events_priority_created_at_idx ON events (priority, created_at);
+
+CREATE SECURITY BARRIER VIEW billing.user_invoice_summary (user_id, invoice_count, total_cents) AS
+    SELECT user_id, COUNT(*) AS invoice_count, SUM(amount_cents) AS total_cents FROM billing.invoices GROUP BY user_id
+WITH CASCADED CHECK OPTION;
+
+CREATE VIEW active_users AS
+    SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL;
+COMMENT ON VIEW active_users IS 'Users who have logged in at least once.';
+
+CREATE MATERIALIZED VIEW cached_bookings AS
+    SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource
+WITH (fillfactor = 90);
+COMMENT ON MATERIALIZED VIEW cached_bookings IS 'Pre-aggregated booking counts.';
+
+CREATE MATERIALIZED VIEW pending_events AS
+    SELECT * FROM events WHERE created_at > now() - interval '1 day'
+WITH NO DATA;

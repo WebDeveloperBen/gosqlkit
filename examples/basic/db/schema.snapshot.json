@@ -70,6 +70,16 @@
       "name": "pgcrypto"
     }
   ],
+  "materializedViews": [
+    {
+      "name": "cached_bookings",
+      "query": "SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource",
+      "comment": "Pre-aggregated booking counts.",
+      "dependsOn": [
+        "bookings"
+      ]
+    }
+  ],
   "namespaces": [
     {
       "name": "billing"
@@ -87,7 +97,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "922c693070b575a79b5e5d4897102230c6521f8063ddd2ce18888a48cf8de78e",
+  "snapshotId": "184b41b20e3f49ba9db798d98ff0a5ec6ca7e2b16ada5fabb981a3a50d49f6db",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -389,5 +399,34 @@
       ]
     }
   ],
-  "version": 1
+  "version": 1,
+  "viewMetadata": {
+    "billing.user_invoice_summary": {},
+    "public.active_users": {
+      "comment": "Users who have logged in at least once."
+    },
+    "public.cached_bookings": {
+      "comment": "Pre-aggregated booking counts."
+    }
+  },
+  "views": [
+    {
+      "schema": "billing",
+      "name": "user_invoice_summary",
+      "query": "SELECT user_id, COUNT(*) AS invoice_count, SUM(amount_cents) AS total_cents FROM billing.invoices GROUP BY user_id",
+      "columnAliases": [
+        "user_id",
+        "invoice_count",
+        "total_cents"
+      ],
+      "dependsOn": [
+        "billing.invoices"
+      ]
+    },
+    {
+      "name": "active_users",
+      "query": "SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL",
+      "comment": "Users who have logged in at least once."
+    }
+  ]
 }

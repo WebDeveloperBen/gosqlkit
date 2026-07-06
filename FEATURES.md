@@ -195,15 +195,15 @@ Missing common PostgreSQL types:
 
 ## Views and Materialized Views
 
-- `[ ]` Plain views.
-- `[ ]` Existing view declarations for introspection/diff compatibility.
-- `[ ]` Materialized views.
-- `[ ]` View column metadata.
-- `[ ]` View definition SQL.
-- `[ ]` View check options.
-- `[ ]` View security options.
-- `[ ]` Materialized view storage options.
-- `[ ]` Materialized view `WITH NO DATA`.
+- `[x]` Views.
+- `[x]` Existing view declarations for introspection/diff compatibility.
+- `[x]` Materialized views.
+- `[x]` View column metadata.
+- `[x]` View definition SQL.
+- `[x]` View check options.
+- `[x]` View security options.
+- `[x]` Materialized view storage options.
+- `[x]` Materialized view `WITH NO DATA`.
 - `[ ]` Refresh materialized view support.
 
 ## Sequences
@@ -362,7 +362,7 @@ Other provider requirement:
 - `[x]` Array type rendering tests.
 - `[x]` Enum rendering tests.
 - `[x]` Sequence rendering tests.
-- `[ ]` View rendering tests.
+- `[x]` View rendering tests.
 - `[ ]` RLS policy rendering tests.
 - `[ ]` Diff fixture tests.
 - `[ ]` Destructive-change fixture tests.

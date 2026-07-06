@@ -10,13 +10,15 @@ import (
 )
 
 var registry = struct {
-	namespaces     []pgschema.Namespace
-	extensions     []pgschema.Extension
-	enums          []pgschema.Enum
-	sequences      []pgschema.Sequence
-	compositeTypes []pgschema.CompositeType
-	domains        []*pgschema.Domain
-	tables         []*ast.Table
+	namespaces        []pgschema.Namespace
+	extensions        []pgschema.Extension
+	enums             []pgschema.Enum
+	sequences         []pgschema.Sequence
+	compositeTypes    []pgschema.CompositeType
+	domains           []*pgschema.Domain
+	tables            []*ast.Table
+	views             []*pgschema.View
+	materializedViews []*pgschema.MaterializedView
 	sync.Mutex
 }{}
 
@@ -31,15 +33,17 @@ func (provider) Dialect() kit.DialectInfo {
 		Name:    "postgres",
 		Aliases: []string{"pg", "postgresql"},
 		Capabilities: kit.Capabilities{
-			Tables:          true,
-			Schemas:         true,
-			Extensions:      true,
-			Enums:           true,
-			ForeignKeys:     true,
-			Checks:          true,
-			Indexes:         true,
-			AdvancedIndexes: true,
-			Snapshots:       true,
+			Tables:            true,
+			Schemas:           true,
+			Extensions:        true,
+			Enums:             true,
+			ForeignKeys:       true,
+			Checks:            true,
+			Indexes:           true,
+			AdvancedIndexes:   true,
+			Snapshots:         true,
+			Views:             true,
+			MaterializedViews: true,
 		},
 	}
 }
@@ -73,14 +77,26 @@ func Schema() pgschema.Schema {
 		tables = append(tables, *table)
 	}
 
+	views := make([]pgschema.View, 0, len(registry.views))
+	for _, view := range registry.views {
+		views = append(views, *view)
+	}
+
+	materializedViews := make([]pgschema.MaterializedView, 0, len(registry.materializedViews))
+	for _, mv := range registry.materializedViews {
+		materializedViews = append(materializedViews, *mv)
+	}
+
 	return pgschema.Schema{
-		Namespaces:     namespaces,
-		Extensions:     extensions,
-		Enums:          enums,
-		Sequences:      sequences,
-		CompositeTypes: compositeTypes,
-		Domains:        domains,
-		Tables:         tables,
+		Namespaces:        namespaces,
+		Extensions:        extensions,
+		Enums:             enums,
+		Sequences:         sequences,
+		CompositeTypes:    compositeTypes,
+		Domains:           domains,
+		Tables:            tables,
+		Views:             views,
+		MaterializedViews: materializedViews,
 	}
 }
 
@@ -117,6 +133,8 @@ func Reset() {
 	registry.sequences = nil
 	registry.compositeTypes = nil
 	registry.domains = nil
+	registry.views = nil
+	registry.materializedViews = nil
 }
 
 func register(table *ast.Table) {
@@ -166,4 +184,18 @@ func registerDomain(domain *pgschema.Domain) {
 	defer registry.Unlock()
 
 	registry.domains = append(registry.domains, domain)
+}
+
+func registerView(view *pgschema.View) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.views = append(registry.views, view)
+}
+
+func registerMaterializedView(mv *pgschema.MaterializedView) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.materializedViews = append(registry.materializedViews, mv)
 }

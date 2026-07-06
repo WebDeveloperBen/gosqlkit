@@ -116,3 +116,20 @@ var Bookings = pg.Table(
 		pg.ExcludeWith("during", "&&"),
 	).Using("gist"),
 )
+
+var ActiveUsers = pg.View("active_users", "SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL").
+	Comment("Users who have logged in at least once.")
+
+var UserInvoiceSummary = pg.ViewInSchema(
+	"billing", "user_invoice_summary",
+	"SELECT user_id, COUNT(*) AS invoice_count, SUM(amount_cents) AS total_cents FROM billing.invoices GROUP BY user_id",
+).
+	Columns("user_id", "invoice_count", "total_cents").
+	DependsOn("billing.invoices")
+
+var CachedBookings = pg.MaterializedView(
+	"cached_bookings",
+	"SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource",
+).
+	Comment("Pre-aggregated booking counts.").
+	DependsOn("bookings")

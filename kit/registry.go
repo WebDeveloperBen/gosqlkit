@@ -20,15 +20,17 @@ type DialectInfo struct {
 }
 
 type Capabilities struct {
-	Tables          bool
-	Schemas         bool
-	Extensions      bool
-	Enums           bool
-	ForeignKeys     bool
-	Checks          bool
-	Indexes         bool
-	AdvancedIndexes bool
-	Snapshots       bool
+	Tables            bool
+	Schemas           bool
+	Extensions        bool
+	Enums             bool
+	ForeignKeys       bool
+	Checks            bool
+	Indexes           bool
+	AdvancedIndexes   bool
+	Snapshots         bool
+	Views             bool
+	MaterializedViews bool
 }
 
 var registry = struct {

@@ -193,6 +193,34 @@ func TestPostgresRender(t *testing.T) {
 				},
 			},
 		},
+		Views: []pgschema.View{
+			{
+				Name:    "active_users",
+				Query:   "SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL",
+				Comment: "Users who have logged in at least once.",
+			},
+			{
+				Schema:          "billing",
+				Name:            "user_invoice_summary",
+				Query:           "SELECT user_id, COUNT(*) AS invoice_count, SUM(amount_cents) AS total_cents FROM billing.invoices GROUP BY user_id",
+				CheckOption:     "cascaded",
+				SecurityBarrier: true,
+				ColumnAliases:   []string{"user_id", "invoice_count", "total_cents"},
+			},
+		},
+		MaterializedViews: []pgschema.MaterializedView{
+			{
+				Name:    "cached_bookings",
+				Query:   "SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource",
+				Comment: "Pre-aggregated booking counts.",
+				With:    map[string]string{"fillfactor": "90"},
+			},
+			{
+				Name:   "pending_events",
+				Query:  "SELECT * FROM events WHERE created_at > now() - interval '1 day'",
+				NoData: true,
+			},
+		},
 	}
 
 	got, err := render.Postgres(schema)
