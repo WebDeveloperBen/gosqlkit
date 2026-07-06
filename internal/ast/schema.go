@@ -7,6 +7,7 @@ type Schema struct {
 type Table struct {
 	Schema            string                 `json:"schema,omitempty"`
 	Name              string                 `json:"name"`
+	PreviousName      string                 `json:"previousName,omitempty"`
 	Comment           string                 `json:"comment,omitempty"`
 	Columns           []Column               `json:"columns,omitempty"`
 	PrimaryKeys       []PrimaryKey           `json:"primaryKeys,omitempty"`
@@ -18,16 +19,17 @@ type Table struct {
 }
 
 type Column struct {
-	References *ForeignKey `json:"references,omitempty"`
-	Generated  *Generated  `json:"generated,omitempty"`
-	Identity   *Identity   `json:"identity,omitempty"`
-	Name       string      `json:"name"`
-	Type       string      `json:"type"`
-	Default    string      `json:"default,omitempty"`
-	Comment    string      `json:"comment,omitempty"`
-	NotNull    bool        `json:"notNull,omitempty"`
-	PrimaryKey bool        `json:"primaryKey,omitempty"`
-	Unique     bool        `json:"unique,omitempty"`
+	References   *ForeignKey `json:"references,omitempty"`
+	Generated    *Generated  `json:"generated,omitempty"`
+	Identity     *Identity   `json:"identity,omitempty"`
+	Name         string      `json:"name"`
+	PreviousName string      `json:"previousName,omitempty"`
+	Type         string      `json:"type"`
+	Default      string      `json:"default,omitempty"`
+	Comment      string      `json:"comment,omitempty"`
+	NotNull      bool        `json:"notNull,omitempty"`
+	PrimaryKey   bool        `json:"primaryKey,omitempty"`
+	Unique       bool        `json:"unique,omitempty"`
 }
 
 type ForeignKey struct {
@@ -54,12 +56,14 @@ type Identity struct {
 }
 
 type PrimaryKey struct {
-	Name    string   `json:"name"`
-	Columns []string `json:"columns"`
+	Name         string   `json:"name"`
+	PreviousName string   `json:"previousName,omitempty"`
+	Columns      []string `json:"columns"`
 }
 
 type UniqueConstraint struct {
 	Name             string   `json:"name"`
+	PreviousName     string   `json:"previousName,omitempty"`
 	Initially        string   `json:"initially,omitempty"`
 	Columns          []string `json:"columns"`
 	NullsNotDistinct bool     `json:"nullsNotDistinct,omitempty"`
@@ -68,6 +72,7 @@ type UniqueConstraint struct {
 
 type ForeignKeyConstraint struct {
 	Name              string   `json:"name"`
+	PreviousName      string   `json:"previousName,omitempty"`
 	ReferencedTable   string   `json:"referencedTable"`
 	OnDelete          string   `json:"onDelete,omitempty"`
 	OnUpdate          string   `json:"onUpdate,omitempty"`
@@ -78,17 +83,19 @@ type ForeignKeyConstraint struct {
 }
 
 type Check struct {
-	Name       string `json:"name"`
-	Expression string `json:"expression"`
+	Name         string `json:"name"`
+	PreviousName string `json:"previousName,omitempty"`
+	Expression   string `json:"expression"`
 }
 
 type ExclusionConstraint struct {
-	Name       string             `json:"name"`
-	Method     string             `json:"method,omitempty"`
-	Where      string             `json:"where,omitempty"`
-	Initially  string             `json:"initially,omitempty"`
-	Elements   []ExclusionElement `json:"elements,omitempty"`
-	Deferrable bool               `json:"deferrable,omitempty"`
+	Name         string             `json:"name"`
+	PreviousName string             `json:"previousName,omitempty"`
+	Method       string             `json:"method,omitempty"`
+	Where        string             `json:"where,omitempty"`
+	Initially    string             `json:"initially,omitempty"`
+	Elements     []ExclusionElement `json:"elements,omitempty"`
+	Deferrable   bool               `json:"deferrable,omitempty"`
 }
 
 type ExclusionElement struct {
@@ -102,6 +109,7 @@ type ExclusionElement struct {
 type Index struct {
 	With         map[string]string `json:"with,omitempty"`
 	Name         string            `json:"name"`
+	PreviousName string            `json:"previousName,omitempty"`
 	Method       string            `json:"method,omitempty"`
 	Where        string            `json:"where,omitempty"`
 	Columns      []IndexColumn     `json:"columns,omitempty"`

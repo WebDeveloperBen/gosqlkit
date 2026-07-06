@@ -2,6 +2,8 @@ package app
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,12 +31,13 @@ type GenerateResult struct {
 }
 
 type SnapshotOptions struct {
-	Stdout  io.Writer
-	Package string
-	Dialect string
-	Out     string
-	Root    string
-	Check   bool
+	Stdout       io.Writer
+	Package      string
+	Dialect      string
+	Out          string
+	Root         string
+	PreviousSnap string
+	Check        bool
 }
 
 type SnapshotResult struct {
@@ -183,15 +186,17 @@ func Snapshot(opts SnapshotOptions) (*SnapshotResult, error) {
 		return nil, err
 	}
 
-	json, err := runPackageProgram([]string{importPath}, kitImportPath, moduleDir, fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
+	prevID, err := readPreviousSnapshotID(opts.PreviousSnap)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return nil, err
 	}
-	if _, err := os.Stdout.Write(data); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}`, dialect(opts.Dialect)))
+
+	rawJSON, err := runPackageProgram([]string{importPath}, kitImportPath, moduleDir, snapshotBody(dialect(opts.Dialect)))
+	if err != nil {
+		return nil, err
+	}
+
+	json, err := injectSnapshotIDs(rawJSON, prevID)
 	if err != nil {
 		return nil, err
 	}
@@ -236,16 +241,18 @@ func SnapshotWithConfig(config *Config, opts SnapshotOptions) (*SnapshotResult, 
 		return nil, err
 	}
 
-	d := dialect(config.Dialect)
-	json, err := runPackageProgram(importPaths, kitImportPath, moduleDir, fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
+	prevID, err := readPreviousSnapshotID(opts.PreviousSnap)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return nil, err
 	}
-	if _, err := os.Stdout.Write(data); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}`, d))
+
+	d := dialect(config.Dialect)
+	rawJSON, err := runPackageProgram(importPaths, kitImportPath, moduleDir, snapshotBody(d))
+	if err != nil {
+		return nil, err
+	}
+
+	json, err := injectSnapshotIDs(rawJSON, prevID)
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +281,87 @@ func SnapshotWithConfig(config *Config, opts SnapshotOptions) (*SnapshotResult, 
 		return nil, err
 	}
 	return &SnapshotResult{Packages: importPaths}, nil
+}
+
+func snapshotBody(dialect string) string {
+	return fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if _, err := os.Stdout.Write(data); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}`, dialect)
+}
+
+func readPreviousSnapshotID(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	// #nosec G304 -- path is user-supplied previous snapshot file.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read previous snapshot %q: %w", path, err)
+	}
+	var raw struct {
+		SnapshotID string `json:"snapshotId"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return "", fmt.Errorf("parse previous snapshot %q: %w", path, err)
+	}
+	if raw.SnapshotID == "" {
+		return "", fmt.Errorf("previous snapshot %q has no snapshotId", path)
+	}
+	return raw.SnapshotID, nil
+}
+
+func injectSnapshotIDs(rawJSON, previousSnapshotID string) (string, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(rawJSON), &raw); err != nil {
+		return "", fmt.Errorf("parse snapshot JSON: %w", err)
+	}
+
+	delete(raw, "snapshotId")
+	delete(raw, "previousSnapshotId")
+
+	if previousSnapshotID != "" {
+		prevData, err := json.Marshal(previousSnapshotID)
+		if err != nil {
+			return "", err
+		}
+		raw["previousSnapshotId"] = prevData
+	}
+
+	content, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(content)
+	snapshotID := hashToString(hash[:])
+
+	idData, err := json.Marshal(snapshotID)
+	if err != nil {
+		return "", err
+	}
+	raw["snapshotId"] = idData
+
+	final, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(append(final, '\n')), nil
+}
+
+func hashToString(b []byte) string {
+	const hex = "0123456789abcdef"
+	buf := make([]byte, len(b)*2)
+	for i, v := range b {
+		buf[i*2] = hex[v>>4]
+		buf[i*2+1] = hex[v&0x0f]
+	}
+	return string(buf)
 }
 
 func ResolveRoot(root string) (string, error) {

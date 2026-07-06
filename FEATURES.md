@@ -225,20 +225,20 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Internal snapshot format separate from rendered SQL.
 - `[x]` Snapshot version.
 - `[x]` Dialect marker.
-- `[ ]` Stable snapshot IDs.
-- `[ ]` Previous snapshot ID.
-- `[ ]` Table metadata map.
-- `[ ]` Column metadata map.
-- `[ ]` Schema metadata map.
-- `[ ]` Stable object keys for schema-qualified names.
+- `[x]` Stable snapshot IDs.
+- `[x]` Previous snapshot ID.
+- `[x]` Table metadata map.
+- `[x]` Column metadata map.
+- `[x]` Schema metadata map.
+- `[x]` Stable object keys for schema-qualified names.
 - `[ ]` Squashed/normalised representation for diffing.
 - `[x]` Deterministic serialisation to JSON.
 - `[ ]` Diff input from current database introspection.
 - `[ ]` Diff input from generated desired snapshot.
 - `[ ]` Drift check from database to generated schema.
-- `[ ]` Rename annotations for tables.
-- `[ ]` Rename annotations for columns.
-- `[ ]` Rename annotations for indexes and constraints.
+- `[x]` Rename annotations for tables.
+- `[x]` Rename annotations for columns.
+- `[x]` Rename annotations for indexes and constraints.
 - `[ ]` Destructive-change detection.
 - `[ ]` Destructive-change default failure mode.
 - `[ ]` Explicit override for destructive changes.

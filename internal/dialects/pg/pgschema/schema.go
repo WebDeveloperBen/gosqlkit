@@ -20,15 +20,33 @@ type Schema struct {
 }
 
 type Document struct {
-	Dialect        string          `json:"dialect"`
-	Namespaces     []Namespace     `json:"namespaces,omitempty"`
-	Extensions     []Extension     `json:"extensions,omitempty"`
-	Enums          []Enum          `json:"enums,omitempty"`
-	CompositeTypes []CompositeType `json:"compositeTypes,omitempty"`
-	Domains        []Domain        `json:"domains,omitempty"`
-	Sequences      []Sequence      `json:"sequences,omitempty"`
-	Tables         []ast.Table     `json:"tables,omitempty"`
-	Version        int             `json:"version"`
+	ColumnMetadata     map[string]ColumnMetadata `json:"columnMetadata,omitempty"`
+	TableMetadata      map[string]TableMetadata  `json:"tableMetadata,omitempty"`
+	SchemaMetadata     map[string]SchemaMetadata `json:"schemaMetadata,omitempty"`
+	SnapshotID         string                    `json:"snapshotId"`
+	PreviousSnapshotID string                    `json:"previousSnapshotId,omitempty"`
+	Dialect            string                    `json:"dialect"`
+	Sequences          []Sequence                `json:"sequences,omitempty"`
+	CompositeTypes     []CompositeType           `json:"compositeTypes,omitempty"`
+	Domains            []Domain                  `json:"domains,omitempty"`
+	Enums              []Enum                    `json:"enums,omitempty"`
+	Tables             []ast.Table               `json:"tables,omitempty"`
+	Extensions         []Extension               `json:"extensions,omitempty"`
+	Namespaces         []Namespace               `json:"namespaces,omitempty"`
+	Version            int                       `json:"version"`
+}
+
+type SchemaMetadata struct {
+	Source string `json:"source,omitempty"`
+}
+
+type TableMetadata struct {
+	Source  string `json:"source,omitempty"`
+	Comment string `json:"comment,omitempty"`
+}
+
+type ColumnMetadata struct {
+	Source string `json:"source,omitempty"`
 }
 
 type Namespace struct {
@@ -80,8 +98,8 @@ type Sequence struct {
 
 func JSON(dialect string, schema Schema) ([]byte, error) {
 	doc := Document{
-		Version:        SnapshotVersion,
 		Dialect:        dialect,
+		Version:        SnapshotVersion,
 		Namespaces:     sortedNamespaces(schema.Namespaces),
 		Extensions:     sortedExtensions(schema.Extensions),
 		Enums:          sortedEnums(schema.Enums),
@@ -89,6 +107,9 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		Domains:        sortedDomains(schema.Domains),
 		Sequences:      sortedSequences(schema.Sequences),
 		Tables:         sortedTables(schema.Tables),
+		SchemaMetadata: buildSchemaMetadata(schema.Namespaces),
+		TableMetadata:  buildTableMetadata(schema.Tables),
+		ColumnMetadata: buildColumnMetadata(schema.Tables),
 	}
 
 	data, err := json.MarshalIndent(doc, "", "  ")
@@ -96,6 +117,47 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		return nil, err
 	}
 	return append(data, '\n'), nil
+}
+
+func buildSchemaMetadata(namespaces []Namespace) map[string]SchemaMetadata {
+	if len(namespaces) == 0 {
+		return nil
+	}
+	m := make(map[string]SchemaMetadata, len(namespaces))
+	for _, ns := range namespaces {
+		m[ns.Name] = SchemaMetadata{}
+	}
+	return m
+}
+
+func buildTableMetadata(tables []ast.Table) map[string]TableMetadata {
+	if len(tables) == 0 {
+		return nil
+	}
+	m := make(map[string]TableMetadata, len(tables))
+	for _, t := range tables {
+		key := qualified(t.Schema, t.Name)
+		m[key] = TableMetadata{Comment: t.Comment}
+	}
+	return m
+}
+
+func buildColumnMetadata(tables []ast.Table) map[string]ColumnMetadata {
+	total := 0
+	for _, t := range tables {
+		total += len(t.Columns)
+	}
+	if total == 0 {
+		return nil
+	}
+	m := make(map[string]ColumnMetadata, total)
+	for _, t := range tables {
+		tableKey := qualified(t.Schema, t.Name)
+		for _, col := range t.Columns {
+			m[tableKey+"."+col.Name] = ColumnMetadata{}
+		}
+	}
+	return m
 }
 
 func sortedNamespaces(input []Namespace) []Namespace {

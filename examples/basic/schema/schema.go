@@ -10,8 +10,8 @@ var InvoiceStatus = pg.EnumTypeInSchema("billing", "invoice_status", "draft", "i
 
 var OrderNumberSeq = pg.SequenceInSchema("billing", "order_number_seq", pg.SequenceOptions{
 	Increment: 1,
-	StartWith: ptrInt64(1000),
-	Cache:     ptrInt64(1),
+	StartWith: new(int64(1000)),
+	Cache:     new(int64(1)),
 })
 
 var Money = pg.CompositeTypeInSchema(
@@ -89,7 +89,7 @@ var Events = pg.Table(
 	pg.Integer("id").GeneratedAlwaysAsIdentity(pg.SequenceOptions{
 		Name:      "events_id_seq",
 		Increment: 1,
-		Cache:     ptrInt64(20),
+		Cache:     new(int64(20)),
 	}),
 	pg.Text("description").NotNull(),
 	pg.Text("search_vector").GeneratedAlwaysAs("to_tsvector('english', description)"),
@@ -116,7 +116,3 @@ var Bookings = pg.Table(
 		pg.ExcludeWith("during", "&&"),
 	).Using("gist"),
 )
-
-func ptrInt64(v int64) *int64 {
-	return &v
-}

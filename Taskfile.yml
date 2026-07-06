@@ -176,6 +176,7 @@ tasks:
   verify:
     desc: Run the main project checks
     cmds:
+      - task: fix:fieldalignment
       - task: verify:fmt
       - task: verify:build
       - task: verify:test

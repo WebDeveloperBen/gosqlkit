@@ -1,27 +1,33 @@
 {
-  "dialect": "postgresql",
-  "namespaces": [
-    {
-      "name": "billing"
-    }
-  ],
-  "extensions": [
-    {
-      "name": "pgcrypto"
-    }
-  ],
-  "enums": [
-    {
-      "schema": "billing",
-      "name": "invoice_status",
-      "values": [
-        "draft",
-        "issued",
-        "paid",
-        "void"
-      ]
-    }
-  ],
+  "columnMetadata": {
+    "billing.invoice_lines.amount_cents": {},
+    "billing.invoice_lines.description": {},
+    "billing.invoice_lines.invoice_id": {},
+    "billing.invoice_lines.line_no": {},
+    "billing.invoices.amount_cents": {},
+    "billing.invoices.created_at": {},
+    "billing.invoices.id": {},
+    "billing.invoices.status": {},
+    "billing.invoices.user_id": {},
+    "public.bookings.during": {},
+    "public.bookings.id": {},
+    "public.bookings.owner": {},
+    "public.bookings.resource": {},
+    "public.events.created_at": {},
+    "public.events.description": {},
+    "public.events.duration": {},
+    "public.events.id": {},
+    "public.events.metadata": {},
+    "public.events.payload": {},
+    "public.events.priority": {},
+    "public.events.search_vector": {},
+    "public.users.created_at": {},
+    "public.users.display_name": {},
+    "public.users.email": {},
+    "public.users.id": {},
+    "public.users.last_login_ip": {},
+    "public.users.tags": {}
+  },
   "compositeTypes": [
     {
       "schema": "billing",
@@ -38,6 +44,7 @@
       ]
     }
   ],
+  "dialect": "postgresql",
   "domains": [
     {
       "name": "email",
@@ -46,6 +53,31 @@
       "notNull": true
     }
   ],
+  "enums": [
+    {
+      "schema": "billing",
+      "name": "invoice_status",
+      "values": [
+        "draft",
+        "issued",
+        "paid",
+        "void"
+      ]
+    }
+  ],
+  "extensions": [
+    {
+      "name": "pgcrypto"
+    }
+  ],
+  "namespaces": [
+    {
+      "name": "billing"
+    }
+  ],
+  "schemaMetadata": {
+    "billing": {}
+  },
   "sequences": [
     {
       "startWith": 1000,
@@ -55,6 +87,16 @@
       "increment": 1
     }
   ],
+  "snapshotId": "922c693070b575a79b5e5d4897102230c6521f8063ddd2ce18888a48cf8de78e",
+  "tableMetadata": {
+    "billing.invoice_lines": {},
+    "billing.invoices": {},
+    "public.bookings": {},
+    "public.events": {},
+    "public.users": {
+      "comment": "Application users."
+    }
+  },
   "tables": [
     {
       "schema": "billing",
