@@ -3,9 +3,10 @@ version: "3"
 dotenv: [".env"]
 
 vars:
-  BIN: "{{.TASK_DIR}}/bin/pgkit"
+  BIN: "{{.TASK_DIR}}/bin/gosqlkit"
   EXAMPLE_SCHEMA: "examples/basic/schema"
   EXAMPLE_SQL: "examples/basic/db/schema.generated.sql"
+  EXAMPLE_SNAPSHOT: "examples/basic/db/schema.snapshot.json"
 
 tasks:
   default:
@@ -19,10 +20,10 @@ tasks:
       - go tool lefthook install
 
   build:
-    desc: Build the pgkit CLI
+    desc: Build the gosqlkit CLI
     cmds:
       - mkdir -p "{{.TASK_DIR}}/bin"
-      - go build -o "{{.BIN}}" ./cmd/pgkit
+      - go build -o "{{.BIN}}" ./cmd/gosqlkit
 
   test:
     desc: Run all Go tests
@@ -32,32 +33,66 @@ tasks:
   generate:
     desc: Regenerate the checked-in example schema SQL
     cmds:
-      - go run ./cmd/pgkit generate --out "{{.EXAMPLE_SQL}}" ./{{.EXAMPLE_SCHEMA}}
+      - go run ./cmd/gosqlkit generate --out "{{.EXAMPLE_SQL}}" ./{{.EXAMPLE_SCHEMA}}
 
   generate:check:
     desc: Check the checked-in example schema SQL is current
     cmds:
-      - go run ./cmd/pgkit generate --out "{{.EXAMPLE_SQL}}" --check ./{{.EXAMPLE_SCHEMA}}
+      - go run ./cmd/gosqlkit generate --out "{{.EXAMPLE_SQL}}" --check ./{{.EXAMPLE_SCHEMA}}
+
+  snapshot:
+    desc: Regenerate the checked-in example schema snapshot JSON
+    cmds:
+      - go run ./cmd/gosqlkit snapshot --out "{{.EXAMPLE_SNAPSHOT}}" ./{{.EXAMPLE_SCHEMA}}
+
+  snapshot:check:
+    desc: Check the checked-in example schema snapshot JSON is current
+    cmds:
+      - go run ./cmd/gosqlkit snapshot --out "{{.EXAMPLE_SNAPSHOT}}" --check ./{{.EXAMPLE_SCHEMA}}
 
   sqlc:check:
     desc: Validate the example schema and queries with sqlc in a temp directory
     cmds:
       - |
         set -e
+
         if ! command -v sqlc >/dev/null 2>&1; then
           echo "sqlc not found; install sqlc to run this check" >&2
           exit 1
         fi
-        WORK=$(mktemp -d)
+
+        WORK="$(mktemp -d)"
         trap 'rm -rf "$WORK"' EXIT
+
         cp -R examples/basic/. "$WORK"
         cd "$WORK"
+
         sqlc generate
 
   fmt:
     desc: Format all Go files with gofumpt
     cmds:
       - go tool gofumpt -w .
+
+  fmt:check:
+    desc: Check Go files are formatted with gofumpt
+    cmds:
+      - |
+        set -e
+
+        files="$(go tool gofumpt -l .)"
+        if [ -n "$files" ]; then
+          echo "The following files need formatting:"
+          echo "$files"
+          echo
+          echo "Run: task fmt"
+          exit 1
+        fi
+
+  fix:fieldalignment:
+    desc: Reorder struct fields to reduce memory usage
+    cmds:
+      - go tool fieldalignment -fix ./...
 
   modernize:
     desc: Apply Go modernization fixes
@@ -70,20 +105,27 @@ tasks:
       - go tool modernize ./...
 
   lint:
-    desc: Run golangci-lint if installed
+    desc: Run golangci-lint
     cmds:
       - |
         set -e
+
         if ! command -v golangci-lint >/dev/null 2>&1; then
           echo "golangci-lint not found; install golangci-lint to run this check" >&2
           exit 1
         fi
+
         golangci-lint run ./...
 
   vuln:
     desc: Run govulncheck
     cmds:
       - go tool govulncheck ./...
+
+  verify:fmt:
+    desc: Check Go formatting
+    cmds:
+      - task: fmt:check
 
   verify:build:
     desc: Compile all packages
@@ -96,9 +138,10 @@ tasks:
       - task: test
 
   verify:generate:
-    desc: Check generated example SQL is current
+    desc: Check generated example SQL and snapshot JSON are current
     cmds:
       - task: generate:check
+      - task: snapshot:check
 
   verify:sqlc:
     desc: Run the sqlc compatibility check
@@ -106,19 +149,34 @@ tasks:
       - task: sqlc:check
 
   verify:cli:
-    desc: Smoke-test the pgkit CLI
+    desc: Smoke-test the gosqlkit CLI
     deps: [build]
     cmds:
       - "{{.BIN}} --help"
       - "{{.BIN}} version"
       - "{{.BIN}} generate ./{{.EXAMPLE_SCHEMA}} > /dev/null"
       - "{{.BIN}} generate --out {{.EXAMPLE_SQL}} --check ./{{.EXAMPLE_SCHEMA}}"
+      - "{{.BIN}} snapshot ./{{.EXAMPLE_SCHEMA}} > /dev/null"
+      - "{{.BIN}} snapshot --out {{.EXAMPLE_SNAPSHOT}} --check ./{{.EXAMPLE_SCHEMA}}"
+
+  verify:lint:
+    desc: Run lint checks
+    cmds:
+      - task: lint
+
+  verify:vuln:
+    desc: Run vulnerability checks
+    cmds:
+      - task: vuln
 
   verify:
     desc: Run the main project checks
     cmds:
+      - task: verify:fmt
       - task: verify:build
       - task: verify:test
       - task: verify:generate
       - task: verify:sqlc
       - task: verify:cli
+      - task: verify:lint
+      - task: verify:vuln

@@ -34,7 +34,7 @@ func Get() Info {
 
 func String() string {
 	i := Get()
-	parts := []string{"pgkit " + i.Version}
+	parts := []string{"gosqlkit " + i.Version}
 	if i.Commit != "" {
 		parts = append(parts, "commit "+i.Commit)
 	}

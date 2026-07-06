@@ -1,10 +1,11 @@
-module github.com/webdeveloperben/pgkit
+module github.com/webdeveloperben/gosqlkit
 
 go 1.26.3
 
+require github.com/alecthomas/kong v1.15.0
+
 require (
 	charm.land/lipgloss/v2 v2.0.3 // indirect
-	github.com/alecthomas/kong v1.15.0 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
@@ -71,6 +72,7 @@ require (
 
 tool (
 	github.com/evilmartians/lefthook/v2
+	golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment
 	golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize
 	golang.org/x/vuln/cmd/govulncheck
 	gotest.tools/gotestsum

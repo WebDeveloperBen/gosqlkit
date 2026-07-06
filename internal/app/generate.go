@@ -11,17 +11,31 @@ import (
 	"strings"
 )
 
-const pgImportPath = "github.com/webdeveloperben/pgkit/pg"
-
 type GenerateOptions struct {
 	Stdout  io.Writer
 	Package string
+	Dialect string
 	Out     string
 	Root    string
 	Check   bool
 }
 
 type GenerateResult struct {
+	Out     string `json:"out,omitempty"`
+	Package string `json:"package"`
+	Checked bool   `json:"checked"`
+}
+
+type SnapshotOptions struct {
+	Stdout  io.Writer
+	Package string
+	Dialect string
+	Out     string
+	Root    string
+	Check   bool
+}
+
+type SnapshotResult struct {
 	Out     string `json:"out,omitempty"`
 	Package string `json:"package"`
 	Checked bool   `json:"checked"`
@@ -48,7 +62,12 @@ func Generate(opts GenerateOptions) (*GenerateResult, error) {
 		return nil, err
 	}
 
-	sql, err := renderPackage(importPath, moduleDir)
+	sql, err := runPackageProgram(importPath, moduleDir, fmt.Sprintf(`sql, err := kit.RenderSQL(%q)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Print(sql)`, dialect(opts.Dialect)))
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +92,60 @@ func Generate(opts GenerateOptions) (*GenerateResult, error) {
 	return &GenerateResult{Package: importPath}, nil
 }
 
+func Snapshot(opts SnapshotOptions) (*SnapshotResult, error) {
+	if opts.Package == "" {
+		return nil, errors.New("schema package is required")
+	}
+	if opts.Check && opts.Out == "" {
+		return nil, errors.New("snapshot --check requires --out")
+	}
+	if opts.Stdout == nil {
+		opts.Stdout = io.Discard
+	}
+
+	root, err := ResolveRoot(opts.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	importPath, moduleDir, err := resolvePackage(root, opts.Package)
+	if err != nil {
+		return nil, err
+	}
+
+	json, err := runPackageProgram(importPath, moduleDir, fmt.Sprintf(`data, err := kit.SnapshotJSON(%q)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if _, err := os.Stdout.Write(data); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}`, dialect(opts.Dialect)))
+	if err != nil {
+		return nil, err
+	}
+
+	out := ResolvePath(root, opts.Out)
+	if opts.Check {
+		if err := checkOutput(out, json); err != nil {
+			return nil, err
+		}
+		return &SnapshotResult{Checked: true, Out: out, Package: importPath}, nil
+	}
+	if opts.Out != "" {
+		if err := writeOutput(out, json); err != nil {
+			return nil, err
+		}
+		return &SnapshotResult{Out: out, Package: importPath}, nil
+	}
+
+	if _, err := io.WriteString(opts.Stdout, json); err != nil {
+		return nil, err
+	}
+	return &SnapshotResult{Package: importPath}, nil
+}
+
 func ResolveRoot(root string) (string, error) {
 	if root != "" {
 		return root, nil
@@ -88,6 +161,7 @@ func ResolvePath(root, path string) string {
 }
 
 func resolvePackage(root, pkg string) (importPath string, moduleDir string, err error) {
+	// #nosec G204 -- pkg is a user-supplied Go package path passed to the Go tool by design.
 	listCmd := exec.Command("go", "list", "-f", "{{.ImportPath}}", pkg)
 	listCmd.Dir = root
 	importOutput, err := listCmd.Output()
@@ -105,12 +179,14 @@ func resolvePackage(root, pkg string) (importPath string, moduleDir string, err 
 	return strings.TrimSpace(string(importOutput)), strings.TrimSpace(string(moduleOutput)), nil
 }
 
-func renderPackage(importPath, moduleDir string) (string, error) {
-	tempDir, err := os.MkdirTemp(moduleDir, "pgkit-generate-*")
+func runPackageProgram(importPath, moduleDir, body string) (string, error) {
+	tempDir, err := os.MkdirTemp(moduleDir, "gosqlkit-generate-*")
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
 
 	source := fmt.Sprintf(`package main
 
@@ -118,19 +194,14 @@ import (
 	"fmt"
 	"os"
 
-	"%s"
+	"github.com/webdeveloperben/gosqlkit/kit"
 	_ "%s"
 )
 
 func main() {
-	sql, err := pg.Render()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Print(sql)
+%s
 }
-`, pgImportPath, importPath)
+`, importPath, indent(body, "\t"))
 
 	if err := os.WriteFile(filepath.Join(tempDir, "main.go"), []byte(source), 0o600); err != nil {
 		return "", err
@@ -141,6 +212,7 @@ func main() {
 		return "", err
 	}
 
+	// #nosec G204 -- rel points at the generated temporary program under moduleDir.
 	cmd := exec.Command("go", "run", "./"+filepath.ToSlash(rel))
 	cmd.Dir = moduleDir
 	var stdout, stderr bytes.Buffer
@@ -153,28 +225,47 @@ func main() {
 	return stdout.String(), nil
 }
 
+func dialect(value string) string {
+	if value == "" {
+		return "postgres"
+	}
+	return value
+}
+
+func indent(value, prefix string) string {
+	lines := strings.Split(value, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = prefix + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func commandError(context string, err error) error {
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return fmt.Errorf("%s: %w\n%s", context, err, strings.TrimSpace(string(exitErr.Stderr)))
 	}
 	return fmt.Errorf("%s: %w", context, err)
 }
 
 func writeOutput(path, content string) error {
+	// #nosec G301 -- generated schema files should follow normal project-readable permissions.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	// #nosec G306 -- generated schema files should follow normal project-readable permissions.
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
 func checkOutput(path, content string) error {
+	// #nosec G304 -- --out is intentionally user-selected and resolved relative to the project root.
 	current, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	if string(current) != content {
-		return fmt.Errorf("%s is out of date; run pgkit generate --out %s", path, path)
+		return fmt.Errorf("%s is out of date; run gosqlkit generate --out %s", path, path)
 	}
 	return nil
 }

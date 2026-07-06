@@ -3,7 +3,7 @@ package pg
 import (
 	"fmt"
 
-	"github.com/webdeveloperben/pgkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/ast"
 )
 
 type Column struct {

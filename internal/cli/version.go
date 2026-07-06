@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/webdeveloperben/pgkit/internal/version"
+	"github.com/webdeveloperben/gosqlkit/internal/version"
 )
 
 type VersionCmd struct{}

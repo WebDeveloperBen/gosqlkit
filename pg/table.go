@@ -1,6 +1,6 @@
 package pg
 
-import "github.com/webdeveloperben/pgkit/internal/ast"
+import "github.com/webdeveloperben/gosqlkit/internal/ast"
 
 type Element interface {
 	apply(table *ast.Table)
@@ -35,7 +35,15 @@ type ForeignKeyDef struct {
 }
 
 func Table(name string, elements ...Element) *Definition {
-	table := ast.Table{Name: name}
+	return table("", name, elements...)
+}
+
+func TableInSchema(schema, name string, elements ...Element) *Definition {
+	return table(schema, name, elements...)
+}
+
+func table(schema, name string, elements ...Element) *Definition {
+	table := ast.Table{Schema: schema, Name: name}
 	for _, element := range elements {
 		element.apply(&table)
 	}

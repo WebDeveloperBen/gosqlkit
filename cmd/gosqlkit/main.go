@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/webdeveloperben/pgkit/internal/cli"
+	"github.com/webdeveloperben/gosqlkit/internal/cli"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func run(args []string) (code int) {
 				}
 				return
 			}
-			fmt.Fprintf(os.Stderr, "pgkit: panic: %v\n", r)
+			fmt.Fprintf(os.Stderr, "gosqlkit: panic: %v\n", r)
 			code = 1
 		}
 	}()

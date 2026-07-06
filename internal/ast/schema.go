@@ -5,6 +5,7 @@ type Schema struct {
 }
 
 type Table struct {
+	Schema            string
 	Name              string
 	Columns           []Column
 	PrimaryKeys       []PrimaryKey
@@ -57,11 +58,11 @@ type Check struct {
 }
 
 type Index struct {
+	With         map[string]string
 	Name         string
-	Columns      []IndexColumn
 	Method       string
 	Where        string
-	With         map[string]string
+	Columns      []IndexColumn
 	Unique       bool
 	Concurrently bool
 	Only         bool

@@ -1,0 +1,201 @@
+{
+  "dialect": "postgresql",
+  "namespaces": [
+    {
+      "name": "billing"
+    }
+  ],
+  "extensions": [
+    {
+      "name": "pgcrypto"
+    }
+  ],
+  "enums": [
+    {
+      "schema": "billing",
+      "name": "invoice_status",
+      "values": [
+        "draft",
+        "issued",
+        "paid",
+        "void"
+      ]
+    }
+  ],
+  "tables": [
+    {
+      "schema": "billing",
+      "name": "invoice_lines",
+      "columns": [
+        {
+          "name": "invoice_id",
+          "type": "uuid",
+          "notNull": true
+        },
+        {
+          "name": "line_no",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "amount_cents",
+          "type": "integer",
+          "notNull": true
+        }
+      ],
+      "primaryKeys": [
+        {
+          "name": "invoice_lines_pkey",
+          "columns": [
+            "invoice_id",
+            "line_no"
+          ]
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "invoice_lines_invoice_id_fkey",
+          "referencedTable": "billing.invoices",
+          "onDelete": "cascade",
+          "columns": [
+            "invoice_id"
+          ],
+          "referencedColumns": [
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "invoice_lines_amount_cents_positive",
+          "expression": "amount_cents \u003e 0"
+        }
+      ],
+      "indexes": [
+        {
+          "with": {
+            "fillfactor": "90"
+          },
+          "name": "invoice_lines_description_idx",
+          "method": "btree",
+          "columns": [
+            {
+              "expression": "description",
+              "opClass": "text_ops"
+            }
+          ],
+          "concurrently": true
+        }
+      ]
+    },
+    {
+      "schema": "billing",
+      "name": "invoices",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "notNull": true
+        },
+        {
+          "name": "amount_cents",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "status",
+          "type": "billing.invoice_status",
+          "default": "'draft'",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "now()",
+          "notNull": true
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "invoices_user_id_fkey",
+          "referencedTable": "public.users",
+          "onDelete": "cascade",
+          "columns": [
+            "user_id"
+          ],
+          "referencedColumns": [
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "invoices_amount_cents_positive",
+          "expression": "amount_cents \u003e 0"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "invoices_user_id_created_at_idx",
+          "where": "status \u003c\u003e 'void'",
+          "columns": [
+            {
+              "expression": "user_id"
+            },
+            {
+              "expression": "created_at",
+              "order": "DESC",
+              "nulls": "LAST"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "display_name",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "now()",
+          "notNull": true
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "users_email_unique",
+          "columns": [
+            "email"
+          ]
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

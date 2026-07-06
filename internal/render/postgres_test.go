@@ -5,12 +5,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/webdeveloperben/pgkit/internal/ast"
-	"github.com/webdeveloperben/pgkit/internal/render"
+	"github.com/webdeveloperben/gosqlkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/pgschema"
+	"github.com/webdeveloperben/gosqlkit/internal/render"
 )
 
 func TestPostgresRender(t *testing.T) {
-	schema := ast.Schema{
+	schema := pgschema.Schema{
+		Namespaces: []pgschema.Namespace{
+			{Name: "billing"},
+		},
+		Extensions: []pgschema.Extension{
+			{Name: "pgcrypto"},
+		},
+		Enums: []pgschema.Enum{
+			{Schema: "billing", Name: "invoice_status", Values: []string{"draft", "issued", "paid", "void"}},
+		},
 		Tables: []ast.Table{
 			{
 				Name: "users",
@@ -25,19 +35,20 @@ func TestPostgresRender(t *testing.T) {
 				},
 			},
 			{
-				Name: "invoices",
+				Schema: "billing",
+				Name:   "invoices",
 				Columns: []ast.Column{
 					{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
 					{Name: "user_id", Type: "uuid", NotNull: true},
 					{Name: "amount_cents", Type: "integer", NotNull: true},
-					{Name: "status", Type: "text", NotNull: true, Default: "'draft'"},
+					{Name: "status", Type: "billing.invoice_status", NotNull: true, Default: "'draft'"},
 					{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
 				},
 				ForeignKeys: []ast.ForeignKeyConstraint{
 					{
 						Name:              "invoices_user_id_fkey",
 						Columns:           []string{"user_id"},
-						ReferencedTable:   "users",
+						ReferencedTable:   "public.users",
 						ReferencedColumns: []string{"id"},
 						OnDelete:          "cascade",
 					},
@@ -57,7 +68,8 @@ func TestPostgresRender(t *testing.T) {
 				},
 			},
 			{
-				Name: "invoice_lines",
+				Schema: "billing",
+				Name:   "invoice_lines",
 				Columns: []ast.Column{
 					{Name: "invoice_id", Type: "uuid", NotNull: true},
 					{Name: "line_no", Type: "integer", NotNull: true},
@@ -71,7 +83,7 @@ func TestPostgresRender(t *testing.T) {
 					{
 						Name:              "invoice_lines_invoice_id_fkey",
 						Columns:           []string{"invoice_id"},
-						ReferencedTable:   "invoices",
+						ReferencedTable:   "billing.invoices",
 						ReferencedColumns: []string{"id"},
 						OnDelete:          "cascade",
 					},
@@ -108,8 +120,33 @@ func TestPostgresRender(t *testing.T) {
 	}
 }
 
+func TestPostgresRejectsEnumWithDuplicateValues(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Enums: []pgschema.Enum{
+			{Name: "invoice_status", Values: []string{"draft", "draft"}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `duplicate value "draft"`) {
+		t.Fatalf("expected duplicate enum value error, got %v", err)
+	}
+}
+
+func TestPostgresAllowsHyphenatedExtensionNames(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Extensions: []pgschema.Extension{
+			{Name: "uuid-ossp"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";\n" {
+		t.Fatalf("unexpected extension SQL:\n%s", got)
+	}
+}
+
 func TestPostgresRejectsIndexWithUnknownColumn(t *testing.T) {
-	_, err := render.Postgres(ast.Schema{
+	_, err := render.Postgres(pgschema.Schema{
 		Tables: []ast.Table{
 			{
 				Name: "users",
@@ -127,8 +164,93 @@ func TestPostgresRejectsIndexWithUnknownColumn(t *testing.T) {
 	}
 }
 
+func TestPostgresAllowsSameTableNameInDifferentSchemas(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Namespaces: []pgschema.Namespace{
+			{Name: "tenant_a"},
+			{Name: "tenant_b"},
+		},
+		Tables: []ast.Table{
+			{
+				Schema: "tenant_a",
+				Name:   "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+				},
+			},
+			{
+				Schema: "tenant_b",
+				Name:   "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "CREATE TABLE tenant_a.users") || !strings.Contains(got, "CREATE TABLE tenant_b.users") {
+		t.Fatalf("expected both schema-qualified tables, got:\n%s", got)
+	}
+}
+
+func TestPostgresRejectsForeignKeyToUnknownTable(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "invoices",
+				Columns: []ast.Column{
+					{Name: "user_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{
+					{
+						Name:              "invoices_user_id_fkey",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+					},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown table "users"`) {
+		t.Fatalf("expected unknown referenced table error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsForeignKeyToUnknownColumn(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+				},
+			},
+			{
+				Name: "invoices",
+				Columns: []ast.Column{
+					{Name: "user_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{
+					{
+						Name:              "invoices_user_id_fkey",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"missing_id"},
+					},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown column "missing_id"`) {
+		t.Fatalf("expected unknown referenced column error, got %v", err)
+	}
+}
+
 func TestPostgresRejectsConstraintWithUnknownColumn(t *testing.T) {
-	_, err := render.Postgres(ast.Schema{
+	_, err := render.Postgres(pgschema.Schema{
 		Tables: []ast.Table{
 			{
 				Name: "invoice_lines",
@@ -147,7 +269,7 @@ func TestPostgresRejectsConstraintWithUnknownColumn(t *testing.T) {
 }
 
 func TestPostgresRejectsDuplicateColumns(t *testing.T) {
-	_, err := render.Postgres(ast.Schema{
+	_, err := render.Postgres(pgschema.Schema{
 		Tables: []ast.Table{
 			{
 				Name: "users",
@@ -164,7 +286,7 @@ func TestPostgresRejectsDuplicateColumns(t *testing.T) {
 }
 
 func TestPostgresRejectsUnsupportedForeignKeyAction(t *testing.T) {
-	_, err := render.Postgres(ast.Schema{
+	_, err := render.Postgres(pgschema.Schema{
 		Tables: []ast.Table{
 			{
 				Name: "invoices",

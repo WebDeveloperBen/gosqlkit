@@ -1,8 +1,15 @@
 package schema
 
-import "github.com/webdeveloperben/pgkit/pg"
+import "github.com/webdeveloperben/gosqlkit/pg"
 
-var Users = pg.Table("users",
+var PgCrypto = pg.Extension("pgcrypto")
+
+var Billing = pg.Namespace("billing")
+
+var InvoiceStatus = pg.EnumTypeInSchema("billing", "invoice_status", "draft", "issued", "paid", "void")
+
+var Users = pg.Table(
+	"users",
 	pg.UUID("id").
 		PrimaryKey().
 		Default("gen_random_uuid()"),
@@ -15,7 +22,8 @@ var Users = pg.Table("users",
 	pg.Unique("users_email_unique", "email"),
 )
 
-var Invoices = pg.Table("invoices",
+var Invoices = pg.TableInSchema(
+	"billing", "invoices",
 	pg.UUID("id").
 		PrimaryKey().
 		Default("gen_random_uuid()"),
@@ -23,7 +31,7 @@ var Invoices = pg.Table("invoices",
 		NotNull(),
 	pg.Integer("amount_cents").
 		NotNull(),
-	pg.Text("status").
+	pg.EnumColumn("status", InvoiceStatus).
 		NotNull().
 		Default("'draft'"),
 	pg.TimestampTZ("created_at").
@@ -31,29 +39,28 @@ var Invoices = pg.Table("invoices",
 		Default("now()"),
 	pg.Check("invoices_amount_cents_positive", "amount_cents > 0"),
 	pg.ForeignKey("invoices_user_id_fkey", "user_id").
-		References("users", "id").
+		References("public.users", "id").
 		OnDelete("cascade"),
-	pg.IndexOn("invoices_user_id_created_at_idx",
+	pg.IndexOn(
+		"invoices_user_id_created_at_idx",
 		pg.IndexColumn("user_id"),
 		pg.IndexColumn("created_at").Desc().NullsLast(),
 	).Where("status <> 'void'"),
 )
 
-var InvoiceLines = pg.Table("invoice_lines",
-	pg.UUID("invoice_id").
-		NotNull(),
-	pg.Integer("line_no").
-		NotNull(),
-	pg.Text("description").
-		NotNull(),
-	pg.Integer("amount_cents").
-		NotNull(),
+var InvoiceLines = pg.TableInSchema(
+	"billing", "invoice_lines",
+	pg.UUID("invoice_id").NotNull(),
+	pg.Integer("line_no").NotNull(),
+	pg.Text("description").NotNull(),
+	pg.Integer("amount_cents").NotNull(),
 	pg.PrimaryKey("invoice_lines_pkey", "invoice_id", "line_no"),
 	pg.ForeignKey("invoice_lines_invoice_id_fkey", "invoice_id").
-		References("invoices", "id").
+		References("billing.invoices", "id").
 		OnDelete("cascade"),
 	pg.Check("invoice_lines_amount_cents_positive", "amount_cents > 0"),
-	pg.IndexOn("invoice_lines_description_idx",
+	pg.IndexOn(
+		"invoice_lines_description_idx",
 		pg.IndexColumn("description").OpClass("text_ops"),
 	).Using("btree").Concurrently().With("fillfactor", "90"),
 )

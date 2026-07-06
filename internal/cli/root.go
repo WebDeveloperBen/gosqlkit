@@ -10,9 +10,10 @@ import (
 )
 
 type CLI struct {
-	Version VersionCmd `cmd:"" help:"Print the pgkit version and exit."`
+	Version VersionCmd `cmd:"" help:"Print the gosqlkit version and exit."`
 	GlobalFlags
-	Generate GenerateCmd `cmd:"" help:"Generate deterministic PostgreSQL SQL from a Go schema package."`
+	Generate GenerateCmd `cmd:"" help:"Generate deterministic SQL from a Go schema package."`
+	Snapshot SnapshotCmd `cmd:"" help:"Generate deterministic schema snapshot JSON from a Go schema package."`
 }
 
 type GlobalFlags struct {
@@ -83,8 +84,8 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 
 	parser, err := kong.New(
 		&cli,
-		kong.Name("pgkit"),
-		kong.Description("Generate deterministic PostgreSQL schema SQL from Go definitions."),
+		kong.Name("gosqlkit"),
+		kong.Description("Generate deterministic schema SQL from Go definitions."),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact:  true,
@@ -106,7 +107,7 @@ func run(args []string, stdout, stderr io.Writer) (int, error) {
 		if !errors.As(err, &exitErr) {
 			exitErr = &ExitError{Code: 1, Err: err}
 		}
-		fmt.Fprintf(cli.stderr(), "pgkit: error: %s\n", exitErr.Err)
+		_, _ = fmt.Fprintf(cli.stderr(), "gosqlkit: error: %s\n", exitErr.Err)
 		return exitErr.Code, exitErr.Err
 	}
 	return 0, nil
@@ -116,8 +117,8 @@ func runHelp() (int, error) {
 	var cli CLI
 	parser, err := kong.New(
 		&cli,
-		kong.Name("pgkit"),
-		kong.Description("Generate deterministic PostgreSQL schema SQL from Go definitions."),
+		kong.Name("gosqlkit"),
+		kong.Description("Generate deterministic schema SQL from Go definitions."),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact:  true,
 			Indenter: kong.SpaceIndenter,

@@ -6,12 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/webdeveloperben/pgkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/pgschema"
 )
 
 var identifierPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
-func Postgres(schema ast.Schema) (string, error) {
+func Postgres(schema pgschema.Schema) (string, error) {
 	if err := validateSchema(schema); err != nil {
 		return "", err
 	}
@@ -21,6 +22,41 @@ func Postgres(schema ast.Schema) (string, error) {
 	tables, err := orderTables(schema.Tables)
 	if err != nil {
 		return "", err
+	}
+
+	namespaces := append([]pgschema.Namespace(nil), schema.Namespaces...)
+	sort.SliceStable(namespaces, func(i, j int) bool {
+		return namespaces[i].Name < namespaces[j].Name
+	})
+	for i, namespace := range namespaces {
+		b.WriteString("CREATE SCHEMA ")
+		b.WriteString(namespace.Name)
+		b.WriteString(";\n")
+		if i < len(namespaces)-1 || len(tables) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	extensions := append([]pgschema.Extension(nil), schema.Extensions...)
+	sort.SliceStable(extensions, func(i, j int) bool {
+		return qualifiedName(extensions[i].Schema, extensions[i].Name) < qualifiedName(extensions[j].Schema, extensions[j].Name)
+	})
+	for i, extension := range extensions {
+		renderExtension(&b, extension)
+		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(tables) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	enums := append([]pgschema.Enum(nil), schema.Enums...)
+	sort.SliceStable(enums, func(i, j int) bool {
+		return qualifiedName(enums[i].Schema, enums[i].Name) < qualifiedName(enums[j].Schema, enums[j].Name)
+	})
+	for i, enum := range enums {
+		renderEnum(&b, enum)
+		if i < len(enums)-1 || len(tables) > 0 {
+			b.WriteString("\n")
+		}
 	}
 
 	for i, table := range tables {
@@ -36,7 +72,7 @@ func Postgres(schema ast.Schema) (string, error) {
 			return indexes[i].Name < indexes[j].Name
 		})
 		for j, index := range indexes {
-			if err := renderIndex(&b, table.Name, index); err != nil {
+			if err := renderIndex(&b, renderTableName(table), index); err != nil {
 				return "", err
 			}
 			if j < len(indexes)-1 || i < len(tables)-1 {
@@ -51,12 +87,12 @@ func Postgres(schema ast.Schema) (string, error) {
 func orderTables(input []ast.Table) ([]ast.Table, error) {
 	tables := append([]ast.Table(nil), input...)
 	sort.SliceStable(tables, func(i, j int) bool {
-		return tables[i].Name < tables[j].Name
+		return tableKey(tables[i]) < tableKey(tables[j])
 	})
 
 	byName := make(map[string]ast.Table, len(tables))
 	for _, table := range tables {
-		byName[table.Name] = table
+		byName[tableKey(table)] = table
 	}
 
 	visiting := map[string]bool{}
@@ -65,14 +101,15 @@ func orderTables(input []ast.Table) ([]ast.Table, error) {
 
 	var visit func(table ast.Table) error
 	visit = func(table ast.Table) error {
-		if visited[table.Name] {
+		key := tableKey(table)
+		if visited[key] {
 			return nil
 		}
-		if visiting[table.Name] {
-			return fmt.Errorf("table %q has a foreign key cycle; cyclic foreign keys are not supported in CREATE TABLE output yet", table.Name)
+		if visiting[key] {
+			return fmt.Errorf("table %q has a foreign key cycle; cyclic foreign keys are not supported in CREATE TABLE output yet", renderTableName(table))
 		}
 
-		visiting[table.Name] = true
+		visiting[key] = true
 		for _, dependency := range tableDependencies(table) {
 			depTable, ok := byName[dependency]
 			if !ok {
@@ -82,8 +119,8 @@ func orderTables(input []ast.Table) ([]ast.Table, error) {
 				return err
 			}
 		}
-		visiting[table.Name] = false
-		visited[table.Name] = true
+		visiting[key] = false
+		visited[key] = true
 		ordered = append(ordered, table)
 		return nil
 	}
@@ -100,13 +137,17 @@ func orderTables(input []ast.Table) ([]ast.Table, error) {
 func tableDependencies(table ast.Table) []string {
 	deps := map[string]struct{}{}
 	for _, column := range table.Columns {
-		if column.References != nil && column.References.Table != table.Name {
-			deps[column.References.Table] = struct{}{}
+		if column.References != nil {
+			dependency, err := referenceKey(table.Schema, column.References.Table)
+			if err == nil && dependency != tableKey(table) {
+				deps[dependency] = struct{}{}
+			}
 		}
 	}
 	for _, foreignKey := range table.ForeignKeys {
-		if foreignKey.ReferencedTable != table.Name {
-			deps[foreignKey.ReferencedTable] = struct{}{}
+		dependency, err := referenceKey(table.Schema, foreignKey.ReferencedTable)
+		if err == nil && dependency != tableKey(table) {
+			deps[dependency] = struct{}{}
 		}
 	}
 
@@ -118,18 +159,82 @@ func tableDependencies(table ast.Table) []string {
 	return names
 }
 
-func validateSchema(schema ast.Schema) error {
+func validateSchema(schema pgschema.Schema) error {
+	namespaceNames := map[string]struct{}{}
+	for _, namespace := range schema.Namespaces {
+		if err := validateIdentifier("schema", namespace.Name); err != nil {
+			return err
+		}
+		if _, ok := namespaceNames[namespace.Name]; ok {
+			return fmt.Errorf("duplicate schema %q", namespace.Name)
+		}
+		namespaceNames[namespace.Name] = struct{}{}
+	}
+
+	extensionNames := map[string]struct{}{}
+	for _, extension := range schema.Extensions {
+		if extension.Schema != "" {
+			if err := validateIdentifier("extension schema", extension.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateExtensionName(extension.Name); err != nil {
+			return err
+		}
+		key := qualifiedName(extension.Schema, extension.Name)
+		if _, ok := extensionNames[key]; ok {
+			return fmt.Errorf("duplicate extension %q", renderQualifiedName(extension.Schema, extension.Name))
+		}
+		extensionNames[key] = struct{}{}
+	}
+
+	enumNames := map[string]struct{}{}
+	for _, enum := range schema.Enums {
+		if enum.Schema != "" {
+			if err := validateIdentifier("enum schema", enum.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateIdentifier("enum", enum.Name); err != nil {
+			return err
+		}
+		if len(enum.Values) == 0 {
+			return fmt.Errorf("enum %q must have at least one value", renderQualifiedName(enum.Schema, enum.Name))
+		}
+		seenValues := map[string]struct{}{}
+		for _, value := range enum.Values {
+			if value == "" {
+				return fmt.Errorf("enum %q has an empty value", renderQualifiedName(enum.Schema, enum.Name))
+			}
+			if _, ok := seenValues[value]; ok {
+				return fmt.Errorf("enum %q has duplicate value %q", renderQualifiedName(enum.Schema, enum.Name), value)
+			}
+			seenValues[value] = struct{}{}
+		}
+		key := qualifiedName(enum.Schema, enum.Name)
+		if _, ok := enumNames[key]; ok {
+			return fmt.Errorf("duplicate enum %q", renderQualifiedName(enum.Schema, enum.Name))
+		}
+		enumNames[key] = struct{}{}
+	}
+
 	tableNames := map[string]struct{}{}
+	tableColumns := map[string]map[string]struct{}{}
 	indexNames := map[string]struct{}{}
 
 	for _, table := range schema.Tables {
+		if table.Schema != "" {
+			if err := validateIdentifier("schema", table.Schema); err != nil {
+				return fmt.Errorf("table %q: %w", table.Name, err)
+			}
+		}
 		if err := validateIdentifier("table", table.Name); err != nil {
 			return err
 		}
-		if _, ok := tableNames[table.Name]; ok {
-			return fmt.Errorf("duplicate table %q", table.Name)
+		if _, ok := tableNames[tableKey(table)]; ok {
+			return fmt.Errorf("duplicate table %q", renderTableName(table))
 		}
-		tableNames[table.Name] = struct{}{}
+		tableNames[tableKey(table)] = struct{}{}
 
 		columnNames := map[string]struct{}{}
 		hasPrimaryKey := false
@@ -150,14 +255,18 @@ func validateSchema(schema ast.Schema) error {
 			}
 
 			if column.References != nil {
+				if _, err := parseQualifiedIdentifier("referenced table", column.References.Table); err != nil {
+					return fmt.Errorf("table %q column %q: %w", renderTableName(table), column.Name, err)
+				}
 				if err := validateForeignKeyAction("ON DELETE", column.References.OnDelete); err != nil {
-					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+					return fmt.Errorf("table %q column %q: %w", renderTableName(table), column.Name, err)
 				}
 				if err := validateForeignKeyAction("ON UPDATE", column.References.OnUpdate); err != nil {
-					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+					return fmt.Errorf("table %q column %q: %w", renderTableName(table), column.Name, err)
 				}
 			}
 		}
+		tableColumns[tableKey(table)] = columnNames
 
 		constraintNames := map[string]struct{}{}
 		for _, primaryKey := range table.PrimaryKeys {
@@ -192,7 +301,7 @@ func validateSchema(schema ast.Schema) error {
 			if len(foreignKey.Columns) != len(foreignKey.ReferencedColumns) {
 				return fmt.Errorf("table %q foreign key %q has %d local columns but %d referenced columns", table.Name, foreignKey.Name, len(foreignKey.Columns), len(foreignKey.ReferencedColumns))
 			}
-			if err := validateIdentifier("referenced table", foreignKey.ReferencedTable); err != nil {
+			if _, err := parseQualifiedIdentifier("referenced table", foreignKey.ReferencedTable); err != nil {
 				return fmt.Errorf("table %q foreign key %q: %w", table.Name, foreignKey.Name, err)
 			}
 			for _, column := range foreignKey.ReferencedColumns {
@@ -218,17 +327,40 @@ func validateSchema(schema ast.Schema) error {
 		}
 
 		for _, index := range table.Indexes {
-			if _, ok := indexNames[index.Name]; ok {
-				return fmt.Errorf("duplicate index %q", index.Name)
+			key := indexKey(table, index)
+			if _, ok := indexNames[key]; ok {
+				return fmt.Errorf("duplicate index %q in schema %q", index.Name, tableSchema(table))
 			}
-			indexNames[index.Name] = struct{}{}
+			indexNames[key] = struct{}{}
 			if err := validateIndex(table.Name, index, columnNames); err != nil {
 				return err
 			}
 		}
 	}
 
-	return nil
+	return validateReferences(schema.Tables, tableColumns)
+}
+
+func renderExtension(b *strings.Builder, extension pgschema.Extension) {
+	b.WriteString("CREATE EXTENSION IF NOT EXISTS ")
+	b.WriteString(quoteIdentifier(extension.Name))
+	if extension.Schema != "" {
+		b.WriteString(" WITH SCHEMA ")
+		b.WriteString(extension.Schema)
+	}
+	b.WriteString(";\n")
+}
+
+func renderEnum(b *strings.Builder, enum pgschema.Enum) {
+	b.WriteString("CREATE TYPE ")
+	b.WriteString(renderQualifiedName(enum.Schema, enum.Name))
+	b.WriteString(" AS ENUM (")
+	values := make([]string, 0, len(enum.Values))
+	for _, value := range enum.Values {
+		values = append(values, quoteLiteral(value))
+	}
+	b.WriteString(strings.Join(values, ", "))
+	b.WriteString(");\n")
 }
 
 func renderTable(b *strings.Builder, table ast.Table) error {
@@ -240,7 +372,7 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 	}
 
 	b.WriteString("CREATE TABLE ")
-	b.WriteString(table.Name)
+	b.WriteString(renderTableName(table))
 	b.WriteString(" (\n")
 
 	lines := make([]string, 0, len(table.Columns)+len(table.PrimaryKeys)+len(table.UniqueConstraints)+len(table.ForeignKeys)+len(table.Checks))
@@ -277,7 +409,7 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 		return foreignKeys[i].Name < foreignKeys[j].Name
 	})
 	for _, foreignKey := range foreignKeys {
-		line := fmt.Sprintf("    CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)", foreignKey.Name, strings.Join(foreignKey.Columns, ", "), foreignKey.ReferencedTable, strings.Join(foreignKey.ReferencedColumns, ", "))
+		line := fmt.Sprintf("    CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s)", foreignKey.Name, strings.Join(foreignKey.Columns, ", "), renderReferencedTable(foreignKey.ReferencedTable), strings.Join(foreignKey.ReferencedColumns, ", "))
 		if foreignKey.OnDelete != "" {
 			line += " ON DELETE " + strings.ToUpper(foreignKey.OnDelete)
 		}
@@ -328,13 +460,13 @@ func renderColumn(column ast.Column) (string, error) {
 		parts = append(parts, "DEFAULT", column.Default)
 	}
 	if column.References != nil {
-		if err := validateIdentifier("referenced table", column.References.Table); err != nil {
+		if _, err := parseQualifiedIdentifier("referenced table", column.References.Table); err != nil {
 			return "", err
 		}
 		if err := validateIdentifier("referenced column", column.References.Column); err != nil {
 			return "", err
 		}
-		parts = append(parts, fmt.Sprintf("REFERENCES %s (%s)", column.References.Table, column.References.Column))
+		parts = append(parts, fmt.Sprintf("REFERENCES %s (%s)", renderReferencedTable(column.References.Table), column.References.Column))
 		if column.References.OnDelete != "" {
 			parts = append(parts, "ON DELETE", strings.ToUpper(column.References.OnDelete))
 		}
@@ -426,6 +558,103 @@ func renderIndexWith(values map[string]string) string {
 	return strings.Join(parts, ", ")
 }
 
+func renderTableName(table ast.Table) string {
+	if table.Schema == "" {
+		return table.Name
+	}
+	return table.Schema + "." + table.Name
+}
+
+func renderReferencedTable(name string) string {
+	parts, err := parseQualifiedIdentifier("referenced table", name)
+	if err != nil {
+		return name
+	}
+	return strings.Join(parts, ".")
+}
+
+func renderQualifiedName(schema, name string) string {
+	if schema == "" {
+		return name
+	}
+	return schema + "." + name
+}
+
+func qualifiedName(schema, name string) string {
+	if schema == "" {
+		schema = "public"
+	}
+	return schema + "." + name
+}
+
+func tableKey(table ast.Table) string {
+	return tableSchema(table) + "." + table.Name
+}
+
+func tableSchema(table ast.Table) string {
+	schema := table.Schema
+	if schema == "" {
+		schema = "public"
+	}
+	return schema
+}
+
+func indexKey(table ast.Table, index ast.Index) string {
+	return tableSchema(table) + "." + index.Name
+}
+
+func referenceKey(defaultSchema, name string) (string, error) {
+	parts, err := parseQualifiedIdentifier("referenced table", name)
+	if err != nil {
+		return "", err
+	}
+	if len(parts) == 2 {
+		return parts[0] + "." + parts[1], nil
+	}
+	schema := defaultSchema
+	if schema == "" {
+		schema = "public"
+	}
+	return schema + "." + parts[0], nil
+}
+
+func parseQualifiedIdentifier(kind, value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, fmt.Errorf("%s identifier must not be empty", kind)
+	}
+	parts := strings.Split(value, ".")
+	if len(parts) > 2 {
+		return nil, fmt.Errorf("%s identifier %q must be unqualified or schema-qualified", kind, value)
+	}
+	for _, part := range parts {
+		if err := validateIdentifier(kind, part); err != nil {
+			return nil, err
+		}
+	}
+	return parts, nil
+}
+
+func validateExtensionName(value string) error {
+	if value == "" {
+		return fmt.Errorf("extension identifier must not be empty")
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			continue
+		}
+		return fmt.Errorf("extension identifier %q may only contain letters, numbers, underscores, and hyphens", value)
+	}
+	return nil
+}
+
+func quoteIdentifier(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
+}
+
+func quoteLiteral(value string) string {
+	return `'` + strings.ReplaceAll(value, `'`, `''`) + `'`
+}
+
 func validateIdentifier(kind, value string) error {
 	if !identifierPattern.MatchString(value) {
 		return fmt.Errorf("%s identifier %q must match %s", kind, value, identifierPattern.String())
@@ -456,6 +685,43 @@ func addConstraintName(tableName string, names map[string]struct{}, name string)
 		return fmt.Errorf("table %q has duplicate constraint %q", tableName, name)
 	}
 	names[name] = struct{}{}
+	return nil
+}
+
+func validateReferences(tables []ast.Table, tableColumns map[string]map[string]struct{}) error {
+	for _, table := range tables {
+		for _, column := range table.Columns {
+			if column.References == nil {
+				continue
+			}
+			refKey, err := referenceKey(table.Schema, column.References.Table)
+			if err != nil {
+				return fmt.Errorf("table %q column %q: %w", renderTableName(table), column.Name, err)
+			}
+			columns, ok := tableColumns[refKey]
+			if !ok {
+				return fmt.Errorf("table %q column %q references unknown table %q", renderTableName(table), column.Name, renderReferencedTable(column.References.Table))
+			}
+			if _, ok := columns[column.References.Column]; !ok {
+				return fmt.Errorf("table %q column %q references unknown column %q on table %q", renderTableName(table), column.Name, column.References.Column, renderReferencedTable(column.References.Table))
+			}
+		}
+		for _, foreignKey := range table.ForeignKeys {
+			refKey, err := referenceKey(table.Schema, foreignKey.ReferencedTable)
+			if err != nil {
+				return fmt.Errorf("table %q foreign key %q: %w", renderTableName(table), foreignKey.Name, err)
+			}
+			columns, ok := tableColumns[refKey]
+			if !ok {
+				return fmt.Errorf("table %q foreign key %q references unknown table %q", renderTableName(table), foreignKey.Name, renderReferencedTable(foreignKey.ReferencedTable))
+			}
+			for _, column := range foreignKey.ReferencedColumns {
+				if _, ok := columns[column]; !ok {
+					return fmt.Errorf("table %q foreign key %q references unknown column %q on table %q", renderTableName(table), foreignKey.Name, column, renderReferencedTable(foreignKey.ReferencedTable))
+				}
+			}
+		}
+	}
 	return nil
 }
 

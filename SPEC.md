@@ -1,4 +1,4 @@
-# ADR: Build `pgkit` as a Go-native PostgreSQL schema DSL and migration-generation workflow
+# ADR: Build `gosqlkit` as a Go-native SQL schema DSL and migration-generation workflow
 
 ## Status
 
@@ -6,21 +6,21 @@ Accepted. Phase 1 vertical slice implemented.
 
 ## Executive summary
 
-We will build `pgkit`, a Go-native PostgreSQL schema definition toolkit that allows application teams to declare database schema in Go code, generate deterministic PostgreSQL SQL schema output, and use existing migration-diff tooling to produce migration files.
+We will build `gosqlkit`, a Go-native schema definition toolkit that allows application teams to declare database schema in Go code, generate deterministic schema snapshots, generate dialect-specific SQL schema output, and use existing migration-diff tooling to produce migration files.
 
-The goal is to achieve a Drizzle Kit / Prisma-style schema management workflow for Go applications without adopting a runtime ORM. `pgkit` will own schema declaration and SQL generation only. Runtime database access will remain with `sqlc` and `pgx`.
+The goal is to achieve a Drizzle Kit / Prisma-style schema management workflow for Go applications without adopting a runtime ORM. `gosqlkit` will own schema declaration, snapshot generation, and SQL generation only. Runtime database access will remain with `sqlc`, `pgx`, and dialect equivalents.
 
 The intended toolchain is:
 
 ```text
-pgkit            → Go schema DSL and canonical PostgreSQL schema generation
-pg-schema-diff   → schema diff and migration SQL generation
-goose            → optional migration runner/history
-sqlc             → SQL query code generation
-pgx              → runtime PostgreSQL driver
+gosqlkit         → Go schema DSL, snapshots, and canonical dialect SQL generation
+pg-schema-diff  → initial PostgreSQL schema diff and migration SQL generation
+goose           → optional migration runner/history
+sqlc            → SQL query code generation
+pgx             → runtime PostgreSQL driver
 ```
 
-This replaces the need to adopt GORM, Bun, Ent, Bob, Atlas, Prisma, or Drizzle ORM for this workflow.
+PostgreSQL is the first implemented dialect. The core must stay dialect-neutral so SQLite, MySQL, MSSQL, SingleStore, CockroachDB, and other engines can be added as separate dialect packages.
 
 ## Context
 
@@ -30,7 +30,7 @@ Desired workflow:
 
 ```text
 Declare tables/functions/indexes in code
-→ generate canonical PostgreSQL schema SQL
+→ generate canonical dialect schema SQL
 → diff desired schema against current state
 → generate reviewable SQL migrations
 → apply migrations
@@ -48,9 +48,9 @@ Existing options do not fully satisfy this:
 
 ## Decision
 
-We will build `pgkit`.
+We will build `gosqlkit`.
 
-`pgkit` will provide a Go schema DSL that compiles to deterministic PostgreSQL SQL.
+`gosqlkit` will provide Go schema DSL packages that compile to deterministic dialect-specific SQL.
 
 It will not be an ORM.
 
@@ -64,7 +64,8 @@ It will focus only on:
 
 ```text
 Go schema definitions
-→ canonical PostgreSQL schema SQL
+→ deterministic schema snapshot
+→ canonical dialect-specific schema SQL
 ```
 
 The initial integration target will be `pg-schema-diff` for generating migration SQL from the generated schema. `goose` may be used to store and apply versioned migrations.
@@ -76,7 +77,7 @@ Example schema definition:
 ```go
 package schema
 
-import "github.com/insurgence/pgkit/pg"
+import "github.com/webdeveloperben/gosqlkit/pg"
 
 var Users = pg.Table("users",
     pg.UUID("id").
@@ -109,10 +110,12 @@ CREATE TABLE users (
 Example workflow:
 
 ```bash
-pgkit generate --out db/schema.generated.sql ./schema
-pgkit generate --out db/schema.generated.sql --check ./schema
+gosqlkit generate --out db/schema.generated.sql ./schema
+gosqlkit generate --out db/schema.generated.sql --check ./schema
+gosqlkit snapshot --out db/schema.snapshot.json ./schema
+gosqlkit snapshot --out db/schema.snapshot.json --check ./schema
 
-pgkit diff \
+gosqlkit diff \
   --from "$DATABASE_URL" \
   --to db/schema.generated.sql \
   --name add_users_table
@@ -142,11 +145,11 @@ internal/db/
 
 - Provide a Go-native schema-as-code experience.
 - Preserve `sqlc` and `pgx` as the runtime database layer.
-- Generate deterministic, reviewable PostgreSQL SQL.
+- Generate deterministic, reviewable dialect-specific SQL.
 - Support generated migration files from schema diffs.
 - Avoid ORM coupling.
 - Avoid paid schema-management tooling.
-- Keep PostgreSQL as a first-class target rather than abstracting across databases.
+- Keep each supported database dialect first-class rather than flattening them into a lowest-common-denominator abstraction.
 - Make schema review easier by reviewing desired state and generated migration output together.
 
 ## Non-goals
@@ -156,7 +159,7 @@ internal/db/
 - Replacing `sqlc`.
 - Replacing `pgx`.
 - Building a full migration engine from scratch in the first version.
-- Supporting multiple databases.
+- Building runtime database clients for each dialect.
 - Hiding SQL from developers.
 - Automatically applying destructive changes without review.
 
@@ -218,23 +221,33 @@ Current implementation status:
   - Defaults
   - Nullable / not-null columns
   - Common PostgreSQL scalar types listed above
+  - PostgreSQL schemas/namespaces
+  - PostgreSQL extensions
+  - PostgreSQL enums
+  - Schema-qualified table rendering
+  - Schema-qualified enum column types
+  - Schema-qualified foreign key references
   - Deterministic table ordering that respects foreign-key dependencies
   - Deterministic index ordering
+  - Dialect-neutral provider registry
+  - Provider aliases and capabilities
+  - Snapshot JSON output
   - CLI `generate`
   - CLI `generate --out`
   - CLI `generate --check`
+  - CLI `snapshot`
+  - CLI `snapshot --out`
+  - CLI `snapshot --check`
   - Golden-style SQL output tests
   - `sqlc` compatibility example
 - Not implemented yet:
-  - Extensions, enums, views, RLS, triggers, functions
+  - Views, RLS, triggers, functions
   - Migration diff integration
 
 ## Later scope
 
 Future versions may support:
 
-- Extensions
-- Enums
 - Views
 - Materialized views
 - Functions
@@ -260,8 +273,8 @@ Future versions may support:
 ## Proposed architecture
 
 ```text
-pgkit/
-  cmd/pgkit/
+gosqlkit/
+  cmd/gosqlkit/
     main.go
 
   internal/cli/
@@ -272,9 +285,13 @@ pgkit/
   internal/app/
     generate.go
 
+  kit/
+    registry.go
+
   pg/
     table.go
     column.go
+    registry.go
     types.go
     constraints.go
     indexes.go
@@ -283,8 +300,17 @@ pgkit/
   internal/ast/
     schema.go
 
+  internal/pgschema/
+    schema.go
+
   internal/render/
     postgres.go
+
+  internal/snapshot/
+    snapshot.go
+
+  internal/pgsnapshot/
+    snapshot.go
 
   internal/diff/
     pgschemadiff.go
@@ -297,9 +323,10 @@ Core flow:
 
 ```text
 User Go schema definitions
-→ pgkit schema registry
-→ internal schema AST
-→ deterministic PostgreSQL renderer
+→ dialect package registry, for example pg
+→ selected kit provider
+→ shared schema model plus dialect-specific extensions
+→ deterministic dialect renderer
 → internal/app generation use case
 → internal/cli command adapter
 → schema.generated.sql
@@ -309,10 +336,15 @@ User Go schema definitions
 
 CLI layering follows the same broad shape as `tyche`:
 
-- `cmd/pgkit` is only the process boundary: call the CLI runner, translate panics/exit codes, and exit.
+- `cmd/gosqlkit` is only the process boundary: call the CLI runner, translate panics/exit codes, and exit.
 - `internal/cli` owns Kong command structs, help text, argument parsing, and exit-code mapping.
 - `internal/app` owns user-facing use cases with plain Go option/result types and no dependency on Kong.
-- `pg`, `internal/ast`, and `internal/render` do not import CLI packages.
+- `kit` owns dialect-neutral provider registration, lookup, aliases, and capabilities.
+- Dialect packages such as `pg` own their schema DSL, registry, renderer selection, and snapshot dialect marker.
+- `internal/ast` owns the shared schema core: tables, columns, constraints, and indexes.
+- Dialect-specific schema envelopes, such as `internal/pgschema`, own database-specific objects such as PostgreSQL namespaces, extensions, and enums.
+- Dialect-specific snapshots, such as `internal/pgsnapshot`, wrap shared table snapshots with database-specific schema objects.
+- `pg`, `kit`, `internal/ast`, `internal/pgschema`, `internal/render`, `internal/snapshot`, and `internal/pgsnapshot` do not import CLI packages.
 - New CLI commands should first become app-layer functions, then thin CLI adapters.
 
 ## Design principles
@@ -321,7 +353,8 @@ CLI layering follows the same broad shape as `tyche`:
 - Generated SQL must be deterministic.
 - CLI parsing should stay separate from schema generation and application behaviour.
 - Runtime database access remains explicit SQL via `sqlc`.
-- The schema DSL should expose PostgreSQL features rather than flatten them into a generic abstraction.
+- Each dialect DSL should expose native database features rather than flattening every database into a lowest-common-denominator abstraction.
+- Shared core types should cover concepts common across SQL stores, while dialect-specific features stay owned by their provider package.
 - Migration generation should be review-first, apply-second.
 - Destructive changes should be obvious and guarded.
 - Database connectivity should support both password authentication and short-lived token authentication.
@@ -393,7 +426,7 @@ Deliverables:
 - constraints
 - indexes
 - deterministic renderer
-- CLI `pgkit generate`
+- CLI `gosqlkit generate`
 - golden-file tests
 
 ### Phase 2: sqlc compatibility
@@ -402,7 +435,7 @@ Ensure generated schema SQL can be consumed by `sqlc`.
 
 Deliverables:
 
-- example app using `pgkit + sqlc + pgx`
+- example app using `gosqlkit + sqlc + pgx`
 - CI command to regenerate schema
 - validation that committed schema output is up to date
 
@@ -412,7 +445,7 @@ Integrate with `pg-schema-diff`.
 
 Deliverables:
 
-- `pgkit diff`
+- `gosqlkit diff`
 - database connection layer for introspection/diff inputs
 - password auth and provider-pluggable token auth
 - Azure Database for PostgreSQL Microsoft Entra token-as-password support
@@ -429,7 +462,7 @@ Optionally generate goose-compatible migration files.
 
 Deliverables:
 
-- `pgkit migration create <name>`
+- `gosqlkit migration create <name>`
 - generated `Up` SQL
 - best-effort `Down` SQL where safe
 - explicit warnings where down migration is unsafe or unavailable
@@ -442,11 +475,11 @@ Add support for extensions, functions, views, RLS, triggers, and advanced index 
 
 - Should schema registration be explicit or automatic through package init?
 - Should generated SQL be one file or multiple files?
-- Should `pgkit` generate `Down` migrations, or require explicit manual review?
+- Should `gosqlkit` generate `Down` migrations, or require explicit manual review?
 - Should destructive changes fail by default?
 - How should table/column renames be represented?
 - Should the DSL support raw SQL escape hatches from day one?
-- Should `pgkit` own migration application, or leave that entirely to goose?
+- Should `gosqlkit` own migration application, or leave that entirely to goose?
 
 ## Initial agent task
 

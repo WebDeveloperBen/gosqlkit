@@ -1,6 +1,6 @@
-# pgkit Feature Roadmap
+# gosqlkit Feature Roadmap
 
-This document tracks the product requirements for `pgkit` against the current implementation and the broader PostgreSQL schema-management surface exposed by Drizzle's PostgreSQL core and serializer.
+This document tracks the product requirements for `gosqlkit` against the current implementation and the broader schema-management surface exposed by tools such as Drizzle.
 
 Legend:
 
@@ -12,7 +12,9 @@ Legend:
 
 ## Product Boundary
 
-- `[x]` Go-native PostgreSQL schema DSL.
+- `[x]` Go-native schema DSL.
+- `[x]` Dialect registry with PostgreSQL as the first provider.
+- `[x]` Self-describing dialect provider interface with canonical names, aliases, and capabilities.
 - `[x]` Deterministic PostgreSQL SQL generation.
 - `[x]` No runtime ORM.
 - `[x]` No query builder.
@@ -27,9 +29,13 @@ Legend:
 - `[x]` Define tables in Go.
 - `[x]` Define columns in Go.
 - `[x]` Register schema from Go package imports.
-- `[x]` Render canonical PostgreSQL SQL.
+- `[x]` Render canonical SQL for the PostgreSQL dialect.
 - `[x]` Stable table ordering that respects foreign-key dependencies.
 - `[x]` Stable index ordering.
+- `[x]` PostgreSQL schemas/namespaces.
+- `[x]` PostgreSQL extensions.
+- `[x]` PostgreSQL enums.
+- `[x]` Deterministic schema snapshot JSON.
 - `[x]` Golden-style SQL tests.
 - `[x]` Example schema with two related tables.
 - `[x]` Example schema with a composite-key child table.
@@ -37,14 +43,32 @@ Legend:
 - `[x]` CLI `generate`.
 - `[x]` CLI `generate --out`.
 - `[x]` CLI `generate --check`.
+- `[x]` CLI `snapshot`.
+- `[x]` CLI `snapshot --out`.
+- `[x]` CLI `snapshot --check`.
+
+## Dialect Provider Boundary
+
+- `[x]` Dialect-neutral package for provider registration and selection.
+- `[x]` Providers expose canonical dialect name.
+- `[x]` Providers expose dialect aliases, for example `postgres`, `pg`, and `postgresql`.
+- `[x]` Providers expose coarse capabilities for command and workflow planning.
+- `[x]` SQL generation routes through the selected provider.
+- `[x]` Snapshot generation routes through the selected provider.
+- `[x]` PostgreSQL schema envelope separated from the shared schema core.
+- `[x]` PostgreSQL snapshots wrap shared table snapshots with PostgreSQL objects.
+- `[~]` Shared table/index core explicitly separated from all dialect-specific options.
+- `[ ]` Move PostgreSQL-only index options out of the shared index model.
+- `[ ]` First non-PostgreSQL provider proving the boundary.
+- `[ ]` Dialect capability checks in CLI commands where a command needs unsupported features.
 
 ## Schema Object Model
 
 - `[x]` Tables.
 - `[x]` Columns.
-- `[ ]` PostgreSQL schemas/namespaces.
-- `[ ]` Extensions.
-- `[ ]` Enums.
+- `[x]` PostgreSQL schemas/namespaces.
+- `[x]` Extensions.
+- `[x]` Enums.
 - `[ ]` Sequences.
 - `[ ]` Views.
 - `[ ]` Materialized views.
@@ -75,7 +99,7 @@ Legend:
 - `[ ]` Array columns.
 - `[ ]` Column comments.
 - `[ ]` Column-level collation.
-- `[ ]` Type schema qualification, for example enum types in non-public schemas.
+- `[x]` Type schema qualification, for example enum types in non-public schemas.
 - `[ ]` Rename metadata.
 
 ## PostgreSQL Types
@@ -196,11 +220,11 @@ Missing common PostgreSQL types:
 
 ## Serialisation and Diff Readiness
 
-Drizzle's serializer models schema as a structured snapshot before diffing. `pgkit` should adopt the same general idea, but Go-native and SQL-focused.
+Drizzle's serializer models schema as a structured snapshot before diffing. `gosqlkit` should adopt the same general idea, but Go-native and SQL-focused.
 
-- `[ ]` Internal snapshot format separate from rendered SQL.
-- `[ ]` Snapshot version.
-- `[ ]` Dialect marker.
+- `[x]` Internal snapshot format separate from rendered SQL.
+- `[x]` Snapshot version.
+- `[x]` Dialect marker.
 - `[ ]` Stable snapshot IDs.
 - `[ ]` Previous snapshot ID.
 - `[ ]` Table metadata map.
@@ -208,7 +232,7 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `pgk
 - `[ ]` Schema metadata map.
 - `[ ]` Stable object keys for schema-qualified names.
 - `[ ]` Squashed/normalised representation for diffing.
-- `[ ]` Deterministic serialisation to JSON.
+- `[x]` Deterministic serialisation to JSON.
 - `[ ]` Diff input from current database introspection.
 - `[ ]` Diff input from generated desired snapshot.
 - `[ ]` Drift check from database to generated schema.
@@ -257,13 +281,13 @@ Azure-specific requirement:
 - Azure Database for PostgreSQL with Microsoft Entra authentication accepts a Microsoft Entra access token as the PostgreSQL password.
 - The PostgreSQL username is the mapped Entra user, service principal, managed identity, or group name.
 - The token should target Azure Database for PostgreSQL, for example Azure CLI's `--resource-type oss-rdbms` flow.
-- `pgkit` should model this as a token provider, not as a stored password.
+- `gosqlkit` should model this as a token provider, not as a stored password.
 
 AWS-specific requirement:
 
 - Amazon RDS and Aurora PostgreSQL IAM database authentication uses an authentication token instead of a password.
 - The token is generated with AWS Signature Version 4 and is short-lived.
-- Token generation depends on host, port, region, and database username, so `pgkit` must not treat it as a generic static secret.
+- Token generation depends on host, port, region, and database username, so `gosqlkit` must not treat it as a generic static secret.
 - The implementation should support the AWS SDK credential chain and CLI-compatible local development.
 - The implementation must preserve TLS/SSL configuration because IAM database authentication is intended to be used with encrypted connections.
 
@@ -272,33 +296,33 @@ Google Cloud-specific requirement:
 - Cloud SQL for PostgreSQL IAM database authentication uses temporary OAuth2 access tokens.
 - Manual IAM auth passes the access token as the PostgreSQL password.
 - Automatic IAM auth is mediated by the Cloud SQL Auth Proxy or Cloud SQL language connectors.
-- `pgkit` should support direct manual-token connections and connector/proxy-mediated connections.
+- `gosqlkit` should support direct manual-token connections and connector/proxy-mediated connections.
 - Google IAM auth requires SSL for manual database authentication.
 
 Other provider requirement:
 
 - Providers such as Neon, Supabase, Heroku, Crunchy Bridge, Aiven, DigitalOcean, and self-hosted PostgreSQL may use password auth, SSL client certificates, external secret managers, proxies, or custom token flows.
-- `pgkit` should expose a generic provider-neutral auth interface so these can be supported without changing the schema DSL or renderer.
+- `gosqlkit` should expose a generic provider-neutral auth interface so these can be supported without changing the schema DSL or renderer.
 
 ## CLI and Workflow
 
-- `[x]` `pgkit generate`.
-- `[x]` `pgkit generate --out`.
-- `[x]` `pgkit generate --check`.
-- `[x]` `pgkit version`.
-- `[ ]` `pgkit inspect` or equivalent database introspection.
-- `[ ]` `pgkit inspect --url ...`.
-- `[ ]` `pgkit inspect --auth password`.
-- `[ ]` `pgkit inspect --auth token`.
-- `[ ]` `pgkit inspect --auth azure-entra`.
-- `[ ]` `pgkit inspect --auth aws-iam`.
-- `[ ]` `pgkit inspect --auth gcp-iam`.
-- `[ ]` `pgkit inspect --auth custom-token-command`.
-- `[ ]` `pgkit snapshot` for deterministic snapshot output.
-- `[ ]` `pgkit diff --from ... --to ...`.
-- `[ ]` `pgkit diff` support for token-authenticated source databases.
-- `[ ]` `pgkit diff` support for provider-specific auth on both source and target inputs.
-- `[ ]` `pgkit migrate create <name>`.
+- `[x]` `gosqlkit generate`.
+- `[x]` `gosqlkit generate --out`.
+- `[x]` `gosqlkit generate --check`.
+- `[x]` `gosqlkit version`.
+- `[ ]` `gosqlkit inspect` or equivalent database introspection.
+- `[ ]` `gosqlkit inspect --url ...`.
+- `[ ]` `gosqlkit inspect --auth password`.
+- `[ ]` `gosqlkit inspect --auth token`.
+- `[ ]` `gosqlkit inspect --auth azure-entra`.
+- `[ ]` `gosqlkit inspect --auth aws-iam`.
+- `[ ]` `gosqlkit inspect --auth gcp-iam`.
+- `[ ]` `gosqlkit inspect --auth custom-token-command`.
+- `[x]` `gosqlkit snapshot` for deterministic snapshot output.
+- `[ ]` `gosqlkit diff --from ... --to ...`.
+- `[ ]` `gosqlkit diff` support for token-authenticated source databases.
+- `[ ]` `gosqlkit diff` support for provider-specific auth on both source and target inputs.
+- `[ ]` `gosqlkit migrate create <name>`.
 - `[ ]` Goose-compatible migration file output.
 - `[ ]` CI command for committed schema drift.
 - `[ ]` CI command for database drift.
@@ -316,10 +340,10 @@ Other provider requirement:
 - `[x]` Foreign key action validation.
 - `[x]` Unknown local constraint column validation.
 - `[x]` Unknown index column validation.
-- `[ ]` Duplicate schema object validation across schemas.
+- `[x]` Duplicate schema object validation across schemas.
 - `[~]` Duplicate constraint validation scoped like PostgreSQL.
-- `[ ]` Unknown referenced table validation.
-- `[ ]` Unknown referenced column validation.
+- `[x]` Unknown referenced table validation.
+- `[x]` Unknown referenced column validation.
 - `[ ]` Invalid default expression validation where practical.
 - `[ ]` Invalid generated-column expression validation where practical.
 - `[ ]` Invalid RLS policy validation.
@@ -330,19 +354,21 @@ Other provider requirement:
 - `[x]` Renderer golden tests.
 - `[x]` CLI generation test.
 - `[x]` `sqlc` compatibility smoke validation.
-- `[ ]` Snapshot golden tests.
+- `[x]` Snapshot golden tests.
 - `[ ]` Schema-qualified object tests.
 - `[ ]` Constraint rendering tests.
 - `[ ]` Advanced index rendering tests.
 - `[ ]` Default literal rendering tests.
 - `[ ]` Array type rendering tests.
-- `[ ]` Enum rendering tests.
+- `[x]` Enum rendering tests.
 - `[ ]` Sequence rendering tests.
 - `[ ]` View rendering tests.
 - `[ ]` RLS policy rendering tests.
 - `[ ]` Diff fixture tests.
 - `[ ]` Destructive-change fixture tests.
 - `[ ]` Integration test against live PostgreSQL.
+- `[ ]` Testcontainers integration test against live PostgreSQL.
+- `[ ]` Testcontainers integration test per supported dialect.
 
 ## Recommended Build Order
 

@@ -58,7 +58,7 @@ func TestRunGenerateCheckRequiresOut(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "--check requires --out") {
 		t.Fatalf("expected --check error, got %v", err)
 	}
-	if !strings.Contains(stderr.String(), "pgkit: error:") {
+	if !strings.Contains(stderr.String(), "gosqlkit: error:") {
 		t.Fatalf("expected error output, got %q", stderr.String())
 	}
 }
