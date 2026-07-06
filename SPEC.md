@@ -200,7 +200,11 @@ Current implementation status:
 
 - Implemented:
   - Tables
-  - Columns
+  - Columns (all common PostgreSQL scalar types, arrays, custom type escape hatch)
+  - Identity columns with sequence options
+  - Generated stored columns
+  - Column and table comments
+  - Safe default helpers (string, int, bool, JSON, array, date, timestamp)
   - Column primary keys
   - Column unique constraints
   - Inline foreign keys
@@ -210,6 +214,8 @@ Current implementation status:
   - Composite unique constraints
   - Named foreign keys
   - Composite foreign keys
+  - Deferrable constraints (foreign keys and unique constraints)
+  - Exclusion constraints
   - Basic indexes
   - Unique indexes
   - Advanced index methods
@@ -217,6 +223,7 @@ Current implementation status:
   - Per-column index ordering/null ordering/operator classes
   - Concurrent indexes
   - Index storage parameters
+  - Named index auto-generation helpers
   - Basic checks
   - Defaults
   - Nullable / not-null columns
@@ -224,6 +231,9 @@ Current implementation status:
   - PostgreSQL schemas/namespaces
   - PostgreSQL extensions
   - PostgreSQL enums
+  - PostgreSQL sequences
+  - PostgreSQL composite types
+  - PostgreSQL domains
   - Schema-qualified table rendering
   - Schema-qualified enum column types
   - Schema-qualified foreign key references
@@ -241,7 +251,7 @@ Current implementation status:
   - Golden-style SQL output tests
   - `sqlc` compatibility example
 - Not implemented yet:
-  - Views, RLS, triggers, functions
+  - Views, RLS, triggers, functions, roles
   - Migration diff integration
 
 ## Later scope
@@ -280,6 +290,7 @@ gosqlkit/
   internal/cli/
     root.go
     generate.go
+    snapshot.go
     version.go
 
   internal/app/
@@ -288,35 +299,26 @@ gosqlkit/
   kit/
     registry.go
 
-  pg/
+  pg/                              public PostgreSQL DSL (user import path)
     table.go
     column.go
+    schema.go
     registry.go
-    types.go
-    constraints.go
-    indexes.go
     defaults.go
+
+  internal/dialects/pg/            PostgreSQL internal machinery
+    pgschema/
+      schema.go
+    pgsnapshot/
+      snapshot.go
+    render/
+      postgres.go
 
   internal/ast/
     schema.go
 
-  internal/pgschema/
-    schema.go
-
-  internal/render/
-    postgres.go
-
   internal/snapshot/
     snapshot.go
-
-  internal/pgsnapshot/
-    snapshot.go
-
-  internal/diff/
-    pgschemadiff.go
-
-  internal/testing/
-    golden.go
 ```
 
 Core flow:
@@ -342,9 +344,9 @@ CLI layering follows the same broad shape as `tyche`:
 - `kit` owns dialect-neutral provider registration, lookup, aliases, and capabilities.
 - Dialect packages such as `pg` own their schema DSL, registry, renderer selection, and snapshot dialect marker.
 - `internal/ast` owns the shared schema core: tables, columns, constraints, and indexes.
-- Dialect-specific schema envelopes, such as `internal/pgschema`, own database-specific objects such as PostgreSQL namespaces, extensions, and enums.
-- Dialect-specific snapshots, such as `internal/pgsnapshot`, wrap shared table snapshots with database-specific schema objects.
-- `pg`, `kit`, `internal/ast`, `internal/pgschema`, `internal/render`, `internal/snapshot`, and `internal/pgsnapshot` do not import CLI packages.
+- Dialect-specific schema envelopes, such as `internal/dialects/pg/pgschema`, own database-specific objects such as PostgreSQL namespaces, extensions, and enums.
+- Dialect-specific snapshots, such as `internal/dialects/pg/pgsnapshot`, wrap shared table snapshots with database-specific schema objects.
+- `pg`, `kit`, `internal/ast`, `internal/dialects`, `internal/snapshot` do not import CLI packages.
 - New CLI commands should first become app-layer functions, then thin CLI adapters.
 
 ## Design principles

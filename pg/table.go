@@ -1,13 +1,17 @@
 package pg
 
-import "github.com/webdeveloperben/gosqlkit/internal/ast"
+import (
+	"strings"
+
+	"github.com/webdeveloperben/gosqlkit/internal/ast"
+)
 
 type Element interface {
 	apply(table *ast.Table)
 }
 
 type Definition struct {
-	def ast.Table
+	def *ast.Table
 }
 
 type CheckDef struct {
@@ -34,6 +38,14 @@ type ForeignKeyDef struct {
 	def ast.ForeignKeyConstraint
 }
 
+type ExclusionDef struct {
+	def ast.ExclusionConstraint
+}
+
+type ExclusionElementDef struct {
+	def ast.ExclusionElement
+}
+
 func Table(name string, elements ...Element) *Definition {
 	return table("", name, elements...)
 }
@@ -43,13 +55,13 @@ func TableInSchema(schema, name string, elements ...Element) *Definition {
 }
 
 func table(schema, name string, elements ...Element) *Definition {
-	table := ast.Table{Schema: schema, Name: name}
+	t := &ast.Table{Schema: schema, Name: name}
 	for _, element := range elements {
-		element.apply(&table)
+		element.apply(t)
 	}
 
-	register(table)
-	return &Definition{def: table}
+	register(t)
+	return &Definition{def: t}
 }
 
 func Check(name, expression string) *CheckDef {
@@ -188,6 +200,26 @@ func (u *UniqueConstraintDef) NullsNotDistinct() *UniqueConstraintDef {
 	return u
 }
 
+func (u *UniqueConstraintDef) Deferrable() *UniqueConstraintDef {
+	u.def.Deferrable = true
+	if u.def.Initially == "" {
+		u.def.Initially = "IMMEDIATE"
+	}
+	return u
+}
+
+func (u *UniqueConstraintDef) InitiallyDeferred() *UniqueConstraintDef {
+	u.def.Deferrable = true
+	u.def.Initially = "DEFERRED"
+	return u
+}
+
+func (u *UniqueConstraintDef) InitiallyImmediate() *UniqueConstraintDef {
+	u.def.Deferrable = true
+	u.def.Initially = "IMMEDIATE"
+	return u
+}
+
 func (f *ForeignKeyDef) References(table string, columns ...string) *ForeignKeyDef {
 	f.def.ReferencedTable = table
 	f.def.ReferencedColumns = append([]string(nil), columns...)
@@ -204,12 +236,124 @@ func (f *ForeignKeyDef) OnUpdate(action string) *ForeignKeyDef {
 	return f
 }
 
+func (f *ForeignKeyDef) Deferrable() *ForeignKeyDef {
+	f.def.Deferrable = true
+	if f.def.Initially == "" {
+		f.def.Initially = "IMMEDIATE"
+	}
+	return f
+}
+
+func (f *ForeignKeyDef) InitiallyDeferred() *ForeignKeyDef {
+	f.def.Deferrable = true
+	f.def.Initially = "DEFERRED"
+	return f
+}
+
+func (f *ForeignKeyDef) InitiallyImmediate() *ForeignKeyDef {
+	f.def.Deferrable = true
+	f.def.Initially = "IMMEDIATE"
+	return f
+}
+
+func Exclusion(name string, elements ...*ExclusionElementDef) *ExclusionDef {
+	exclusionElements := make([]ast.ExclusionElement, 0, len(elements))
+	for _, element := range elements {
+		exclusionElements = append(exclusionElements, element.def)
+	}
+	return &ExclusionDef{
+		def: ast.ExclusionConstraint{
+			Name:     name,
+			Elements: exclusionElements,
+		},
+	}
+}
+
+func ExcludeWith(expression, operator string) *ExclusionElementDef {
+	return &ExclusionElementDef{
+		def: ast.ExclusionElement{
+			Expression: expression,
+			Operator:   operator,
+		},
+	}
+}
+
+func (e *ExclusionElementDef) OpClass(opClass string) *ExclusionElementDef {
+	e.def.OpClass = opClass
+	return e
+}
+
+func (e *ExclusionElementDef) Asc() *ExclusionElementDef {
+	e.def.Order = "ASC"
+	return e
+}
+
+func (e *ExclusionElementDef) Desc() *ExclusionElementDef {
+	e.def.Order = "DESC"
+	return e
+}
+
+func (e *ExclusionElementDef) NullsFirst() *ExclusionElementDef {
+	e.def.Nulls = "FIRST"
+	return e
+}
+
+func (e *ExclusionElementDef) NullsLast() *ExclusionElementDef {
+	e.def.Nulls = "LAST"
+	return e
+}
+
+func (e *ExclusionDef) Using(method string) *ExclusionDef {
+	e.def.Method = method
+	return e
+}
+
+func (e *ExclusionDef) Where(expression string) *ExclusionDef {
+	e.def.Where = expression
+	return e
+}
+
+func (e *ExclusionDef) Deferrable() *ExclusionDef {
+	e.def.Deferrable = true
+	if e.def.Initially == "" {
+		e.def.Initially = "IMMEDIATE"
+	}
+	return e
+}
+
+func (e *ExclusionDef) InitiallyDeferred() *ExclusionDef {
+	e.def.Deferrable = true
+	e.def.Initially = "DEFERRED"
+	return e
+}
+
+func (d *Definition) Comment(text string) *Definition {
+	d.def.Comment = text
+	return d
+}
+
 func (c *CheckDef) apply(table *ast.Table) {
 	table.Checks = append(table.Checks, c.def)
 }
 
 func (i *IndexDef) apply(table *ast.Table) {
+	if i.def.Name == "" {
+		i.def.Name = autoIndexName(table.Name, i.def)
+	}
 	table.Indexes = append(table.Indexes, i.def)
+}
+
+func autoIndexName(tableName string, index ast.Index) string {
+	parts := make([]string, 0, len(index.Columns)+2)
+	parts = append(parts, tableName)
+	for _, column := range index.Columns {
+		if column.IsExpression {
+			panic("indexes with expression columns require an explicit name")
+		}
+		parts = append(parts, column.Expression)
+	}
+	parts = append(parts, "idx")
+	return strings.Join(parts, "_")
 }
 
 func indexOn(name string, unique bool, columns ...*IndexColumnDef) *IndexDef {
@@ -236,4 +380,8 @@ func (u *UniqueConstraintDef) apply(table *ast.Table) {
 
 func (f *ForeignKeyDef) apply(table *ast.Table) {
 	table.ForeignKeys = append(table.ForeignKeys, f.def)
+}
+
+func (e *ExclusionDef) apply(table *ast.Table) {
+	table.Exclusions = append(table.Exclusions, e.def)
 }

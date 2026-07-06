@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
-	"github.com/webdeveloperben/gosqlkit/internal/pgschema"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 )
 
 var identifierPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
@@ -55,7 +55,44 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, enum := range enums {
 		renderEnum(&b, enum)
-		if i < len(enums)-1 || len(tables) > 0 {
+		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(tables) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	compositeTypes := append([]pgschema.CompositeType(nil), schema.CompositeTypes...)
+	sort.SliceStable(compositeTypes, func(i, j int) bool {
+		return qualifiedName(compositeTypes[i].Schema, compositeTypes[i].Name) < qualifiedName(compositeTypes[j].Schema, compositeTypes[j].Name)
+	})
+	for i, compositeType := range compositeTypes {
+		if err := renderCompositeType(&b, compositeType); err != nil {
+			return "", err
+		}
+		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(tables) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	domains := append([]pgschema.Domain(nil), schema.Domains...)
+	sort.SliceStable(domains, func(i, j int) bool {
+		return qualifiedName(domains[i].Schema, domains[i].Name) < qualifiedName(domains[j].Schema, domains[j].Name)
+	})
+	for i, domain := range domains {
+		if err := renderDomain(&b, domain); err != nil {
+			return "", err
+		}
+		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(tables) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	sequences := append([]pgschema.Sequence(nil), schema.Sequences...)
+	sort.SliceStable(sequences, func(i, j int) bool {
+		return qualifiedName(sequences[i].Schema, sequences[i].Name) < qualifiedName(sequences[j].Schema, sequences[j].Name)
+	})
+	for i, sequence := range sequences {
+		renderSequence(&b, sequence)
+		if i < len(sequences)-1 || len(tables) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -64,7 +101,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderTable(&b, table); err != nil {
 			return "", err
 		}
-		if i < len(tables)-1 || len(table.Indexes) > 0 {
+		if i < len(tables)-1 || len(table.Indexes) > 0 || hasComments(table) {
 			b.WriteString("\n")
 		}
 
@@ -76,9 +113,16 @@ func Postgres(schema pgschema.Schema) (string, error) {
 			if err := renderIndex(&b, renderTableName(table), index); err != nil {
 				return "", err
 			}
-			if j < len(indexes)-1 || i < len(tables)-1 {
+			if j < len(indexes)-1 || i < len(tables)-1 || hasComments(table) {
 				b.WriteString("\n")
 			}
+		}
+
+		if err := renderComments(&b, table); err != nil {
+			return "", err
+		}
+		if hasComments(table) && i < len(tables)-1 {
+			b.WriteString("\n")
 		}
 	}
 
@@ -219,6 +263,87 @@ func validateSchema(schema pgschema.Schema) error {
 		enumNames[key] = struct{}{}
 	}
 
+	sequenceNames := map[string]struct{}{}
+	for _, sequence := range schema.Sequences {
+		if sequence.Schema != "" {
+			if err := validateIdentifier("sequence schema", sequence.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateIdentifier("sequence", sequence.Name); err != nil {
+			return err
+		}
+		key := qualifiedName(sequence.Schema, sequence.Name)
+		if _, ok := sequenceNames[key]; ok {
+			return fmt.Errorf("duplicate sequence %q", renderQualifiedName(sequence.Schema, sequence.Name))
+		}
+		sequenceNames[key] = struct{}{}
+		if sequence.OwnedBy != "" {
+			parts := strings.SplitSeq(sequence.OwnedBy, ".")
+			for part := range parts {
+				if err := validateIdentifier("owned by", part); err != nil {
+					return fmt.Errorf("sequence %q: %w", renderQualifiedName(sequence.Schema, sequence.Name), err)
+				}
+			}
+		}
+	}
+
+	compositeTypeNames := map[string]struct{}{}
+	for _, compositeType := range schema.CompositeTypes {
+		if compositeType.Schema != "" {
+			if err := validateIdentifier("composite type schema", compositeType.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateIdentifier("composite type", compositeType.Name); err != nil {
+			return err
+		}
+		key := qualifiedName(compositeType.Schema, compositeType.Name)
+		if _, ok := compositeTypeNames[key]; ok {
+			return fmt.Errorf("duplicate composite type %q", renderQualifiedName(compositeType.Schema, compositeType.Name))
+		}
+		compositeTypeNames[key] = struct{}{}
+		if len(compositeType.Attributes) == 0 {
+			return fmt.Errorf("composite type %q must have at least one attribute", renderQualifiedName(compositeType.Schema, compositeType.Name))
+		}
+		seenAttrs := map[string]struct{}{}
+		for _, attribute := range compositeType.Attributes {
+			if err := validateIdentifier("composite attribute", attribute.Name); err != nil {
+				return fmt.Errorf("composite type %q: %w", compositeType.Name, err)
+			}
+			if _, ok := seenAttrs[attribute.Name]; ok {
+				return fmt.Errorf("composite type %q has duplicate attribute %q", compositeType.Name, attribute.Name)
+			}
+			seenAttrs[attribute.Name] = struct{}{}
+			if strings.TrimSpace(attribute.Type) == "" {
+				return fmt.Errorf("composite type %q attribute %q must have a type", compositeType.Name, attribute.Name)
+			}
+		}
+	}
+
+	domainNames := map[string]struct{}{}
+	for _, domain := range schema.Domains {
+		if domain.Schema != "" {
+			if err := validateIdentifier("domain schema", domain.Schema); err != nil {
+				return err
+			}
+		}
+		if err := validateIdentifier("domain", domain.Name); err != nil {
+			return err
+		}
+		key := qualifiedName(domain.Schema, domain.Name)
+		if _, ok := domainNames[key]; ok {
+			return fmt.Errorf("duplicate domain %q", renderQualifiedName(domain.Schema, domain.Name))
+		}
+		domainNames[key] = struct{}{}
+		if strings.TrimSpace(domain.BaseType) == "" {
+			return fmt.Errorf("domain %q must have a base type", renderQualifiedName(domain.Schema, domain.Name))
+		}
+		if domain.Check != "" && strings.TrimSpace(domain.Check) != domain.Check {
+			return fmt.Errorf("domain %q check expression must not have leading or trailing whitespace", renderQualifiedName(domain.Schema, domain.Name))
+		}
+	}
+
 	tableNames := map[string]struct{}{}
 	tableColumns := map[string]map[string]struct{}{}
 	indexNames := map[string]struct{}{}
@@ -266,6 +391,16 @@ func validateSchema(schema pgschema.Schema) error {
 					return fmt.Errorf("table %q column %q: %w", renderTableName(table), column.Name, err)
 				}
 			}
+			if column.Identity != nil {
+				if err := validateIdentity(column); err != nil {
+					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+				}
+			}
+			if column.Generated != nil {
+				if err := validateGenerated(column); err != nil {
+					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+				}
+			}
 		}
 		tableColumns[tableKey(table)] = columnNames
 
@@ -286,6 +421,9 @@ func validateSchema(schema pgschema.Schema) error {
 		for _, unique := range table.UniqueConstraints {
 			if err := validateNamedColumnConstraint(table.Name, "unique constraint", unique.Name, unique.Columns, columnNames); err != nil {
 				return err
+			}
+			if err := validateInitially(unique.Initially); err != nil {
+				return fmt.Errorf("table %q unique constraint %q: %w", table.Name, unique.Name, err)
 			}
 			if err := addConstraintName(table.Name, constraintNames, unique.Name); err != nil {
 				return err
@@ -316,6 +454,9 @@ func validateSchema(schema pgschema.Schema) error {
 			if err := validateForeignKeyAction("ON UPDATE", foreignKey.OnUpdate); err != nil {
 				return fmt.Errorf("table %q foreign key %q: %w", table.Name, foreignKey.Name, err)
 			}
+			if err := validateInitially(foreignKey.Initially); err != nil {
+				return fmt.Errorf("table %q foreign key %q: %w", table.Name, foreignKey.Name, err)
+			}
 			if err := addConstraintName(table.Name, constraintNames, foreignKey.Name); err != nil {
 				return err
 			}
@@ -323,6 +464,15 @@ func validateSchema(schema pgschema.Schema) error {
 
 		for _, check := range table.Checks {
 			if err := addConstraintName(table.Name, constraintNames, check.Name); err != nil {
+				return err
+			}
+		}
+
+		for _, exclusion := range table.Exclusions {
+			if err := validateExclusion(table.Name, exclusion, columnNames); err != nil {
+				return err
+			}
+			if err := addConstraintName(table.Name, constraintNames, exclusion.Name); err != nil {
 				return err
 			}
 		}
@@ -364,6 +514,86 @@ func renderEnum(b *strings.Builder, enum pgschema.Enum) {
 	b.WriteString(");\n")
 }
 
+func renderSequence(b *strings.Builder, sequence pgschema.Sequence) {
+	b.WriteString("CREATE SEQUENCE ")
+	b.WriteString(renderQualifiedName(sequence.Schema, sequence.Name))
+	if sequence.Increment != 0 {
+		fmt.Fprintf(b, " INCREMENT %d", sequence.Increment)
+	}
+	if sequence.MinValue != nil {
+		fmt.Fprintf(b, " MINVALUE %d", *sequence.MinValue)
+	}
+	if sequence.MaxValue != nil {
+		fmt.Fprintf(b, " MAXVALUE %d", *sequence.MaxValue)
+	}
+	if sequence.StartWith != nil {
+		fmt.Fprintf(b, " START %d", *sequence.StartWith)
+	}
+	if sequence.Cache != nil {
+		fmt.Fprintf(b, " CACHE %d", *sequence.Cache)
+	}
+	if sequence.Cycle {
+		b.WriteString(" CYCLE")
+	}
+	if sequence.OwnedBy != "" {
+		b.WriteString(" OWNED BY ")
+		b.WriteString(sequence.OwnedBy)
+	}
+	b.WriteString(";\n")
+}
+
+func renderCompositeType(b *strings.Builder, compositeType pgschema.CompositeType) error {
+	if err := validateIdentifier("composite type", compositeType.Name); err != nil {
+		return err
+	}
+	if len(compositeType.Attributes) == 0 {
+		return fmt.Errorf("composite type %q must have at least one attribute", renderQualifiedName(compositeType.Schema, compositeType.Name))
+	}
+	b.WriteString("CREATE TYPE ")
+	b.WriteString(renderQualifiedName(compositeType.Schema, compositeType.Name))
+	b.WriteString(" AS (\n")
+	lines := make([]string, 0, len(compositeType.Attributes))
+	for _, attribute := range compositeType.Attributes {
+		if err := validateIdentifier("composite attribute", attribute.Name); err != nil {
+			return fmt.Errorf("composite type %q: %w", compositeType.Name, err)
+		}
+		if strings.TrimSpace(attribute.Type) == "" {
+			return fmt.Errorf("composite type %q attribute %q must have a type", compositeType.Name, attribute.Name)
+		}
+		lines = append(lines, "    "+attribute.Name+" "+attribute.Type)
+	}
+	b.WriteString(strings.Join(lines, ",\n"))
+	b.WriteString("\n);\n")
+	return nil
+}
+
+func renderDomain(b *strings.Builder, domain pgschema.Domain) error {
+	if err := validateIdentifier("domain", domain.Name); err != nil {
+		return err
+	}
+	if strings.TrimSpace(domain.BaseType) == "" {
+		return fmt.Errorf("domain %q must have a base type", renderQualifiedName(domain.Schema, domain.Name))
+	}
+	b.WriteString("CREATE DOMAIN ")
+	b.WriteString(renderQualifiedName(domain.Schema, domain.Name))
+	b.WriteString(" AS ")
+	b.WriteString(domain.BaseType)
+	if domain.Default != "" {
+		b.WriteString(" DEFAULT ")
+		b.WriteString(domain.Default)
+	}
+	if domain.NotNull {
+		b.WriteString(" NOT NULL")
+	}
+	if domain.Check != "" {
+		b.WriteString(" CHECK (")
+		b.WriteString(domain.Check)
+		b.WriteString(")")
+	}
+	b.WriteString(";\n")
+	return nil
+}
+
 func renderTable(b *strings.Builder, table ast.Table) error {
 	if err := validateIdentifier("table", table.Name); err != nil {
 		return err
@@ -377,12 +607,14 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 	b.WriteString(" (\n")
 
 	lines := make([]string, 0, len(table.Columns)+len(table.PrimaryKeys)+len(table.UniqueConstraints)+len(table.ForeignKeys)+len(table.Checks))
+	columnNames := make(map[string]struct{}, len(table.Columns))
 	for _, column := range table.Columns {
 		line, err := renderColumn(column)
 		if err != nil {
 			return fmt.Errorf("table %q: %w", table.Name, err)
 		}
 		lines = append(lines, "    "+line)
+		columnNames[column.Name] = struct{}{}
 	}
 
 	primaryKeys := append([]ast.PrimaryKey(nil), table.PrimaryKeys...)
@@ -402,7 +634,9 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 		if unique.NullsNotDistinct {
 			keyword = "UNIQUE NULLS NOT DISTINCT"
 		}
-		lines = append(lines, fmt.Sprintf("    CONSTRAINT %s %s (%s)", unique.Name, keyword, strings.Join(unique.Columns, ", ")))
+		line := fmt.Sprintf("    CONSTRAINT %s %s (%s)", unique.Name, keyword, strings.Join(unique.Columns, ", "))
+		line += renderDeferrable(unique.Deferrable, unique.Initially)
+		lines = append(lines, line)
 	}
 
 	foreignKeys := append([]ast.ForeignKeyConstraint(nil), table.ForeignKeys...)
@@ -417,6 +651,7 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 		if foreignKey.OnUpdate != "" {
 			line += " ON UPDATE " + strings.ToUpper(foreignKey.OnUpdate)
 		}
+		line += renderDeferrable(foreignKey.Deferrable, foreignKey.Initially)
 		lines = append(lines, line)
 	}
 
@@ -434,6 +669,30 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 		lines = append(lines, fmt.Sprintf("    CONSTRAINT %s CHECK (%s)", check.Name, check.Expression))
 	}
 
+	exclusions := append([]ast.ExclusionConstraint(nil), table.Exclusions...)
+	sort.SliceStable(exclusions, func(i, j int) bool {
+		return exclusions[i].Name < exclusions[j].Name
+	})
+	for _, exclusion := range exclusions {
+		if err := validateExclusion(table.Name, exclusion, columnNames); err != nil {
+			return err
+		}
+		method := exclusion.Method
+		if method == "" {
+			method = "gist"
+		}
+		elements := make([]string, 0, len(exclusion.Elements))
+		for _, element := range exclusion.Elements {
+			elements = append(elements, renderExclusionElement(element))
+		}
+		line := fmt.Sprintf("    CONSTRAINT %s EXCLUDE USING %s (%s)", exclusion.Name, method, strings.Join(elements, ", "))
+		if exclusion.Where != "" {
+			line += " WHERE " + exclusion.Where
+		}
+		line += renderDeferrable(exclusion.Deferrable, exclusion.Initially)
+		lines = append(lines, line)
+	}
+
 	b.WriteString(strings.Join(lines, ",\n"))
 	b.WriteString("\n);\n")
 	return nil
@@ -448,17 +707,30 @@ func renderColumn(column ast.Column) (string, error) {
 	}
 
 	parts := []string{column.Name, column.Type}
-	if column.PrimaryKey {
-		parts = append(parts, "PRIMARY KEY")
+	if column.Identity != nil {
+		if err := validateIdentity(column); err != nil {
+			return "", fmt.Errorf("column %q: %w", column.Name, err)
+		}
+		parts = append(parts, renderIdentity(column.Identity))
+	} else {
+		if column.PrimaryKey {
+			parts = append(parts, "PRIMARY KEY")
+		}
+		if column.NotNull {
+			parts = append(parts, "NOT NULL")
+		}
+		if column.Unique {
+			parts = append(parts, "UNIQUE")
+		}
+		if column.Default != "" {
+			parts = append(parts, "DEFAULT", column.Default)
+		}
 	}
-	if column.NotNull {
-		parts = append(parts, "NOT NULL")
-	}
-	if column.Unique {
-		parts = append(parts, "UNIQUE")
-	}
-	if column.Default != "" {
-		parts = append(parts, "DEFAULT", column.Default)
+	if column.Generated != nil {
+		if err := validateGenerated(column); err != nil {
+			return "", fmt.Errorf("column %q: %w", column.Name, err)
+		}
+		parts = append(parts, fmt.Sprintf("GENERATED ALWAYS AS (%s) STORED", column.Generated.As))
 	}
 	if column.References != nil {
 		if _, err := parseQualifiedIdentifier("referenced table", column.References.Table); err != nil {
@@ -477,6 +749,87 @@ func renderColumn(column ast.Column) (string, error) {
 	}
 
 	return strings.Join(parts, " "), nil
+}
+
+func renderIdentity(identity *ast.Identity) string {
+	keyword := "GENERATED ALWAYS AS IDENTITY"
+	if strings.EqualFold(identity.Type, "bydefault") {
+		keyword = "GENERATED BY DEFAULT AS IDENTITY"
+	}
+	options := renderIdentityOptions(identity)
+	if options == "" {
+		return keyword
+	}
+	return keyword + " (" + options + ")"
+}
+
+func renderIdentityOptions(identity *ast.Identity) string {
+	var parts []string
+	if identity.Name != "" {
+		parts = append(parts, "SEQUENCE NAME "+identity.Name)
+	}
+	if identity.Increment != 0 {
+		parts = append(parts, fmt.Sprintf("INCREMENT %d", identity.Increment))
+	}
+	if identity.MinValue != nil {
+		parts = append(parts, fmt.Sprintf("MINVALUE %d", *identity.MinValue))
+	}
+	if identity.MaxValue != nil {
+		parts = append(parts, fmt.Sprintf("MAXVALUE %d", *identity.MaxValue))
+	}
+	if identity.StartWith != nil {
+		parts = append(parts, fmt.Sprintf("START %d", *identity.StartWith))
+	}
+	if identity.Cache != nil {
+		parts = append(parts, fmt.Sprintf("CACHE %d", *identity.Cache))
+	}
+	if identity.Cycle {
+		parts = append(parts, "CYCLE")
+	}
+	return strings.Join(parts, " ")
+}
+
+func validateIdentity(column ast.Column) error {
+	if column.Identity == nil {
+		return nil
+	}
+	switch strings.ToLower(column.Identity.Type) {
+	case "always", "bydefault":
+	default:
+		return fmt.Errorf("identity type %q must be always or byDefault", column.Identity.Type)
+	}
+	baseType := strings.TrimSpace(strings.TrimSuffix(column.Type, "[]"))
+	switch baseType {
+	case "smallint", "integer", "bigint":
+	default:
+		return fmt.Errorf("identity columns require an integer type, got %q", column.Type)
+	}
+	if column.Generated != nil {
+		return errors.New("a column cannot be both identity and generated")
+	}
+	if column.Default != "" {
+		return errors.New("identity columns cannot have an explicit default")
+	}
+	return nil
+}
+
+func validateGenerated(column ast.Column) error {
+	if column.Generated == nil {
+		return nil
+	}
+	if strings.TrimSpace(column.Generated.As) == "" {
+		return errors.New("generated column expression must not be empty")
+	}
+	if !strings.EqualFold(column.Generated.Type, "stored") {
+		return fmt.Errorf("generated column type %q must be stored", column.Generated.Type)
+	}
+	if column.Default != "" {
+		return errors.New("generated columns cannot have a default")
+	}
+	if column.Identity != nil {
+		return errors.New("a column cannot be both generated and identity")
+	}
+	return nil
 }
 
 func renderIndex(b *strings.Builder, tableName string, index ast.Index) error {
@@ -557,6 +910,103 @@ func renderIndexWith(values map[string]string) string {
 		parts = append(parts, key+" = "+values[key])
 	}
 	return strings.Join(parts, ", ")
+}
+
+func renderDeferrable(deferrable bool, initially string) string {
+	if !deferrable {
+		return ""
+	}
+	out := " DEFERRABLE"
+	if initially != "" {
+		out += " INITIALLY " + strings.ToUpper(initially)
+	}
+	return out
+}
+
+func renderExclusionElement(element ast.ExclusionElement) string {
+	parts := []string{element.Expression}
+	if element.OpClass != "" {
+		parts = append(parts, element.OpClass)
+	}
+	parts = append(parts, "WITH", element.Operator)
+	if element.Order != "" {
+		parts = append(parts, element.Order)
+	}
+	if element.Nulls != "" {
+		parts = append(parts, "NULLS", element.Nulls)
+	}
+	return strings.Join(parts, " ")
+}
+
+func validateExclusion(tableName string, exclusion ast.ExclusionConstraint, columnNames map[string]struct{}) error {
+	if err := validateIdentifier("exclusion constraint", exclusion.Name); err != nil {
+		return err
+	}
+	if exclusion.Method != "" {
+		if err := validateIdentifier("exclusion method", exclusion.Method); err != nil {
+			return fmt.Errorf("exclusion %q: %w", exclusion.Name, err)
+		}
+	}
+	if len(exclusion.Elements) == 0 {
+		return fmt.Errorf("exclusion constraint %q must have at least one element", exclusion.Name)
+	}
+	for _, element := range exclusion.Elements {
+		if strings.TrimSpace(element.Expression) == "" {
+			return fmt.Errorf("exclusion constraint %q has an empty element expression", exclusion.Name)
+		}
+		if strings.TrimSpace(element.Operator) == "" {
+			return fmt.Errorf("exclusion constraint %q element %q must have an operator", exclusion.Name, element.Expression)
+		}
+		if element.OpClass != "" {
+			if err := validateIdentifier("operator class", element.OpClass); err != nil {
+				return fmt.Errorf("exclusion %q element %q: %w", exclusion.Name, element.Expression, err)
+			}
+		}
+	}
+	if exclusion.Where != "" && strings.TrimSpace(exclusion.Where) != exclusion.Where {
+		return fmt.Errorf("exclusion constraint %q WHERE expression must not have leading or trailing whitespace", exclusion.Name)
+	}
+	if err := validateInitially(exclusion.Initially); err != nil {
+		return fmt.Errorf("exclusion constraint %q: %w", exclusion.Name, err)
+	}
+	return nil
+}
+
+func validateInitially(initially string) error {
+	switch strings.ToUpper(initially) {
+	case "", "IMMEDIATE", "DEFERRED":
+		return nil
+	default:
+		return fmt.Errorf("INITIALLY value %q must be IMMEDIATE or DEFERRED", initially)
+	}
+}
+
+func hasComments(table ast.Table) bool {
+	if table.Comment != "" {
+		return true
+	}
+	for _, column := range table.Columns {
+		if column.Comment != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func renderComments(b *strings.Builder, table ast.Table) error {
+	if table.Comment != "" {
+		fmt.Fprintf(b, "COMMENT ON TABLE %s IS %s;\n", renderTableName(table), quoteLiteral(table.Comment))
+	}
+	for _, column := range table.Columns {
+		if column.Comment == "" {
+			continue
+		}
+		if err := validateIdentifier("column", column.Name); err != nil {
+			return err
+		}
+		fmt.Fprintf(b, "COMMENT ON COLUMN %s.%s IS %s;\n", renderTableName(table), column.Name, quoteLiteral(column.Comment))
+	}
+	return nil
 }
 
 func renderTableName(table ast.Table) string {

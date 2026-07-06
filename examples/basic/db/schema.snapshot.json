@@ -22,6 +22,39 @@
       ]
     }
   ],
+  "compositeTypes": [
+    {
+      "schema": "billing",
+      "name": "money",
+      "attributes": [
+        {
+          "name": "amount",
+          "type": "numeric(10, 2)"
+        },
+        {
+          "name": "currency",
+          "type": "char(3)"
+        }
+      ]
+    }
+  ],
+  "domains": [
+    {
+      "name": "email",
+      "baseType": "text",
+      "check": "value ~ '^[^@]+@[^@]+$'",
+      "notNull": true
+    }
+  ],
+  "sequences": [
+    {
+      "startWith": 1000,
+      "cache": 1,
+      "schema": "billing",
+      "name": "order_number_seq",
+      "increment": 1
+    }
+  ],
   "tables": [
     {
       "schema": "billing",
@@ -131,12 +164,14 @@
           "name": "invoices_user_id_fkey",
           "referencedTable": "public.users",
           "onDelete": "cascade",
+          "initially": "DEFERRED",
           "columns": [
             "user_id"
           ],
           "referencedColumns": [
             "id"
-          ]
+          ],
+          "deferrable": true
         }
       ],
       "checks": [
@@ -163,7 +198,114 @@
       ]
     },
     {
+      "name": "bookings",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "resource",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "owner",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "during",
+          "type": "tstzrange",
+          "notNull": true
+        }
+      ],
+      "exclusions": [
+        {
+          "name": "bookings_no_overlap",
+          "method": "gist",
+          "elements": [
+            {
+              "expression": "during",
+              "operator": "\u0026\u0026"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "events",
+      "columns": [
+        {
+          "identity": {
+            "cache": 20,
+            "name": "events_id_seq",
+            "type": "always",
+            "increment": 1
+          },
+          "name": "id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "generated": {
+            "as": "to_tsvector('english', description)",
+            "type": "stored"
+          },
+          "name": "search_vector",
+          "type": "text"
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb",
+          "default": "'{\"source\":\"api\"}'::jsonb"
+        },
+        {
+          "name": "payload",
+          "type": "bytea"
+        },
+        {
+          "name": "duration",
+          "type": "interval day to second (6)",
+          "notNull": true
+        },
+        {
+          "name": "priority",
+          "type": "smallint",
+          "default": "0",
+          "notNull": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "default": "now()",
+          "notNull": true
+        }
+      ],
+      "indexes": [
+        {
+          "name": "events_priority_created_at_idx",
+          "columns": [
+            {
+              "expression": "priority"
+            },
+            {
+              "expression": "created_at"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "users",
+      "comment": "Application users.",
       "columns": [
         {
           "name": "id",
@@ -179,6 +321,14 @@
         {
           "name": "display_name",
           "type": "text"
+        },
+        {
+          "name": "last_login_ip",
+          "type": "inet"
+        },
+        {
+          "name": "tags",
+          "type": "text[]"
         },
         {
           "name": "created_at",

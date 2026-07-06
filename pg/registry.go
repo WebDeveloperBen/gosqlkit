@@ -4,17 +4,20 @@ import (
 	"sync"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
-	"github.com/webdeveloperben/gosqlkit/internal/pgschema"
-	"github.com/webdeveloperben/gosqlkit/internal/pgsnapshot"
-	"github.com/webdeveloperben/gosqlkit/internal/render"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgsnapshot"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/render"
 	"github.com/webdeveloperben/gosqlkit/kit"
 )
 
 var registry = struct {
-	namespaces []pgschema.Namespace
-	extensions []pgschema.Extension
-	enums      []pgschema.Enum
-	tables     []ast.Table
+	namespaces     []pgschema.Namespace
+	extensions     []pgschema.Extension
+	enums          []pgschema.Enum
+	sequences      []pgschema.Sequence
+	compositeTypes []pgschema.CompositeType
+	domains        []*pgschema.Domain
+	tables         []*ast.Table
 	sync.Mutex
 }{}
 
@@ -57,8 +60,29 @@ func Schema() pgschema.Schema {
 	namespaces := append([]pgschema.Namespace(nil), registry.namespaces...)
 	extensions := append([]pgschema.Extension(nil), registry.extensions...)
 	enums := append([]pgschema.Enum(nil), registry.enums...)
-	tables := append([]ast.Table(nil), registry.tables...)
-	return pgschema.Schema{Namespaces: namespaces, Extensions: extensions, Enums: enums, Tables: tables}
+	sequences := append([]pgschema.Sequence(nil), registry.sequences...)
+	compositeTypes := append([]pgschema.CompositeType(nil), registry.compositeTypes...)
+	domains := make([]pgschema.Domain, 0, len(registry.domains))
+
+	for _, domain := range registry.domains {
+		domains = append(domains, *domain)
+	}
+
+	tables := make([]ast.Table, 0, len(registry.tables))
+
+	for _, table := range registry.tables {
+		tables = append(tables, *table)
+	}
+
+	return pgschema.Schema{
+		Namespaces:     namespaces,
+		Extensions:     extensions,
+		Enums:          enums,
+		Sequences:      sequences,
+		CompositeTypes: compositeTypes,
+		Domains:        domains,
+		Tables:         tables,
+	}
 }
 
 func Render() (string, error) {
@@ -70,6 +94,7 @@ func SnapshotJSON() ([]byte, error) {
 	if _, err := render.Postgres(schema); err != nil {
 		return nil, err
 	}
+
 	return pgsnapshot.JSON(schema)
 }
 
@@ -78,6 +103,7 @@ func MustRender() string {
 	if err != nil {
 		panic(err)
 	}
+
 	return sql
 }
 
@@ -89,9 +115,12 @@ func Reset() {
 	registry.namespaces = nil
 	registry.extensions = nil
 	registry.enums = nil
+	registry.sequences = nil
+	registry.compositeTypes = nil
+	registry.domains = nil
 }
 
-func register(table ast.Table) {
+func register(table *ast.Table) {
 	registry.Lock()
 	defer registry.Unlock()
 
@@ -117,4 +146,25 @@ func registerEnum(enum pgschema.Enum) {
 	defer registry.Unlock()
 
 	registry.enums = append(registry.enums, enum)
+}
+
+func registerSequence(sequence pgschema.Sequence) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.sequences = append(registry.sequences, sequence)
+}
+
+func registerCompositeType(compositeType pgschema.CompositeType) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.compositeTypes = append(registry.compositeTypes, compositeType)
+}
+
+func registerDomain(domain *pgschema.Domain) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.domains = append(registry.domains, domain)
 }

@@ -69,17 +69,17 @@ Legend:
 - `[x]` PostgreSQL schemas/namespaces.
 - `[x]` Extensions.
 - `[x]` Enums.
-- `[ ]` Sequences.
+- `[x]` Sequences.
 - `[ ]` Views.
 - `[ ]` Materialized views.
 - `[ ]` Functions.
 - `[ ]` Triggers.
 - `[ ]` Row-level security policies.
 - `[ ]` Roles.
-- `[ ]` Domains.
-- `[ ]` Composite types.
+- `[x]` Domains.
+- `[x]` Composite types.
 - `[ ]` Partitioned tables.
-- `[ ]` Comments.
+- `[x]` Comments.
 - `[ ]` Tablespaces.
 - `[ ]` Collations.
 - `[ ]` Raw SQL schema blocks.
@@ -92,12 +92,12 @@ Legend:
 - `[x]` Nullable by default.
 - `[x]` Column primary key.
 - `[x]` Column unique.
-- `[~]` Column default as raw SQL expression.
-- `[ ]` Safe default helpers for strings, numbers, booleans, JSON, arrays, and dates.
-- `[ ]` Generated stored columns.
-- `[ ]` Identity columns.
-- `[ ]` Array columns.
-- `[ ]` Column comments.
+- `[x]` Column default as raw SQL expression.
+- `[x]` Safe default helpers for strings, numbers, booleans, JSON, arrays, and dates.
+- `[x]` Generated stored columns.
+- `[x]` Identity columns.
+- `[x]` Array columns.
+- `[x]` Column comments.
 - `[ ]` Column-level collation.
 - `[x]` Type schema qualification, for example enum types in non-public schemas.
 - `[ ]` Rename metadata.
@@ -121,30 +121,30 @@ Initial type support:
 
 Missing common PostgreSQL types:
 
-- `[ ]` `smallint`
-- `[ ]` `serial`
-- `[ ]` `smallserial`
-- `[ ]` `bigserial`
-- `[ ]` `real`
-- `[ ]` `double precision`
-- `[ ]` `char(n)`
-- `[ ]` `time`
-- `[ ]` `timetz`
-- `[ ]` `interval`
-- `[ ]` `json`
-- `[ ]` `bytea`
-- `[ ]` `inet`
-- `[ ]` `cidr`
-- `[ ]` `macaddr`
-- `[ ]` `macaddr8`
-- `[ ]` `point`
-- `[ ]` `line`
+- `[x]` `smallint`
+- `[x]` `serial`
+- `[x]` `smallserial`
+- `[x]` `bigserial`
+- `[x]` `real`
+- `[x]` `double precision`
+- `[x]` `char(n)`
+- `[x]` `time`
+- `[x]` `timetz`
+- `[x]` `interval`
+- `[x]` `json`
+- `[x]` `bytea`
+- `[x]` `inet`
+- `[x]` `cidr`
+- `[x]` `macaddr`
+- `[x]` `macaddr8`
+- `[x]` `point`
+- `[x]` `line`
 - `[ ]` PostGIS `geometry`
 - `[ ]` pgvector `vector`
 - `[ ]` pgvector `halfvec`
 - `[ ]` pgvector `sparsevec`
 - `[ ]` pgvector `bit`
-- `[ ]` Custom type escape hatch.
+- `[x]` Custom type escape hatch.
 
 ## Constraints
 
@@ -162,15 +162,15 @@ Missing common PostgreSQL types:
 - `[x]` `ON UPDATE` action rendering.
 - `[x]` Basic table check constraints.
 - `[ ]` Named check helper ergonomics beyond raw expression strings.
-- `[ ]` Exclusion constraints.
-- `[ ]` Deferrable constraints.
+- `[x]` Exclusion constraints.
+- `[x]` Deferrable constraints.
 
 ## Indexes
 
 - `[x]` Basic index.
 - `[x]` Basic unique index.
 - `[x]` Multi-column index by column names.
-- `[ ]` Named auto-generation helpers.
+- `[x]` Named auto-generation helpers.
 - `[x]` Index methods: `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`.
 - `[x]` Extension index methods: `hnsw`, `ivfflat`, and custom methods.
 - `[x]` Per-column sort direction.
@@ -208,15 +208,15 @@ Missing common PostgreSQL types:
 
 ## Sequences
 
-- `[ ]` Named sequences.
-- `[ ]` Schema-qualified sequences.
-- `[ ]` Increment.
-- `[ ]` Min/max values.
-- `[ ]` Start value.
-- `[ ]` Cache.
-- `[ ]` Cycle.
-- `[ ]` Sequence ownership.
-- `[ ]` Identity-column generated sequences.
+- `[x]` Named sequences.
+- `[x]` Schema-qualified sequences.
+- `[x]` Increment.
+- `[x]` Min/max values.
+- `[x]` Start value.
+- `[x]` Cache.
+- `[x]` Cycle.
+- `[x]` Sequence ownership.
+- `[x]` Identity-column generated sequences.
 
 ## Serialisation and Diff Readiness
 
@@ -355,13 +355,13 @@ Other provider requirement:
 - `[x]` CLI generation test.
 - `[x]` `sqlc` compatibility smoke validation.
 - `[x]` Snapshot golden tests.
-- `[ ]` Schema-qualified object tests.
-- `[ ]` Constraint rendering tests.
-- `[ ]` Advanced index rendering tests.
-- `[ ]` Default literal rendering tests.
-- `[ ]` Array type rendering tests.
+- `[x]` Schema-qualified object tests.
+- `[x]` Constraint rendering tests.
+- `[x]` Advanced index rendering tests.
+- `[x]` Default literal rendering tests.
+- `[x]` Array type rendering tests.
 - `[x]` Enum rendering tests.
-- `[ ]` Sequence rendering tests.
+- `[x]` Sequence rendering tests.
 - `[ ]` View rendering tests.
 - `[ ]` RLS policy rendering tests.
 - `[ ]` Diff fixture tests.

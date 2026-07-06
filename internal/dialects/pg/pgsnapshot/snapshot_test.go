@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
-	"github.com/webdeveloperben/gosqlkit/internal/pgschema"
-	"github.com/webdeveloperben/gosqlkit/internal/pgsnapshot"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgsnapshot"
 	"github.com/webdeveloperben/gosqlkit/internal/snapshot"
 )
 

@@ -51,13 +51,20 @@ go run ./cmd/gosqlkit snapshot --out db/schema.snapshot.json --check ./schema
 ## Current Features
 
 - Tables and columns
-- Column primary keys
-- Column unique constraints
-- Inline foreign keys
-- Basic indexes
-- Basic checks
-- Defaults
-- Nullable and not-null columns
+- All common PostgreSQL scalar types (uuid, text, varchar, integer, smallint, bigint, serial, smallserial, bigserial, real, double precision, boolean, numeric, char, date, time, timetz, timestamp, timestamptz, interval, json, jsonb, bytea, inet, cidr, macaddr, macaddr8, point, line)
+- Array columns and custom type escape hatch
+- Identity columns with sequence options
+- Generated stored columns
+- Column and table comments
+- Safe default helpers for strings, ints, bools, JSON, arrays, and dates
+- Column primary keys, unique constraints, and inline foreign keys
+- Table-level primary keys, unique constraints, and foreign keys
+- Deferrable constraints (foreign keys and unique constraints)
+- Exclusion constraints
+- Check constraints
+- Advanced indexes (methods, opclass, order, nulls, partial predicates, `CONCURRENTLY`, `ONLY`, `WITH (...)`, named auto-generation)
+- PostgreSQL schemas/namespaces, extensions, enums, sequences, composite types, and domains
+- Schema-qualified rendering for enums, sequences, composite types, and foreign key references
 - Deterministic SQL output
 - Deterministic snapshot JSON output
 - Dialect registry with PostgreSQL as the first provider
@@ -67,7 +74,7 @@ go run ./cmd/gosqlkit snapshot --out db/schema.snapshot.json --check ./schema
 
 ## Example Project
 
-See [examples/basic](examples/basic) for a two-table schema that generates PostgreSQL SQL and feeds `sqlc`.
+See [examples/basic](examples/basic) for a schema that generates PostgreSQL SQL and feeds `sqlc`.
 
 ```bash
 go run ./cmd/gosqlkit generate --out examples/basic/db/schema.generated.sql ./examples/basic/schema

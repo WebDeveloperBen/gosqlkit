@@ -18,19 +18,24 @@ type Document struct {
 type Table struct {
 	Schema            string                 `json:"schema,omitempty"`
 	Name              string                 `json:"name"`
+	Comment           string                 `json:"comment,omitempty"`
 	Columns           []Column               `json:"columns,omitempty"`
 	PrimaryKeys       []PrimaryKey           `json:"primaryKeys,omitempty"`
 	UniqueConstraints []UniqueConstraint     `json:"uniqueConstraints,omitempty"`
 	ForeignKeys       []ForeignKeyConstraint `json:"foreignKeys,omitempty"`
 	Checks            []Check                `json:"checks,omitempty"`
+	Exclusions        []ExclusionConstraint  `json:"exclusions,omitempty"`
 	Indexes           []Index                `json:"indexes,omitempty"`
 }
 
 type Column struct {
 	References *ForeignKey `json:"references,omitempty"`
+	Generated  *Generated  `json:"generated,omitempty"`
+	Identity   *Identity   `json:"identity,omitempty"`
 	Name       string      `json:"name"`
 	Type       string      `json:"type"`
 	Default    string      `json:"default,omitempty"`
+	Comment    string      `json:"comment,omitempty"`
 	NotNull    bool        `json:"notNull,omitempty"`
 	PrimaryKey bool        `json:"primaryKey,omitempty"`
 	Unique     bool        `json:"unique,omitempty"`
@@ -43,6 +48,22 @@ type ForeignKey struct {
 	OnUpdate string `json:"onUpdate,omitempty"`
 }
 
+type Generated struct {
+	As   string `json:"as"`
+	Type string `json:"type"`
+}
+
+type Identity struct {
+	MinValue  *int64 `json:"minValue,omitempty"`
+	MaxValue  *int64 `json:"maxValue,omitempty"`
+	StartWith *int64 `json:"startWith,omitempty"`
+	Cache     *int64 `json:"cache,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Type      string `json:"type"`
+	Increment int64  `json:"increment,omitempty"`
+	Cycle     bool   `json:"cycle,omitempty"`
+}
+
 type PrimaryKey struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
@@ -50,8 +71,10 @@ type PrimaryKey struct {
 
 type UniqueConstraint struct {
 	Name             string   `json:"name"`
+	Initially        string   `json:"initially,omitempty"`
 	Columns          []string `json:"columns"`
 	NullsNotDistinct bool     `json:"nullsNotDistinct,omitempty"`
+	Deferrable       bool     `json:"deferrable,omitempty"`
 }
 
 type ForeignKeyConstraint struct {
@@ -59,13 +82,32 @@ type ForeignKeyConstraint struct {
 	ReferencedTable   string   `json:"referencedTable"`
 	OnDelete          string   `json:"onDelete,omitempty"`
 	OnUpdate          string   `json:"onUpdate,omitempty"`
+	Initially         string   `json:"initially,omitempty"`
 	Columns           []string `json:"columns"`
 	ReferencedColumns []string `json:"referencedColumns"`
+	Deferrable        bool     `json:"deferrable,omitempty"`
 }
 
 type Check struct {
 	Name       string `json:"name"`
 	Expression string `json:"expression"`
+}
+
+type ExclusionConstraint struct {
+	Name       string             `json:"name"`
+	Method     string             `json:"method,omitempty"`
+	Where      string             `json:"where,omitempty"`
+	Initially  string             `json:"initially,omitempty"`
+	Elements   []ExclusionElement `json:"elements,omitempty"`
+	Deferrable bool               `json:"deferrable,omitempty"`
+}
+
+type ExclusionElement struct {
+	Expression string `json:"expression"`
+	Operator   string `json:"operator"`
+	OpClass    string `json:"opClass,omitempty"`
+	Order      string `json:"order,omitempty"`
+	Nulls      string `json:"nulls,omitempty"`
 }
 
 type Index struct {
@@ -119,6 +161,7 @@ func snapshotTable(table ast.Table) Table {
 	uniqueConstraints := append([]ast.UniqueConstraint(nil), table.UniqueConstraints...)
 	foreignKeys := append([]ast.ForeignKeyConstraint(nil), table.ForeignKeys...)
 	checks := append([]ast.Check(nil), table.Checks...)
+	exclusions := append([]ast.ExclusionConstraint(nil), table.Exclusions...)
 	indexes := append([]ast.Index(nil), table.Indexes...)
 
 	sort.SliceStable(primaryKeys, func(i, j int) bool {
@@ -133,6 +176,9 @@ func snapshotTable(table ast.Table) Table {
 	sort.SliceStable(checks, func(i, j int) bool {
 		return checks[i].Name < checks[j].Name
 	})
+	sort.SliceStable(exclusions, func(i, j int) bool {
+		return exclusions[i].Name < exclusions[j].Name
+	})
 	sort.SliceStable(indexes, func(i, j int) bool {
 		return indexes[i].Name < indexes[j].Name
 	})
@@ -140,11 +186,13 @@ func snapshotTable(table ast.Table) Table {
 	return Table{
 		Schema:            table.Schema,
 		Name:              table.Name,
+		Comment:           table.Comment,
 		Columns:           columns(table.Columns),
 		PrimaryKeys:       primaryKeysSnapshot(primaryKeys),
 		UniqueConstraints: uniqueConstraintsSnapshot(uniqueConstraints),
 		ForeignKeys:       foreignKeysSnapshot(foreignKeys),
 		Checks:            checksSnapshot(checks),
+		Exclusions:        exclusionsSnapshot(exclusions),
 		Indexes:           indexesSnapshot(indexes),
 	}
 }
@@ -154,9 +202,12 @@ func columns(input []ast.Column) []Column {
 	for _, column := range input {
 		items = append(items, Column{
 			References: foreignKeySnapshot(column.References),
+			Generated:  generatedSnapshot(column.Generated),
+			Identity:   identitySnapshot(column.Identity),
 			Name:       column.Name,
 			Type:       column.Type,
 			Default:    column.Default,
+			Comment:    column.Comment,
 			NotNull:    column.NotNull,
 			PrimaryKey: column.PrimaryKey,
 			Unique:     column.Unique,
@@ -174,6 +225,32 @@ func foreignKeySnapshot(input *ast.ForeignKey) *ForeignKey {
 		Column:   input.Column,
 		OnDelete: input.OnDelete,
 		OnUpdate: input.OnUpdate,
+	}
+}
+
+func generatedSnapshot(input *ast.Generated) *Generated {
+	if input == nil {
+		return nil
+	}
+	return &Generated{
+		As:   input.As,
+		Type: input.Type,
+	}
+}
+
+func identitySnapshot(input *ast.Identity) *Identity {
+	if input == nil {
+		return nil
+	}
+	return &Identity{
+		Name:      input.Name,
+		Type:      input.Type,
+		Increment: input.Increment,
+		MinValue:  copyInt64Ptr(input.MinValue),
+		MaxValue:  copyInt64Ptr(input.MaxValue),
+		StartWith: copyInt64Ptr(input.StartWith),
+		Cache:     copyInt64Ptr(input.Cache),
+		Cycle:     input.Cycle,
 	}
 }
 
@@ -195,6 +272,8 @@ func uniqueConstraintsSnapshot(input []ast.UniqueConstraint) []UniqueConstraint 
 			Name:             uniqueConstraint.Name,
 			Columns:          append([]string(nil), uniqueConstraint.Columns...),
 			NullsNotDistinct: uniqueConstraint.NullsNotDistinct,
+			Deferrable:       uniqueConstraint.Deferrable,
+			Initially:        uniqueConstraint.Initially,
 		})
 	}
 	return items
@@ -210,6 +289,8 @@ func foreignKeysSnapshot(input []ast.ForeignKeyConstraint) []ForeignKeyConstrain
 			OnUpdate:          foreignKey.OnUpdate,
 			Columns:           append([]string(nil), foreignKey.Columns...),
 			ReferencedColumns: append([]string(nil), foreignKey.ReferencedColumns...),
+			Deferrable:        foreignKey.Deferrable,
+			Initially:         foreignKey.Initially,
 		})
 	}
 	return items
@@ -221,6 +302,35 @@ func checksSnapshot(input []ast.Check) []Check {
 		items = append(items, Check{
 			Name:       check.Name,
 			Expression: check.Expression,
+		})
+	}
+	return items
+}
+
+func exclusionsSnapshot(input []ast.ExclusionConstraint) []ExclusionConstraint {
+	items := make([]ExclusionConstraint, 0, len(input))
+	for _, exclusion := range input {
+		items = append(items, ExclusionConstraint{
+			Name:       exclusion.Name,
+			Method:     exclusion.Method,
+			Elements:   exclusionElementsSnapshot(exclusion.Elements),
+			Where:      exclusion.Where,
+			Deferrable: exclusion.Deferrable,
+			Initially:  exclusion.Initially,
+		})
+	}
+	return items
+}
+
+func exclusionElementsSnapshot(input []ast.ExclusionElement) []ExclusionElement {
+	items := make([]ExclusionElement, 0, len(input))
+	for _, element := range input {
+		items = append(items, ExclusionElement{
+			Expression: element.Expression,
+			Operator:   element.Operator,
+			OpClass:    element.OpClass,
+			Order:      element.Order,
+			Nulls:      element.Nulls,
 		})
 	}
 	return items
@@ -266,6 +376,14 @@ func copyMap(input map[string]string) map[string]string {
 		output[key] = value
 	}
 	return output
+}
+
+func copyInt64Ptr(input *int64) *int64 {
+	if input == nil {
+		return nil
+	}
+	value := *input
+	return &value
 }
 
 func qualified(schema, name string) string {
