@@ -62,7 +62,8 @@ var UsersSetUpdatedAt = pg.Trigger("users_set_updated_at", "users", "set_updated
 	Before().
 	UpdateOf("email", "display_name").
 	ForEachRow().
-	When("OLD.* IS DISTINCT FROM NEW.*")
+	When("OLD.* IS DISTINCT FROM NEW.*").
+	Comment("Automatically updates updated_at timestamp on row updates.")
 
 var UsersReadSelfPolicy = pg.Policy("users_read_self", "users").
 	Select().

@@ -903,7 +903,7 @@ func renderTrigger(b *strings.Builder, trigger pgschema.Trigger) {
 
 func renderTriggerComment(b *strings.Builder, trigger pgschema.Trigger) {
 	if trigger.Comment != "" {
-		fmt.Fprintf(b, "COMMENT ON TRIGGER %s IS %s;\n", renderQualifiedName(trigger.Target, trigger.Name), quoteLiteral(trigger.Comment))
+		fmt.Fprintf(b, "COMMENT ON TRIGGER %s ON %s IS %s;\n", trigger.Name, renderReferencedTable(trigger.Target), quoteLiteral(trigger.Comment))
 	}
 }
 

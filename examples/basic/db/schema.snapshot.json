@@ -157,7 +157,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "e8c93c5ff9f049165dff8b2f171d4219f3d599ec4cd6a6e6d82bb0f7bb8b75ce",
+  "snapshotId": "240f8bbcd1b03083e98cdd9590094553ef28208081e719e59e1c9bfce9743f37",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -476,6 +476,7 @@
       "timing": "BEFORE",
       "level": "ROW",
       "name": "users_set_updated_at",
+      "comment": "Automatically updates updated_at timestamp on row updates.",
       "when": "OLD.* IS DISTINCT FROM NEW.*",
       "events": [
         "UPDATE"

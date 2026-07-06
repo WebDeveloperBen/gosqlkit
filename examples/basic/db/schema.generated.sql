@@ -118,3 +118,4 @@ BEFORE UPDATE OF email, display_name ON users
 FOR EACH ROW
 WHEN (OLD.* IS DISTINCT FROM NEW.*)
 EXECUTE FUNCTION set_updated_at();
+COMMENT ON TRIGGER users_set_updated_at ON users IS 'Automatically updates updated_at timestamp on row updates.';
