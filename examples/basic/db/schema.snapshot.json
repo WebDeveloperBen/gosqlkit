@@ -157,7 +157,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "d1591320ffc70f49013504d07967ec438236b5f847eefa2544bf3d220f31eb10",
+  "snapshotId": "e8c93c5ff9f049165dff8b2f171d4219f3d599ec4cd6a6e6d82bb0f7bb8b75ce",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -471,18 +471,18 @@
   },
   "triggers": [
     {
-      "when": "OLD.* IS DISTINCT FROM NEW.*",
-      "name": "users_set_updated_at",
       "target": "users",
       "function": "set_updated_at",
       "timing": "BEFORE",
       "level": "ROW",
+      "name": "users_set_updated_at",
+      "when": "OLD.* IS DISTINCT FROM NEW.*",
+      "events": [
+        "UPDATE"
+      ],
       "columns": [
         "display_name",
         "email"
-      ],
-      "events": [
-        "UPDATE"
       ]
     }
   ],

@@ -11,6 +11,8 @@ them as canonical:
 - [SPEC.md](SPEC.md) — the ADR: goals, non-goals, scope, architecture, phases.
 - [FEATURES.md](FEATURES.md) — the live feature checklist. Update checkboxes
   as things land. This is the source of truth for "what's done / what's next".
+- [MIGRATIONS.md](MIGRATIONS.md) — the migration-generation decision record:
+  cross-dialect planner, goose-compatible files, embedded metadata.
 - [README.md](README.md) — the user-facing intro and example.
 
 If AGENTS.md ever disagrees with SPEC.md or FEATURES.md, those win. Update
@@ -29,8 +31,9 @@ and **not a migration engine** in the first pass. It owns:
 Go schema definitions -> deterministic snapshot JSON -> canonical dialect SQL
 ```
 
-Runtime DB access stays with `sqlc` + `pgx`. Migration diffing is delegated to
-existing tooling (planned: `pg-schema-diff`), not rebuilt.
+Runtime DB access stays with `sqlc` + `pgx`. Migration diffing is handled by
+the planned `gosqlkit` cross-dialect migration planner. Generated migrations
+should remain goose-compatible; see MIGRATIONS.md for the decision record.
 
 ### Why we're building it
 
@@ -434,9 +437,9 @@ tracks are roughly:
    snapshot ID, schema/table/column/view/role/function/trigger/policy metadata maps, stable
    object keys, rename annotations, squashed/normalised diff representation.
    Prerequisite for high-quality migration diffing.
-3. **Database connectivity + introspection + diff** — PG connection plumbing
-   (password + provider-pluggable token auth for Azure/AWS/GCP), introspection,
-   drift checks, `pg-schema-diff` integration. Largest track.
+3. **Database connectivity + introspection + diff** — cross-dialect migration
+   IR, dialect planners, sandbox validation, drift checks, and provider-pluggable
+   token auth for Azure/AWS/GCP. Largest track.
 4. **Advanced PG objects** — partitioned tables, grants, and other remaining PostgreSQL objects.
 
 When direction is ambiguous, ask the user which track rather than guessing.
@@ -559,8 +562,9 @@ update of this file:
   Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
   (SHA-256), metadata maps (schema/table/column/view/role/function/trigger/policy), and rename
   annotations (previousName on all objects).
-- **Next tracks**: DB connectivity + introspection + `pg-schema-diff`
-  integration, then advanced PG objects (partitioning, grants).
+- **Next tracks**: cross-dialect migration planning, DB connectivity,
+  introspection, and sandbox validation, then advanced PG objects
+  (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

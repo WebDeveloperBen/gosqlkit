@@ -11,14 +11,15 @@ migration runner**. The toolchain is intentionally split:
 ```text
 gosqlkit        schema declarations -> snapshot JSON -> canonical SQL
 sqlc            SQL queries -> type-safe Go query code
-pg-schema-diff  snapshot diff -> reviewable migration SQL (planned)
-goose           migration runner (optional)
+gosqlkit migrate snapshot diff -> reviewable migration SQL (planned)
+goose           migration runner compatibility (planned)
 pgx             runtime PostgreSQL driver
 ```
 
 `gosqlkit` owns the schema layer. `sqlc` owns query code generation and is the
-runtime data-access layer alongside `pgx`. Migration diffing will be delegated
-to `pg-schema-diff`, not rebuilt.
+runtime data-access layer alongside `pgx`. Migration generation will use a
+`gosqlkit` cross-dialect planner with goose-compatible SQL output. See
+[MIGRATIONS.md](MIGRATIONS.md) for the migration design.
 
 PostgreSQL is the first implemented dialect; the core is dialect-neutral so
 SQLite, MySQL, MSSQL, and other engines can be added as separate dialect
@@ -123,8 +124,9 @@ SQL and feeds `sqlc`.
 
 `gosqlkit` does not generate runtime models, build queries, apply migrations,
 or hide SQL. It is the schema layer only — you still use `sqlc` for query code
-generation and `pgx` for runtime database access. Migration diffing is planned
-as an integration with `pg-schema-diff`.
+generation and `pgx` for runtime database access. Migration generation is
+planned as a versioned, review-first workflow documented in
+[MIGRATIONS.md](MIGRATIONS.md).
 
 ## Internal Architecture
 

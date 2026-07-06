@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -202,6 +203,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, trigger := range triggers {
 		renderTrigger(&b, trigger)
+		renderTriggerComment(&b, trigger)
 		if i < len(triggers)-1 {
 			b.WriteString("\n")
 		}
@@ -897,6 +899,12 @@ func renderTrigger(b *strings.Builder, trigger pgschema.Trigger) {
 	}
 	b.WriteString(strings.Join(args, ", "))
 	b.WriteString(");\n")
+}
+
+func renderTriggerComment(b *strings.Builder, trigger pgschema.Trigger) {
+	if trigger.Comment != "" {
+		fmt.Fprintf(b, "COMMENT ON TRIGGER %s IS %s;\n", renderQualifiedName(trigger.Target, trigger.Name), quoteLiteral(trigger.Comment))
+	}
 }
 
 func renderTriggerEvents(trigger pgschema.Trigger) string {
@@ -1707,6 +1715,9 @@ func validateFunction(function pgschema.Function, names map[string]struct{}) err
 	if err := validateFunctionArguments(function); err != nil {
 		return err
 	}
+	if function.Comment != "" && strings.TrimSpace(function.Comment) != function.Comment {
+		return fmt.Errorf("function %q comment must not have leading or trailing whitespace", renderFunctionDisplayName(function))
+	}
 	for key, value := range function.Configuration {
 		if err := validateConfigKey("function configuration", key); err != nil {
 			return fmt.Errorf("function %q: %w", renderFunctionDisplayName(function), err)
@@ -1788,6 +1799,15 @@ func validateTrigger(trigger pgschema.Trigger, names map[string]struct{}, tableN
 	names[key] = struct{}{}
 	if _, err := parseQualifiedIdentifier("trigger function", trigger.Function); err != nil {
 		return fmt.Errorf("trigger %q: %w", trigger.Name, err)
+	}
+	// Validate trigger arguments
+	for i, arg := range trigger.Arguments {
+		if strings.TrimSpace(arg) != arg {
+			return fmt.Errorf("trigger %q argument %d must not have leading or trailing whitespace", trigger.Name, i+1)
+		}
+		if arg == "" {
+			return fmt.Errorf("trigger %q argument %d cannot be empty", trigger.Name, i+1)
+		}
 	}
 	if err := validateTriggerTiming(trigger); err != nil {
 		return err
@@ -1911,6 +1931,15 @@ func validateConstraintTrigger(trigger pgschema.Trigger, events []string, level,
 	if containsString(events, "TRUNCATE") {
 		return fmt.Errorf("trigger %q constraint triggers cannot use TRUNCATE", trigger.Name)
 	}
+	// Constraint triggers can only fire on INSERT, UPDATE, DELETE
+	for _, event := range events {
+		switch event {
+		case "INSERT", "UPDATE", "DELETE":
+			// OK
+		default:
+			return fmt.Errorf("trigger %q constraint triggers can only fire on INSERT, UPDATE, or DELETE, got %q", trigger.Name, event)
+		}
+	}
 	if trigger.ReferencedTable != "" {
 		key, err := referenceKey("", trigger.ReferencedTable)
 		if err != nil {
@@ -2015,12 +2044,7 @@ func normalisedTriggerEvents(events []string) []string {
 }
 
 func containsString(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, needle)
 }
 
 func validateViewQuery(query string) error {

@@ -6,18 +6,19 @@ import (
 )
 
 type Trigger struct {
-	When            string   `json:"when,omitempty"`
-	Name            string   `json:"name"`
+	Initially       string   `json:"initially,omitempty"`
+	ReferencedTable string   `json:"referencedTable,omitempty"`
 	Target          string   `json:"target"`
 	Function        string   `json:"function"`
 	Timing          string   `json:"timing"`
 	Level           string   `json:"level,omitempty"`
-	Initially       string   `json:"initially,omitempty"`
-	ReferencedTable string   `json:"referencedTable,omitempty"`
+	Name            string   `json:"name"`
+	Comment         string   `json:"comment,omitempty"`
+	When            string   `json:"when,omitempty"`
 	PreviousName    string   `json:"previousName,omitempty"`
 	Arguments       []string `json:"arguments,omitempty"`
-	Columns         []string `json:"columns,omitempty"`
 	Events          []string `json:"events"`
+	Columns         []string `json:"columns,omitempty"`
 	Constraint      bool     `json:"constraint,omitempty"`
 	Deferrable      bool     `json:"deferrable,omitempty"`
 }

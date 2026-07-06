@@ -322,10 +322,13 @@ Other provider requirement:
 - `[x]` `gosqlkit snapshot --prev` for previous snapshot ID tracking.
 - `[x]` `gosqlkit snapshot --out`.
 - `[x]` `gosqlkit snapshot --check`.
-- `[ ]` `gosqlkit diff --from ... --to ...`.
-- `[ ]` `gosqlkit diff` support for token-authenticated source databases.
-- `[ ]` `gosqlkit diff` support for provider-specific auth on both source and target inputs.
 - `[ ]` `gosqlkit migrate create <name>`.
+- `[ ]` `gosqlkit migrate create <name> --empty`.
+- `[ ]` `gosqlkit migrate check`.
+- `[ ]` `gosqlkit migrate apply --url ...`.
+- `[ ]` `gosqlkit drift check --url ...`.
+- `[ ]` Migration creation support for token-authenticated source databases.
+- `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[ ]` Goose-compatible migration file output.
 - `[ ]` CI command for committed schema drift.
 - `[ ]` CI command for database drift.
@@ -386,8 +389,8 @@ Other provider requirement:
 6. Add snapshot JSON output before implementing migration diffing.
 7. Add database connection plumbing with password and refreshable token auth.
 8. Add database introspection and drift checks.
-9. Integrate `pg-schema-diff` or another PostgreSQL diff engine.
-10. Add migration file generation and destructive-change guardrails.
+9. Add the cross-dialect migration IR and dialect planner boundary.
+10. Add goose-compatible migration file generation and destructive-change guardrails.
 11. Expand into partitioning, grants, and other advanced PostgreSQL features.
 
 ## Drizzle Reference Notes

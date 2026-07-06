@@ -491,9 +491,6 @@ func (t *TriggerDef) From(table string) *TriggerDef {
 
 func (t *TriggerDef) Deferrable() *TriggerDef {
 	t.def.Deferrable = true
-	if t.def.Initially == "" {
-		t.def.Initially = "IMMEDIATE"
-	}
 	return t
 }
 
@@ -511,6 +508,11 @@ func (t *TriggerDef) InitiallyImmediate() *TriggerDef {
 
 func (t *TriggerDef) PreviousName(name string) *TriggerDef {
 	t.def.PreviousName = name
+	return t
+}
+
+func (t *TriggerDef) Comment(text string) *TriggerDef {
+	t.def.Comment = text
 	return t
 }
 

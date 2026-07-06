@@ -6,7 +6,7 @@ Accepted. Phase 1 vertical slice implemented.
 
 ## Executive summary
 
-We will build `gosqlkit`, a Go-native schema definition toolkit that allows application teams to declare database schema in Go code, generate deterministic schema snapshots, generate dialect-specific SQL schema output, and use existing migration-diff tooling to produce migration files.
+We will build `gosqlkit`, a Go-native schema definition toolkit that allows application teams to declare database schema in Go code, generate deterministic schema snapshots, generate dialect-specific SQL schema output, and produce reviewable migration files.
 
 The goal is to achieve a Drizzle Kit / Prisma-style schema management workflow for Go applications without adopting a runtime ORM. `gosqlkit` will own schema declaration, snapshot generation, and SQL generation only. Runtime database access will remain with `sqlc`, `pgx`, and dialect equivalents.
 
@@ -14,8 +14,8 @@ The intended toolchain is:
 
 ```text
 gosqlkit         → Go schema DSL, snapshots, and canonical dialect SQL generation
-pg-schema-diff  → initial PostgreSQL schema diff and migration SQL generation
-goose           → optional migration runner/history
+gosqlkit migrate → cross-dialect snapshot diff and migration SQL generation
+goose            → migration runner compatibility
 sqlc            → SQL query code generation
 pgx             → runtime PostgreSQL driver
 ```
@@ -68,7 +68,11 @@ Go schema definitions
 → canonical dialect-specific schema SQL
 ```
 
-The initial integration target will be `pg-schema-diff` for generating migration SQL from the generated schema. `goose` may be used to store and apply versioned migrations.
+Migration generation will use a `gosqlkit` cross-dialect planner rather than a
+PostgreSQL-only diff engine as the core abstraction. PostgreSQL-specific tools
+such as Drizzle Kit, Atlas, `pgschema`, and `pg-schema-diff` remain references
+and possible validation or implementation aids. Generated migrations should be
+goose-compatible by default. See [MIGRATIONS.md](MIGRATIONS.md).
 
 ## Target developer experience
 
@@ -115,10 +119,7 @@ gosqlkit generate --out db/schema.generated.sql --check ./schema
 gosqlkit snapshot --out db/schema.snapshot.json ./schema
 gosqlkit snapshot --out db/schema.snapshot.json --check ./schema
 
-gosqlkit diff \
-  --from "$DATABASE_URL" \
-  --to db/schema.generated.sql \
-  --name add_users_table
+gosqlkit migrate create add_users_table
 
 sqlc generate
 go test ./...
@@ -271,7 +272,7 @@ Future versions may support:
 - Google Cloud SQL for PostgreSQL IAM database authentication
 - Expand/contract migration helpers
 - Goose migration file generation
-- Embedded `pg-schema-diff` integration
+- Cross-dialect migration planner and dialect-specific SQL renderers
 - CI drift checks
 
 ## Proposed architecture
@@ -321,8 +322,8 @@ User Go schema definitions
 → internal/app generation use case
 → internal/cli command adapter
 → schema.generated.sql
-→ pg-schema-diff migration generation
-→ optional goose migration file
+→ gosqlkit migration planner
+→ goose-compatible migration file
 ```
 
 CLI layering follows the same broad shape as `tyche`:
@@ -375,9 +376,12 @@ Rejected for now because the desired feature set depends on paid functionality.
 
 Technically viable, but rejected as the primary direction because it introduces TypeScript schema tooling into a Go-first project.
 
-### Build full migration engine from scratch
+### Delegate all migration planning to PostgreSQL-only tools
 
-Rejected for initial scope. Migration planning is complex and risky. We will initially delegate this to `pg-schema-diff` or another existing PostgreSQL diff engine.
+Rejected as the core architecture. PostgreSQL-only tools are useful references,
+validators, and possible implementation aids, but `gosqlkit` needs a
+cross-dialect migration model. The detailed decision is recorded in
+[MIGRATIONS.md](MIGRATIONS.md).
 
 ## Consequences
 
@@ -393,7 +397,8 @@ Positive:
 Negative:
 
 - Requires building and maintaining custom schema DSL tooling.
-- Migration quality depends on the chosen diff engine.
+- Migration quality depends on the planned cross-dialect planner and each
+  dialect implementation.
 - Advanced PostgreSQL features will require deliberate support.
 - Rename detection and destructive-change handling will need careful design.
 - Initial version will not be as feature-complete as mature ORM ecosystems.
@@ -429,13 +434,17 @@ Deliverables:
 - CI command to regenerate schema
 - validation that committed schema output is up to date
 
-### Phase 3: Migration diff integration
+### Phase 3: Migration planning and generation
 
-Integrate with `pg-schema-diff`.
+Implement the cross-dialect migration planning workflow described in
+[MIGRATIONS.md](MIGRATIONS.md).
 
 Deliverables:
 
-- `gosqlkit diff`
+- `gosqlkit migrate create <name>`
+- goose-compatible SQL migration files with embedded `gosqlkit` metadata
+- cross-dialect change IR
+- PostgreSQL planner as the first implementation
 - database connection layer for introspection/diff inputs
 - password auth and provider-pluggable token auth
 - Azure Database for PostgreSQL Microsoft Entra token-as-password support
