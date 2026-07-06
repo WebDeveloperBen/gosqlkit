@@ -1,3 +1,5 @@
 bin/
 .gocache/
 tmp/
+# Local Pi runtime state
+.atl/

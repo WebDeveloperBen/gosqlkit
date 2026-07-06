@@ -31,6 +31,8 @@ type Capabilities struct {
 	Snapshots         bool
 	Views             bool
 	MaterializedViews bool
+	Roles             bool
+	Functions         bool
 }
 
 var registry = struct {

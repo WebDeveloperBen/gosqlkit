@@ -101,11 +101,17 @@ sqlc generate
 - Advanced indexes (methods, opclass, order, nulls, partial predicates,
   `CONCURRENTLY`, `ONLY`, `WITH (...)`, named auto-generation)
 - PostgreSQL schemas/namespaces, extensions, enums, sequences, composite
-  types, and domains
+  types, domains, roles, and functions
+- Views with column aliases, check options, and security options
+- Materialized views with storage parameters and `WITH NO DATA`
 - Schema-qualified rendering
-- Deterministic SQL and snapshot JSON output
+- Deterministic SQL and snapshot JSON output with stable snapshot IDs
+- Snapshot metadata maps (schema, table, column, view, role, function) with
+  schema-qualified keys for future diffing
+- Rename annotations (previousName) on tables, columns, constraints,
+  and indexes
 - Dialect registry with PostgreSQL as the first provider
-- CLI generation and stale-output checks
+- CLI generation, snapshot, and stale-output checks
 - `sqlc` compatibility example
 
 ## Example Project

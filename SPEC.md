@@ -251,23 +251,20 @@ Current implementation status:
   - Golden-style SQL output tests
   - `sqlc` compatibility example
 - Not implemented yet:
-  - Views, RLS, triggers, functions, roles
+  - RLS, triggers
   - Migration diff integration
 
 ## Later scope
 
 Future versions may support:
 
-- Views
-- Materialized views
-- Functions
 - Triggers
 - RLS policies
-- Composite types
-- Domains
+- Grants
 - Partitioned tables
-- Comments
-- Rename annotations
+- Tablespaces
+- Collations
+- Raw SQL schema blocks
 - Destructive-change guards
 - Database introspection
 - Password and OAuth2/token database authentication
@@ -465,7 +462,7 @@ Deliverables:
 
 ### Phase 5: Advanced PostgreSQL support
 
-Add support for extensions, functions, views, RLS, triggers, and advanced index options.
+Add support for remaining advanced PostgreSQL objects such as RLS and triggers.
 
 ## Open questions
 

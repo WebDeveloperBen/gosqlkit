@@ -22,7 +22,7 @@ Legend:
 - `[~]` CLI generation workflow.
 - `[ ]` Migration diff workflow.
 - `[ ]` Review-first destructive-change handling.
-- `[ ]` Snapshot metadata for stable diffs and rename support.
+- `[x]` Snapshot metadata for stable diffs and rename support.
 
 ## Current Vertical Slice
 
@@ -70,12 +70,12 @@ Legend:
 - `[x]` Extensions.
 - `[x]` Enums.
 - `[x]` Sequences.
-- `[ ]` Views.
-- `[ ]` Materialized views.
-- `[ ]` Functions.
+- `[x]` Views.
+- `[x]` Materialized views.
+- `[x]` Functions.
 - `[ ]` Triggers.
 - `[ ]` Row-level security policies.
-- `[ ]` Roles.
+- `[x]` Roles.
 - `[x]` Domains.
 - `[x]` Composite types.
 - `[ ]` Partitioned tables.
@@ -100,7 +100,7 @@ Legend:
 - `[x]` Column comments.
 - `[ ]` Column-level collation.
 - `[x]` Type schema qualification, for example enum types in non-public schemas.
-- `[ ]` Rename metadata.
+- `[x]` Rename metadata.
 
 ## PostgreSQL Types
 
@@ -186,7 +186,7 @@ Missing common PostgreSQL types:
 
 - `[ ]` Enable row-level security on a table.
 - `[ ]` Force row-level security.
-- `[ ]` Create roles.
+- `[x]` Create roles.
 - `[ ]` Policy `AS PERMISSIVE` / `AS RESTRICTIVE`.
 - `[ ]` Policy command: `ALL`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`.
 - `[ ]` Policy target roles.
@@ -319,6 +319,9 @@ Other provider requirement:
 - `[ ]` `gosqlkit inspect --auth gcp-iam`.
 - `[ ]` `gosqlkit inspect --auth custom-token-command`.
 - `[x]` `gosqlkit snapshot` for deterministic snapshot output.
+- `[x]` `gosqlkit snapshot --prev` for previous snapshot ID tracking.
+- `[x]` `gosqlkit snapshot --out`.
+- `[x]` `gosqlkit snapshot --check`.
 - `[ ]` `gosqlkit diff --from ... --to ...`.
 - `[ ]` `gosqlkit diff` support for token-authenticated source databases.
 - `[ ]` `gosqlkit diff` support for provider-specific auth on both source and target inputs.
@@ -363,6 +366,8 @@ Other provider requirement:
 - `[x]` Enum rendering tests.
 - `[x]` Sequence rendering tests.
 - `[x]` View rendering tests.
+- `[x]` Role rendering tests.
+- `[x]` Function rendering tests.
 - `[ ]` RLS policy rendering tests.
 - `[ ]` Diff fixture tests.
 - `[ ]` Destructive-change fixture tests.
@@ -382,7 +387,7 @@ Other provider requirement:
 8. Add database introspection and drift checks.
 9. Integrate `pg-schema-diff` or another PostgreSQL diff engine.
 10. Add migration file generation and destructive-change guardrails.
-11. Expand into views, sequences, RLS, roles, comments, and advanced PostgreSQL features.
+11. Expand into triggers, RLS, partitioning, grants, and other advanced PostgreSQL features.
 
 ## Drizzle Reference Notes
 

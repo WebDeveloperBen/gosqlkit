@@ -2,7 +2,6 @@ package pgschema
 
 import (
 	"encoding/json"
-	"sort"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
 )
@@ -12,121 +11,39 @@ const SnapshotVersion = 1
 type Schema struct {
 	Namespaces        []Namespace        `json:"namespaces,omitempty"`
 	Extensions        []Extension        `json:"extensions,omitempty"`
+	Roles             []Role             `json:"roles,omitempty"`
 	Enums             []Enum             `json:"enums,omitempty"`
 	CompositeTypes    []CompositeType    `json:"compositeTypes,omitempty"`
 	Domains           []Domain           `json:"domains,omitempty"`
 	Sequences         []Sequence         `json:"sequences,omitempty"`
+	Functions         []Function         `json:"functions,omitempty"`
 	Tables            []ast.Table        `json:"tables,omitempty"`
 	Views             []View             `json:"views,omitempty"`
 	MaterializedViews []MaterializedView `json:"materializedViews,omitempty"`
 }
 
 type Document struct {
-	ColumnMetadata     map[string]ColumnMetadata `json:"columnMetadata,omitempty"`
-	TableMetadata      map[string]TableMetadata  `json:"tableMetadata,omitempty"`
-	ViewMetadata       map[string]ViewMetadata   `json:"viewMetadata,omitempty"`
-	SchemaMetadata     map[string]SchemaMetadata `json:"schemaMetadata,omitempty"`
-	SnapshotID         string                    `json:"snapshotId"`
-	PreviousSnapshotID string                    `json:"previousSnapshotId,omitempty"`
-	Dialect            string                    `json:"dialect"`
-	Namespaces         []Namespace               `json:"namespaces,omitempty"`
-	Extensions         []Extension               `json:"extensions,omitempty"`
-	Enums              []Enum                    `json:"enums,omitempty"`
-	CompositeTypes     []CompositeType           `json:"compositeTypes,omitempty"`
-	Domains            []Domain                  `json:"domains,omitempty"`
-	Sequences          []Sequence                `json:"sequences,omitempty"`
-	Tables             []ast.Table               `json:"tables,omitempty"`
-	Views              []View                    `json:"views,omitempty"`
-	MaterializedViews  []MaterializedView        `json:"materializedViews,omitempty"`
-	Version            int                       `json:"version"`
-}
-
-type SchemaMetadata struct {
-	Source string `json:"source,omitempty"`
-}
-
-type TableMetadata struct {
-	Source  string `json:"source,omitempty"`
-	Comment string `json:"comment,omitempty"`
-}
-
-type ColumnMetadata struct {
-	Source string `json:"source,omitempty"`
-}
-
-type ViewMetadata struct {
-	Source  string `json:"source,omitempty"`
-	Comment string `json:"comment,omitempty"`
-}
-
-type Namespace struct {
-	Name string `json:"name"`
-}
-
-type Extension struct {
-	Name   string `json:"name"`
-	Schema string `json:"schema,omitempty"`
-}
-
-type Enum struct {
-	Schema string   `json:"schema,omitempty"`
-	Name   string   `json:"name"`
-	Values []string `json:"values"`
-}
-
-type CompositeType struct {
-	Schema     string               `json:"schema,omitempty"`
-	Name       string               `json:"name"`
-	Attributes []CompositeAttribute `json:"attributes,omitempty"`
-}
-
-type CompositeAttribute struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
-type Domain struct {
-	Schema   string `json:"schema,omitempty"`
-	Name     string `json:"name"`
-	BaseType string `json:"baseType"`
-	Default  string `json:"default,omitempty"`
-	Check    string `json:"check,omitempty"`
-	NotNull  bool   `json:"notNull,omitempty"`
-}
-
-type Sequence struct {
-	MinValue  *int64 `json:"minValue,omitempty"`
-	MaxValue  *int64 `json:"maxValue,omitempty"`
-	StartWith *int64 `json:"startWith,omitempty"`
-	Cache     *int64 `json:"cache,omitempty"`
-	Schema    string `json:"schema,omitempty"`
-	Name      string `json:"name"`
-	OwnedBy   string `json:"ownedBy,omitempty"`
-	Increment int64  `json:"increment,omitempty"`
-	Cycle     bool   `json:"cycle,omitempty"`
-}
-
-type View struct {
-	Schema          string   `json:"schema,omitempty"`
-	Name            string   `json:"name"`
-	Query           string   `json:"query"`
-	Comment         string   `json:"comment,omitempty"`
-	CheckOption     string   `json:"checkOption,omitempty"`
-	ColumnAliases   []string `json:"columnAliases,omitempty"`
-	DependsOn       []string `json:"dependsOn,omitempty"`
-	SecurityBarrier bool     `json:"securityBarrier,omitempty"`
-	SecurityInvoker bool     `json:"securityInvoker,omitempty"`
-}
-
-type MaterializedView struct {
-	With          map[string]string `json:"with,omitempty"`
-	Schema        string            `json:"schema,omitempty"`
-	Name          string            `json:"name"`
-	Query         string            `json:"query"`
-	Comment       string            `json:"comment,omitempty"`
-	ColumnAliases []string          `json:"columnAliases,omitempty"`
-	DependsOn     []string          `json:"dependsOn,omitempty"`
-	NoData        bool              `json:"noData,omitempty"`
+	ColumnMetadata     map[string]ColumnMetadata   `json:"columnMetadata,omitempty"`
+	TableMetadata      map[string]TableMetadata    `json:"tableMetadata,omitempty"`
+	ViewMetadata       map[string]ViewMetadata     `json:"viewMetadata,omitempty"`
+	RoleMetadata       map[string]RoleMetadata     `json:"roleMetadata,omitempty"`
+	FunctionMetadata   map[string]FunctionMetadata `json:"functionMetadata,omitempty"`
+	SchemaMetadata     map[string]SchemaMetadata   `json:"schemaMetadata,omitempty"`
+	SnapshotID         string                      `json:"snapshotId"`
+	PreviousSnapshotID string                      `json:"previousSnapshotId,omitempty"`
+	Dialect            string                      `json:"dialect"`
+	Namespaces         []Namespace                 `json:"namespaces,omitempty"`
+	Extensions         []Extension                 `json:"extensions,omitempty"`
+	Roles              []Role                      `json:"roles,omitempty"`
+	Enums              []Enum                      `json:"enums,omitempty"`
+	CompositeTypes     []CompositeType             `json:"compositeTypes,omitempty"`
+	Domains            []Domain                    `json:"domains,omitempty"`
+	Sequences          []Sequence                  `json:"sequences,omitempty"`
+	Functions          []Function                  `json:"functions,omitempty"`
+	Tables             []ast.Table                 `json:"tables,omitempty"`
+	Views              []View                      `json:"views,omitempty"`
+	MaterializedViews  []MaterializedView          `json:"materializedViews,omitempty"`
+	Version            int                         `json:"version"`
 }
 
 func JSON(dialect string, schema Schema) ([]byte, error) {
@@ -135,10 +52,12 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		Version:           SnapshotVersion,
 		Namespaces:        sortedNamespaces(schema.Namespaces),
 		Extensions:        sortedExtensions(schema.Extensions),
+		Roles:             sortedRoles(schema.Roles),
 		Enums:             sortedEnums(schema.Enums),
 		CompositeTypes:    sortedCompositeTypes(schema.CompositeTypes),
 		Domains:           sortedDomains(schema.Domains),
 		Sequences:         sortedSequences(schema.Sequences),
+		Functions:         sortedFunctions(schema.Functions),
 		Tables:            sortedTables(schema.Tables),
 		Views:             sortedViews(schema.Views),
 		MaterializedViews: sortedMaterializedViews(schema.MaterializedViews),
@@ -146,6 +65,8 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		TableMetadata:     buildTableMetadata(schema.Tables),
 		ColumnMetadata:    buildColumnMetadata(schema.Tables),
 		ViewMetadata:      buildViewMetadata(schema.Views, schema.MaterializedViews),
+		RoleMetadata:      buildRoleMetadata(schema.Roles),
+		FunctionMetadata:  buildFunctionMetadata(schema.Functions),
 	}
 
 	data, err := json.MarshalIndent(doc, "", "  ")
@@ -153,181 +74,6 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		return nil, err
 	}
 	return append(data, '\n'), nil
-}
-
-func buildSchemaMetadata(namespaces []Namespace) map[string]SchemaMetadata {
-	if len(namespaces) == 0 {
-		return nil
-	}
-	m := make(map[string]SchemaMetadata, len(namespaces))
-	for _, ns := range namespaces {
-		m[ns.Name] = SchemaMetadata{}
-	}
-	return m
-}
-
-func buildTableMetadata(tables []ast.Table) map[string]TableMetadata {
-	if len(tables) == 0 {
-		return nil
-	}
-	m := make(map[string]TableMetadata, len(tables))
-	for _, t := range tables {
-		key := qualified(t.Schema, t.Name)
-		m[key] = TableMetadata{Comment: t.Comment}
-	}
-	return m
-}
-
-func buildColumnMetadata(tables []ast.Table) map[string]ColumnMetadata {
-	total := 0
-	for _, t := range tables {
-		total += len(t.Columns)
-	}
-	if total == 0 {
-		return nil
-	}
-	m := make(map[string]ColumnMetadata, total)
-	for _, t := range tables {
-		tableKey := qualified(t.Schema, t.Name)
-		for _, col := range t.Columns {
-			m[tableKey+"."+col.Name] = ColumnMetadata{}
-		}
-	}
-	return m
-}
-
-func sortedNamespaces(input []Namespace) []Namespace {
-	items := append([]Namespace(nil), input...)
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].Name < items[j].Name
-	})
-	return items
-}
-
-func sortedExtensions(input []Extension) []Extension {
-	items := append([]Extension(nil), input...)
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func sortedEnums(input []Enum) []Enum {
-	items := append([]Enum(nil), input...)
-	for i := range items {
-		items[i].Values = append([]string(nil), items[i].Values...)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func sortedCompositeTypes(input []CompositeType) []CompositeType {
-	items := append([]CompositeType(nil), input...)
-	for i := range items {
-		attrs := append([]CompositeAttribute(nil), items[i].Attributes...)
-		items[i].Attributes = attrs
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func sortedDomains(input []Domain) []Domain {
-	items := append([]Domain(nil), input...)
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func sortedSequences(input []Sequence) []Sequence {
-	items := append([]Sequence(nil), input...)
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func sortedViews(input []View) []View {
-	items := append([]View(nil), input...)
-	for i := range items {
-		items[i].ColumnAliases = append([]string(nil), items[i].ColumnAliases...)
-		items[i].DependsOn = append([]string(nil), items[i].DependsOn...)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func sortedMaterializedViews(input []MaterializedView) []MaterializedView {
-	items := append([]MaterializedView(nil), input...)
-	for i := range items {
-		if items[i].With != nil {
-			sorted := make(map[string]string, len(items[i].With))
-			for k, v := range items[i].With {
-				sorted[k] = v
-			}
-			items[i].With = sorted
-		}
-		items[i].ColumnAliases = append([]string(nil), items[i].ColumnAliases...)
-		items[i].DependsOn = append([]string(nil), items[i].DependsOn...)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	return items
-}
-
-func buildViewMetadata(views []View, mviews []MaterializedView) map[string]ViewMetadata {
-	total := len(views) + len(mviews)
-	if total == 0 {
-		return nil
-	}
-	m := make(map[string]ViewMetadata, total)
-	for _, v := range views {
-		m[qualified(v.Schema, v.Name)] = ViewMetadata{Comment: v.Comment}
-	}
-	for _, mv := range mviews {
-		m[qualified(mv.Schema, mv.Name)] = ViewMetadata{Comment: mv.Comment}
-	}
-	return m
-}
-
-func sortedTables(input []ast.Table) []ast.Table {
-	items := append([]ast.Table(nil), input...)
-	sort.SliceStable(items, func(i, j int) bool {
-		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
-	})
-	for i := range items {
-		items[i] = sortedTable(items[i])
-	}
-	return items
-}
-
-func sortedTable(table ast.Table) ast.Table {
-	sort.SliceStable(table.PrimaryKeys, func(i, j int) bool {
-		return table.PrimaryKeys[i].Name < table.PrimaryKeys[j].Name
-	})
-	sort.SliceStable(table.UniqueConstraints, func(i, j int) bool {
-		return table.UniqueConstraints[i].Name < table.UniqueConstraints[j].Name
-	})
-	sort.SliceStable(table.ForeignKeys, func(i, j int) bool {
-		return table.ForeignKeys[i].Name < table.ForeignKeys[j].Name
-	})
-	sort.SliceStable(table.Checks, func(i, j int) bool {
-		return table.Checks[i].Name < table.Checks[j].Name
-	})
-	sort.SliceStable(table.Exclusions, func(i, j int) bool {
-		return table.Exclusions[i].Name < table.Exclusions[j].Name
-	})
-	sort.SliceStable(table.Indexes, func(i, j int) bool {
-		return table.Indexes[i].Name < table.Indexes[j].Name
-	})
-	return table
 }
 
 func qualified(schema, name string) string {

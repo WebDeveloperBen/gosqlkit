@@ -14,8 +14,38 @@ func int64Ptr(v int64) *int64 {
 	return &v
 }
 
+func float64Ptr(v float64) *float64 {
+	return &v
+}
+
+func intPtr(v int) *int {
+	return &v
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
 func TestPostgresRender(t *testing.T) {
 	schema := pgschema.Schema{
+		Roles: []pgschema.Role{
+			{
+				Name:            "app_reader",
+				Login:           boolPtr(true),
+				MemberOf:        []string{"pg_read_all_data"},
+				ConnectionLimit: intPtr(20),
+			},
+			{
+				Name:            "app_admin",
+				Login:           boolPtr(true),
+				CreateDB:        boolPtr(true),
+				CreateRole:      boolPtr(true),
+				BypassRLS:       boolPtr(true),
+				ConnectionLimit: intPtr(5),
+				ValidUntil:      "2030-01-01 00:00:00+00",
+				AdminOf:         []string{"app_reader"},
+			},
+		},
 		Namespaces: []pgschema.Namespace{
 			{Name: "billing"},
 		},
@@ -50,6 +80,37 @@ func TestPostgresRender(t *testing.T) {
 				Increment: 1,
 				StartWith: int64Ptr(1000),
 				Cache:     int64Ptr(1),
+			},
+		},
+		Functions: []pgschema.Function{
+			{
+				Name:       "normalise_email",
+				Language:   "sql",
+				ReturnType: "text",
+				Body:       "SELECT lower(trim(email))",
+				Volatility: "IMMUTABLE",
+				Strict:     boolPtr(true),
+				Arguments: []pgschema.FunctionArgument{
+					{Name: "email", Type: "text"},
+				},
+			},
+			{
+				Schema:     "billing",
+				Name:       "invoice_total_cents",
+				Language:   "sql",
+				ReturnType: "integer",
+				Body:       "SELECT COALESCE(SUM(amount_cents), 0)::integer FROM billing.invoice_lines WHERE invoice_id = $1",
+				Volatility: "STABLE",
+				Strict:     boolPtr(true),
+				Parallel:   "SAFE",
+				Cost:       float64Ptr(10),
+				Configuration: map[string]string{
+					"search_path": "billing, public",
+				},
+				Comment: "Calculates invoice total cents.",
+				Arguments: []pgschema.FunctionArgument{
+					{Name: "invoice_id", Type: "uuid"},
+				},
 			},
 		},
 		Tables: []ast.Table{
@@ -546,5 +607,62 @@ func TestPostgresRejectsDuplicateDomain(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), `duplicate domain "email"`) {
 		t.Fatalf("expected duplicate domain error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsDuplicateRole(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Roles: []pgschema.Role{
+			{Name: "app_user"},
+			{Name: "app_user"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `duplicate role "app_user"`) {
+		t.Fatalf("expected duplicate role error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsRoleSelfMembership(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Roles: []pgschema.Role{
+			{Name: "app_user", MemberOf: []string{"app_user"}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `cannot reference itself in memberOf`) {
+		t.Fatalf("expected role self-membership error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsDuplicateFunctionSignature(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Functions: []pgschema.Function{
+			{Name: "normalise", Language: "sql", ReturnType: "text", Body: "SELECT $1", Arguments: []pgschema.FunctionArgument{{Type: "text"}}},
+			{Name: "normalise", Language: "sql", ReturnType: "text", Body: "SELECT trim($1)", Arguments: []pgschema.FunctionArgument{{Name: "value", Type: "text"}}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `duplicate function "normalise(text)"`) {
+		t.Fatalf("expected duplicate function signature error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsInvalidFunctionVolatility(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Functions: []pgschema.Function{
+			{Name: "normalise", Language: "sql", ReturnType: "text", Body: "SELECT $1", Volatility: "fast", Arguments: []pgschema.FunctionArgument{{Type: "text"}}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `volatility must be IMMUTABLE, STABLE, or VOLATILE`) {
+		t.Fatalf("expected invalid volatility error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsFunctionBodyDollarQuoteDelimiter(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Functions: []pgschema.Function{
+			{Name: "unsafe_body", Language: "sql", ReturnType: "text", Body: "SELECT $$bad$$"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `body must not contain $$`) {
+		t.Fatalf("expected dollar quote delimiter error, got %v", err)
 	}
 }

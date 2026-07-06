@@ -20,7 +20,8 @@ func TestProviderRegistersPostgresDialectMetadata(t *testing.T) {
 		t.Fatalf("expected pg and postgresql aliases, got %#v", info.Aliases)
 	}
 	if !info.Capabilities.Tables || !info.Capabilities.Schemas || !info.Capabilities.Extensions ||
-		!info.Capabilities.Enums || !info.Capabilities.AdvancedIndexes || !info.Capabilities.Snapshots {
+		!info.Capabilities.Enums || !info.Capabilities.AdvancedIndexes || !info.Capabilities.Snapshots ||
+		!info.Capabilities.Roles || !info.Capabilities.Functions {
 		t.Fatalf("unexpected capabilities %#v", info.Capabilities)
 	}
 }

@@ -4,6 +4,13 @@ import "github.com/webdeveloperben/gosqlkit/pg"
 
 var PgCrypto = pg.Extension("pgcrypto")
 
+var AppReader = pg.Role("app_reader").NoLogin()
+
+var AppWriter = pg.Role("app_writer").
+	Login().
+	MemberOf("app_reader").
+	ConnectionLimit(20)
+
 var Billing = pg.Namespace("billing")
 
 var InvoiceStatus = pg.EnumTypeInSchema("billing", "invoice_status", "draft", "issued", "paid", "void")
@@ -13,6 +20,11 @@ var OrderNumberSeq = pg.SequenceInSchema("billing", "order_number_seq", pg.Seque
 	StartWith: new(int64(1000)),
 	Cache:     new(int64(1)),
 })
+
+var NormaliseEmail = pg.Function("normalise_email", "text", "SELECT lower(trim(email))").
+	Args(pg.FunctionArg("email", "text")).
+	Immutable().
+	Strict()
 
 var Money = pg.CompositeTypeInSchema(
 	"billing", "money",

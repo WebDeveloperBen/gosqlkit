@@ -1,3 +1,7 @@
+CREATE ROLE app_reader WITH NOLOGIN;
+
+CREATE ROLE app_writer WITH LOGIN CONNECTION LIMIT 20 IN ROLE app_reader;
+
 CREATE SCHEMA billing;
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -12,6 +16,15 @@ CREATE TYPE billing.money AS (
 CREATE DOMAIN email AS text NOT NULL CHECK (value ~ '^[^@]+@[^@]+$');
 
 CREATE SEQUENCE billing.order_number_seq INCREMENT 1 START 1000 CACHE 1;
+
+CREATE FUNCTION normalise_email(email text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+AS $$
+SELECT lower(trim(email))
+$$;
 
 CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

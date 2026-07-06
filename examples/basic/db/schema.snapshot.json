@@ -70,6 +70,25 @@
       "name": "pgcrypto"
     }
   ],
+  "functionMetadata": {
+    "public.normalise_email(text)": {}
+  },
+  "functions": [
+    {
+      "strict": true,
+      "name": "normalise_email",
+      "language": "sql",
+      "returnType": "text",
+      "body": "SELECT lower(trim(email))",
+      "volatility": "IMMUTABLE",
+      "arguments": [
+        {
+          "name": "email",
+          "type": "text"
+        }
+      ]
+    }
+  ],
   "materializedViews": [
     {
       "name": "cached_bookings",
@@ -85,6 +104,24 @@
       "name": "billing"
     }
   ],
+  "roleMetadata": {
+    "app_reader": {},
+    "app_writer": {}
+  },
+  "roles": [
+    {
+      "login": false,
+      "name": "app_reader"
+    },
+    {
+      "login": true,
+      "connectionLimit": 20,
+      "name": "app_writer",
+      "memberOf": [
+        "app_reader"
+      ]
+    }
+  ],
   "schemaMetadata": {
     "billing": {}
   },
@@ -97,7 +134,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "184b41b20e3f49ba9db798d98ff0a5ec6ca7e2b16ada5fabb981a3a50d49f6db",
+  "snapshotId": "f27c098cc524e4310d40a4885f9bb61dfe1f8c5f9c5f4e3c6ff5d815ddc9105d",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},

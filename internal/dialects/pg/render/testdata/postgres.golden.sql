@@ -1,3 +1,7 @@
+CREATE ROLE app_admin WITH CREATEDB CREATEROLE LOGIN BYPASSRLS CONNECTION LIMIT 5 VALID UNTIL '2030-01-01 00:00:00+00' ADMIN app_reader;
+
+CREATE ROLE app_reader WITH LOGIN CONNECTION LIMIT 20 IN ROLE pg_read_all_data;
+
 CREATE SCHEMA billing;
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -12,6 +16,28 @@ CREATE TYPE billing.money AS (
 CREATE DOMAIN email AS text NOT NULL CHECK (value ~ '^[^@]+@[^@]+$');
 
 CREATE SEQUENCE billing.order_number_seq INCREMENT 1 START 1000 CACHE 1;
+
+CREATE FUNCTION billing.invoice_total_cents(invoice_id uuid)
+RETURNS integer
+LANGUAGE sql
+STABLE
+STRICT
+PARALLEL SAFE
+COST 10
+SET search_path = billing, public
+AS $$
+SELECT COALESCE(SUM(amount_cents), 0)::integer FROM billing.invoice_lines WHERE invoice_id = $1
+$$;
+COMMENT ON FUNCTION billing.invoice_total_cents(uuid) IS 'Calculates invoice total cents.';
+
+CREATE FUNCTION normalise_email(email text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+AS $$
+SELECT lower(trim(email))
+$$;
 
 CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

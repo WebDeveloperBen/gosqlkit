@@ -28,6 +28,16 @@ func (c *Column) DefaultBool(value bool) *Column {
 	return c
 }
 
+func (c *Column) DefaultFloat32(value float32) *Column {
+	c.def.Default = strconv.FormatFloat(float64(value), 'f', -1, 32)
+	return c
+}
+
+func (c *Column) DefaultFloat64(value float64) *Column {
+	c.def.Default = strconv.FormatFloat(value, 'f', -1, 64)
+	return c
+}
+
 func (c *Column) DefaultJSON(value any) *Column {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -60,12 +70,18 @@ func (c *Column) DefaultTimestampTZ(value time.Time) *Column {
 func escapeArrayElements(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
-		if strings.ContainsAny(value, `,"\`) {
-			out = append(out, strings.ReplaceAll(value, `\`, `\\`))
-			out[len(out)-1] = `"` + strings.ReplaceAll(out[len(out)-1], `"`, `\"`) + `"`
-		} else {
-			out = append(out, value)
+		// Escape backslashes first
+		escaped := strings.ReplaceAll(value, `\`, `\\`)
+		// Escape control characters
+		escaped = strings.ReplaceAll(escaped, "\n", `\n`)
+		escaped = strings.ReplaceAll(escaped, "\t", `\t`)
+		escaped = strings.ReplaceAll(escaped, "\r", `\r`)
+
+		// Quote if contains special characters
+		if strings.ContainsAny(escaped, `,"\n\t\r`) {
+			escaped = `"` + strings.ReplaceAll(escaped, `"`, `\"`) + `"`
 		}
+		out = append(out, escaped)
 	}
 	return out
 }

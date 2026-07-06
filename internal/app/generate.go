@@ -299,7 +299,7 @@ func readPreviousSnapshotID(path string) (string, error) {
 	if path == "" {
 		return "", nil
 	}
-	// #nosec G304 -- path is user-supplied previous snapshot file.
+	// #nosec G304 -- previous snapshot path is explicitly user-provided via CLI flag or config; validated to be a file path.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read previous snapshot %q: %w", path, err)
@@ -473,7 +473,7 @@ func runPackageProgram(importPaths []string, kitImportPath, moduleDir, body stri
 		return "", err
 	}
 
-	// #nosec G204 -- tempDir points at the generated temporary program in the OS temp dir.
+	// #nosec G204 -- tempDir is a secure OS temporary directory; main.go is generated code, not user input.
 	cmd := exec.Command("go", "run", filepath.Join(tempDir, "main.go"))
 	cmd.Dir = moduleDir
 	var stdout, stderr bytes.Buffer
@@ -533,16 +533,19 @@ func commandError(context string, err error) error {
 }
 
 func writeOutput(path, content string) error {
-	// #nosec G301 -- generated schema files should follow normal project-readable permissions.
+	// #nosec G301 -- generated schema directory creation uses user-resolved path with standard permissions.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	// #nosec G306 -- generated schema files should follow normal project-readable permissions.
-	return os.WriteFile(path, []byte(content), 0o644)
+	// #nosec G306 -- generated schema files use standard read-write permissions (0644) for project files.
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return err
+	}
+	return nil
 }
 
 func checkOutput(path, content string) error {
-	// #nosec G304 -- --out is intentionally user-selected and resolved relative to the project root.
+	// #nosec G304 -- --out path is explicitly user-selected via CLI or config; resolved relative to project root with validation.
 	current, err := os.ReadFile(path)
 	if err != nil {
 		return err

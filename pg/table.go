@@ -348,7 +348,7 @@ func autoIndexName(tableName string, index ast.Index) string {
 	parts = append(parts, tableName)
 	for _, column := range index.Columns {
 		if column.IsExpression {
-			panic("indexes with expression columns require an explicit name")
+			panic("index with expression columns requires an explicit name; use IndexOn() or UniqueIndexOn() instead of Index()")
 		}
 		parts = append(parts, column.Expression)
 	}

@@ -431,14 +431,13 @@ tracks are roughly:
    helpers, deferrable/exclusion constraints, comments, named index helpers.
    (Largely landed; check FEATURES.md for residual `[ ]`.)
 2. **Snapshot metadata + diff readiness** — stable snapshot IDs, previous
-   snapshot ID, table/column/schema metadata maps, stable object keys,
-   rename annotations, squashed/normalised diff representation. Prerequisite
-   for high-quality migration diffing.
+   snapshot ID, schema/table/column/view/role/function metadata maps, stable
+   object keys, rename annotations, squashed/normalised diff representation.
+   Prerequisite for high-quality migration diffing.
 3. **Database connectivity + introspection + diff** — PG connection plumbing
    (password + provider-pluggable token auth for Azure/AWS/GCP), introspection,
    drift checks, `pg-schema-diff` integration. Largest track.
-4. **Advanced PG objects** — views, materialized views, functions, triggers,
-   RLS policies, roles.
+4. **Advanced PG objects** — triggers and RLS policies.
 
 When direction is ambiguous, ask the user which track rather than guessing.
 A wrong track wastes more time than a quick clarifying question.
@@ -553,12 +552,16 @@ update of this file:
   scalar types + arrays + identity + generated), constraints (PK, unique
   with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
   (full advanced surface), schemas, extensions, enums, sequences, composite
-  types, domains, comments, safe default helpers, custom-type escape hatch.
-  CLI has `generate`, `snapshot`, `version` (each with `--out` and `--check`).
-  Snapshot JSON is versioned and dialect-tagged.
-- **Next tracks**: snapshot metadata for diff readiness, DB connectivity +
-  introspection + `pg-schema-diff` integration, then advanced PG objects
-  (views/RLS/functions/triggers). See FEATURES.md for the open `[ ]` items.
+  types, domains, roles, functions, views, materialized views, comments, safe
+  default helpers, custom-type escape hatch.
+  CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
+  for snapshot), `version`.
+  Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
+  (SHA-256), metadata maps (schema/table/column/view/role/function), and rename
+  annotations (previousName on all objects).
+- **Next tracks**: DB connectivity + introspection + `pg-schema-diff`
+  integration, then advanced PG objects (RLS/triggers).
+  See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.
 

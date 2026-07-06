@@ -25,6 +25,17 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		return "", err
 	}
 
+	roles := append([]pgschema.Role(nil), schema.Roles...)
+	sort.SliceStable(roles, func(i, j int) bool {
+		return roles[i].Name < roles[j].Name
+	})
+	for i, role := range roles {
+		renderRole(&b, role)
+		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
 	namespaces := append([]pgschema.Namespace(nil), schema.Namespaces...)
 	sort.SliceStable(namespaces, func(i, j int) bool {
 		return namespaces[i].Name < namespaces[j].Name
@@ -33,7 +44,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		b.WriteString("CREATE SCHEMA ")
 		b.WriteString(namespace.Name)
 		b.WriteString(";\n")
-		if i < len(namespaces)-1 || len(tables) > 0 {
+		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -44,7 +55,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, extension := range extensions {
 		renderExtension(&b, extension)
-		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(tables) > 0 {
+		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -55,7 +66,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, enum := range enums {
 		renderEnum(&b, enum)
-		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(tables) > 0 {
+		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -68,7 +79,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderCompositeType(&b, compositeType); err != nil {
 			return "", err
 		}
-		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(tables) > 0 {
+		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -81,7 +92,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderDomain(&b, domain); err != nil {
 			return "", err
 		}
-		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(tables) > 0 {
+		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -92,7 +103,19 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, sequence := range sequences {
 		renderSequence(&b, sequence)
-		if i < len(sequences)-1 || len(tables) > 0 {
+		if i < len(sequences)-1 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	functions := append([]pgschema.Function(nil), schema.Functions...)
+	sort.SliceStable(functions, func(i, j int) bool {
+		return functionKey(functions[i]) < functionKey(functions[j])
+	})
+	for i, function := range functions {
+		renderFunction(&b, function)
+		renderFunctionComment(&b, function)
+		if i < len(functions)-1 || len(tables) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -235,6 +258,13 @@ func tableDependencies(table ast.Table) []string {
 }
 
 func validateSchema(schema pgschema.Schema) error {
+	roleNames := map[string]struct{}{}
+	for _, role := range schema.Roles {
+		if err := validateRole(role, roleNames); err != nil {
+			return err
+		}
+	}
+
 	namespaceNames := map[string]struct{}{}
 	for _, namespace := range schema.Namespaces {
 		if err := validateIdentifier("schema", namespace.Name); err != nil {
@@ -374,6 +404,13 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 	}
 
+	functionNames := map[string]struct{}{}
+	for _, function := range schema.Functions {
+		if err := validateFunction(function, functionNames); err != nil {
+			return err
+		}
+	}
+
 	viewNames := map[string]struct{}{}
 	for _, view := range schema.Views {
 		if view.Schema != "" {
@@ -391,6 +428,9 @@ func validateSchema(schema pgschema.Schema) error {
 		viewNames[key] = struct{}{}
 		if strings.TrimSpace(view.Query) == "" {
 			return fmt.Errorf("view %q must have a query", renderQualifiedName(view.Schema, view.Name))
+		}
+		if err := validateViewQuery(view.Query); err != nil {
+			return fmt.Errorf("view %q: %w", renderQualifiedName(view.Schema, view.Name), err)
 		}
 		if view.CheckOption != "" {
 			switch strings.ToUpper(view.CheckOption) {
@@ -496,6 +536,11 @@ func validateSchema(schema pgschema.Schema) error {
 					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
 				}
 			}
+			if column.Default != "" {
+				if err := validateDefault(column); err != nil {
+					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+				}
+			}
 		}
 		tableColumns[tableKey(table)] = columnNames
 
@@ -558,13 +603,16 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 
 		for _, check := range table.Checks {
+			if err := validateCheck(table.Name, check); err != nil {
+				return err
+			}
 			if err := addConstraintName(table.Name, constraintNames, check.Name); err != nil {
 				return err
 			}
 		}
 
 		for _, exclusion := range table.Exclusions {
-			if err := validateExclusion(table.Name, exclusion, columnNames); err != nil {
+			if err := validateExclusion(exclusion); err != nil {
 				return err
 			}
 			if err := addConstraintName(table.Name, constraintNames, exclusion.Name); err != nil {
@@ -585,6 +633,47 @@ func validateSchema(schema pgschema.Schema) error {
 	}
 
 	return validateReferences(schema.Tables, tableColumns)
+}
+
+func renderRole(b *strings.Builder, role pgschema.Role) {
+	b.WriteString("CREATE ROLE ")
+	b.WriteString(role.Name)
+
+	parts := []string{}
+	parts = appendBoolRoleOption(parts, role.Superuser, "SUPERUSER", "NOSUPERUSER")
+	parts = appendBoolRoleOption(parts, role.CreateDB, "CREATEDB", "NOCREATEDB")
+	parts = appendBoolRoleOption(parts, role.CreateRole, "CREATEROLE", "NOCREATEROLE")
+	parts = appendBoolRoleOption(parts, role.Inherit, "INHERIT", "NOINHERIT")
+	parts = appendBoolRoleOption(parts, role.Login, "LOGIN", "NOLOGIN")
+	parts = appendBoolRoleOption(parts, role.Replication, "REPLICATION", "NOREPLICATION")
+	parts = appendBoolRoleOption(parts, role.BypassRLS, "BYPASSRLS", "NOBYPASSRLS")
+	if role.ConnectionLimit != nil {
+		parts = append(parts, fmt.Sprintf("CONNECTION LIMIT %d", *role.ConnectionLimit))
+	}
+	if role.ValidUntil != "" {
+		parts = append(parts, "VALID UNTIL "+quoteLiteral(role.ValidUntil))
+	}
+	if len(role.MemberOf) > 0 {
+		parts = append(parts, "IN ROLE "+strings.Join(sortedStrings(role.MemberOf), ", "))
+	}
+	if len(role.AdminOf) > 0 {
+		parts = append(parts, "ADMIN "+strings.Join(sortedStrings(role.AdminOf), ", "))
+	}
+	if len(parts) > 0 {
+		b.WriteString(" WITH ")
+		b.WriteString(strings.Join(parts, " "))
+	}
+	b.WriteString(";\n")
+}
+
+func appendBoolRoleOption(parts []string, value *bool, on, off string) []string {
+	if value == nil {
+		return parts
+	}
+	if *value {
+		return append(parts, on)
+	}
+	return append(parts, off)
 }
 
 func renderExtension(b *strings.Builder, extension pgschema.Extension) {
@@ -635,6 +724,91 @@ func renderSequence(b *strings.Builder, sequence pgschema.Sequence) {
 		b.WriteString(sequence.OwnedBy)
 	}
 	b.WriteString(";\n")
+}
+
+func renderFunction(b *strings.Builder, function pgschema.Function) {
+	b.WriteString("CREATE FUNCTION ")
+	b.WriteString(renderQualifiedName(function.Schema, function.Name))
+	b.WriteString("(")
+	args := make([]string, 0, len(function.Arguments))
+	for _, arg := range function.Arguments {
+		args = append(args, renderFunctionArgument(arg))
+	}
+	b.WriteString(strings.Join(args, ", "))
+	b.WriteString(")\nRETURNS ")
+	b.WriteString(function.ReturnType)
+	b.WriteString("\nLANGUAGE ")
+	b.WriteString(function.Language)
+	if function.Volatility != "" {
+		b.WriteString("\n")
+		b.WriteString(strings.ToUpper(function.Volatility))
+	}
+	if function.Strict != nil {
+		if *function.Strict {
+			b.WriteString("\nSTRICT")
+		} else {
+			b.WriteString("\nCALLED ON NULL INPUT")
+		}
+	}
+	if function.SecurityDefiner {
+		b.WriteString("\nSECURITY DEFINER")
+	}
+	if function.Parallel != "" {
+		b.WriteString("\nPARALLEL ")
+		b.WriteString(strings.ToUpper(function.Parallel))
+	}
+	if function.Cost != nil {
+		b.WriteString("\nCOST ")
+		fmt.Fprintf(b, "%g", *function.Cost)
+	}
+	if function.Rows != nil {
+		fmt.Fprintf(b, "\nROWS %d", *function.Rows)
+	}
+	for _, setting := range renderFunctionConfiguration(function.Configuration) {
+		b.WriteString("\nSET ")
+		b.WriteString(setting)
+	}
+	b.WriteString("\nAS $$\n")
+	b.WriteString(function.Body)
+	b.WriteString("\n$$;\n")
+}
+
+func renderFunctionArgument(arg pgschema.FunctionArgument) string {
+	parts := []string{}
+	if arg.Mode != "" {
+		parts = append(parts, strings.ToUpper(arg.Mode))
+	}
+	if arg.Name != "" {
+		parts = append(parts, arg.Name)
+	}
+	parts = append(parts, arg.Type)
+	if arg.Default != "" {
+		parts = append(parts, "DEFAULT", arg.Default)
+	}
+	return strings.Join(parts, " ")
+}
+
+func renderFunctionConfiguration(config map[string]string) []string {
+	if len(config) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(config))
+	for key := range config {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	settings := make([]string, 0, len(keys))
+	for _, key := range keys {
+		settings = append(settings, key+" = "+config[key])
+	}
+	return settings
+}
+
+func renderFunctionComment(b *strings.Builder, function pgschema.Function) {
+	if function.Comment != "" {
+		fmt.Fprintf(b, "COMMENT ON FUNCTION %s(%s) IS %s;\n", renderQualifiedName(function.Schema, function.Name), renderFunctionIdentityArguments(function), quoteLiteral(function.Comment))
+	}
 }
 
 func renderView(b *strings.Builder, view pgschema.View) {
@@ -827,7 +1001,7 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 		return exclusions[i].Name < exclusions[j].Name
 	})
 	for _, exclusion := range exclusions {
-		if err := validateExclusion(table.Name, exclusion, columnNames); err != nil {
+		if err := validateExclusion(exclusion); err != nil {
 			return err
 		}
 		method := exclusion.Method
@@ -963,6 +1137,22 @@ func validateIdentity(column ast.Column) error {
 	if column.Default != "" {
 		return errors.New("identity columns cannot have an explicit default")
 	}
+	if column.Identity.Increment < 1 {
+		return errors.New("identity increment must be positive")
+	}
+	if column.Identity.MinValue != nil && column.Identity.MaxValue != nil {
+		if *column.Identity.MinValue >= *column.Identity.MaxValue {
+			return errors.New("identity min value must be less than max value")
+		}
+	}
+	if column.Identity.StartWith != nil {
+		if column.Identity.MinValue != nil && *column.Identity.StartWith < *column.Identity.MinValue {
+			return errors.New("identity startWith must be >= minValue")
+		}
+		if column.Identity.MaxValue != nil && *column.Identity.StartWith > *column.Identity.MaxValue {
+			return errors.New("identity startWith must be <= maxValue")
+		}
+	}
 	return nil
 }
 
@@ -981,6 +1171,44 @@ func validateGenerated(column ast.Column) error {
 	}
 	if column.Identity != nil {
 		return errors.New("a column cannot be both generated and identity")
+	}
+	lower := strings.ToLower(column.Generated.As)
+	if strings.Contains(lower, "select") || strings.Contains(lower, "insert") ||
+		strings.Contains(lower, "update") || strings.Contains(lower, "delete") {
+		return errors.New("generated columns cannot contain DML statements")
+	}
+	if strings.Count(column.Generated.As, "(") != strings.Count(column.Generated.As, ")") {
+		return errors.New("generated column expression has mismatched parentheses")
+	}
+	return nil
+}
+
+func validateCheck(tableName string, check ast.Check) error {
+	if strings.TrimSpace(check.Expression) == "" {
+		return fmt.Errorf("table %q check constraint %q must have an expression", tableName, check.Name)
+	}
+	if strings.Count(check.Expression, "(") != strings.Count(check.Expression, ")") {
+		return fmt.Errorf("table %q check constraint %q has mismatched parentheses", tableName, check.Name)
+	}
+	lower := strings.ToLower(check.Expression)
+	if strings.Contains(lower, "select") || strings.Contains(lower, "insert") ||
+		strings.Contains(lower, "update") || strings.Contains(lower, "delete") {
+		return fmt.Errorf("table %q check constraint %q cannot contain DML statements", tableName, check.Name)
+	}
+	return nil
+}
+
+func validateDefault(column ast.Column) error {
+	if column.Default == "" {
+		return nil
+	}
+	if strings.Count(column.Default, "(") != strings.Count(column.Default, ")") {
+		return errors.New("default value has mismatched parentheses")
+	}
+	lower := strings.ToLower(column.Default)
+	if strings.Contains(lower, "select") || strings.Contains(lower, "insert") ||
+		strings.Contains(lower, "update") || strings.Contains(lower, "delete") {
+		return errors.New("default value cannot contain DML statements")
 	}
 	return nil
 }
@@ -1091,7 +1319,7 @@ func renderExclusionElement(element ast.ExclusionElement) string {
 	return strings.Join(parts, " ")
 }
 
-func validateExclusion(tableName string, exclusion ast.ExclusionConstraint, columnNames map[string]struct{}) error {
+func validateExclusion(exclusion ast.ExclusionConstraint) error {
 	if err := validateIdentifier("exclusion constraint", exclusion.Name); err != nil {
 		return err
 	}
@@ -1249,6 +1477,201 @@ func validateExtensionName(value string) error {
 		return fmt.Errorf("extension identifier %q may only contain letters, numbers, underscores, and hyphens", value)
 	}
 	return nil
+}
+
+func validateRole(role pgschema.Role, names map[string]struct{}) error {
+	if err := validateIdentifier("role", role.Name); err != nil {
+		return err
+	}
+	if _, ok := names[role.Name]; ok {
+		return fmt.Errorf("duplicate role %q", role.Name)
+	}
+	names[role.Name] = struct{}{}
+	if role.ConnectionLimit != nil && *role.ConnectionLimit < -1 {
+		return fmt.Errorf("role %q connection limit must be -1 or greater", role.Name)
+	}
+	if role.ValidUntil != "" && strings.TrimSpace(role.ValidUntil) != role.ValidUntil {
+		return fmt.Errorf("role %q valid until value must not have leading or trailing whitespace", role.Name)
+	}
+	if err := validateRoleList(role.Name, "memberOf", role.MemberOf); err != nil {
+		return err
+	}
+	if err := validateRoleList(role.Name, "adminOf", role.AdminOf); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRoleList(roleName, field string, roles []string) error {
+	seen := map[string]struct{}{}
+	for _, name := range roles {
+		if err := validateIdentifier("role "+field, name); err != nil {
+			return fmt.Errorf("role %q: %w", roleName, err)
+		}
+		if name == roleName {
+			return fmt.Errorf("role %q cannot reference itself in %s", roleName, field)
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("role %q has duplicate %s role %q", roleName, field, name)
+		}
+		seen[name] = struct{}{}
+	}
+	return nil
+}
+
+func validateFunction(function pgschema.Function, names map[string]struct{}) error {
+	if function.Schema != "" {
+		if err := validateIdentifier("function schema", function.Schema); err != nil {
+			return err
+		}
+	}
+	if err := validateIdentifier("function", function.Name); err != nil {
+		return err
+	}
+	key := functionKey(function)
+	if _, ok := names[key]; ok {
+		return fmt.Errorf("duplicate function %q", renderFunctionDisplayName(function))
+	}
+	names[key] = struct{}{}
+	if strings.TrimSpace(function.Language) == "" {
+		return fmt.Errorf("function %q must have a language", renderFunctionDisplayName(function))
+	}
+	if err := validateIdentifier("function language", function.Language); err != nil {
+		return fmt.Errorf("function %q: %w", renderFunctionDisplayName(function), err)
+	}
+	if strings.TrimSpace(function.ReturnType) == "" {
+		return fmt.Errorf("function %q must have a return type", renderFunctionDisplayName(function))
+	}
+	if strings.TrimSpace(function.Body) == "" {
+		return fmt.Errorf("function %q must have a body", renderFunctionDisplayName(function))
+	}
+	if strings.Contains(function.Body, "$$") {
+		return fmt.Errorf("function %q body must not contain $$ because gosqlkit uses $$ dollar quoting", renderFunctionDisplayName(function))
+	}
+	if err := validateFunctionVolatility(function); err != nil {
+		return err
+	}
+	if err := validateFunctionParallel(function); err != nil {
+		return err
+	}
+	if function.Cost != nil && *function.Cost <= 0 {
+		return fmt.Errorf("function %q cost must be greater than zero", renderFunctionDisplayName(function))
+	}
+	if function.Rows != nil && *function.Rows <= 0 {
+		return fmt.Errorf("function %q rows must be greater than zero", renderFunctionDisplayName(function))
+	}
+	if err := validateFunctionArguments(function); err != nil {
+		return err
+	}
+	for key, value := range function.Configuration {
+		if err := validateConfigKey("function configuration", key); err != nil {
+			return fmt.Errorf("function %q: %w", renderFunctionDisplayName(function), err)
+		}
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("function %q configuration %q has an empty value", renderFunctionDisplayName(function), key)
+		}
+	}
+	return nil
+}
+
+func validateFunctionVolatility(function pgschema.Function) error {
+	switch strings.ToUpper(function.Volatility) {
+	case "", "IMMUTABLE", "STABLE", "VOLATILE":
+		return nil
+	default:
+		return fmt.Errorf("function %q volatility must be IMMUTABLE, STABLE, or VOLATILE, got %q", renderFunctionDisplayName(function), function.Volatility)
+	}
+}
+
+func validateFunctionParallel(function pgschema.Function) error {
+	switch strings.ToUpper(function.Parallel) {
+	case "", "SAFE", "RESTRICTED", "UNSAFE":
+		return nil
+	default:
+		return fmt.Errorf("function %q parallel mode must be SAFE, RESTRICTED, or UNSAFE, got %q", renderFunctionDisplayName(function), function.Parallel)
+	}
+}
+
+func validateFunctionArguments(function pgschema.Function) error {
+	defaultSeen := false
+	for i, arg := range function.Arguments {
+		if arg.Name != "" {
+			if err := validateIdentifier("function argument", arg.Name); err != nil {
+				return fmt.Errorf("function %q: %w", renderFunctionDisplayName(function), err)
+			}
+		}
+		if strings.TrimSpace(arg.Type) == "" {
+			return fmt.Errorf("function %q argument %d must have a type", renderFunctionDisplayName(function), i+1)
+		}
+		mode := strings.ToUpper(arg.Mode)
+		switch mode {
+		case "", "IN", "OUT", "INOUT", "VARIADIC":
+		default:
+			return fmt.Errorf("function %q argument %d mode must be IN, OUT, INOUT, or VARIADIC, got %q", renderFunctionDisplayName(function), i+1, arg.Mode)
+		}
+		if mode == "VARIADIC" && i != len(function.Arguments)-1 {
+			return fmt.Errorf("function %q variadic argument must be last", renderFunctionDisplayName(function))
+		}
+		if arg.Default != "" {
+			if mode == "OUT" {
+				return fmt.Errorf("function %q OUT argument %q cannot have a default", renderFunctionDisplayName(function), arg.Name)
+			}
+			if strings.TrimSpace(arg.Default) != arg.Default {
+				return fmt.Errorf("function %q argument %q default must not have leading or trailing whitespace", renderFunctionDisplayName(function), arg.Name)
+			}
+			defaultSeen = true
+			continue
+		}
+		if defaultSeen && mode != "OUT" {
+			return fmt.Errorf("function %q input arguments after a default must also have defaults", renderFunctionDisplayName(function))
+		}
+	}
+	return nil
+}
+
+func validateViewQuery(query string) error {
+	if strings.TrimSpace(query) != query {
+		return errors.New("query must not have leading or trailing whitespace")
+	}
+	return nil
+}
+
+func validateConfigKey(kind, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s identifier must not be empty", kind)
+	}
+	parts := strings.SplitSeq(value, ".")
+	for part := range parts {
+		if err := validateIdentifier(kind, part); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func functionKey(function pgschema.Function) string {
+	return qualifiedName(function.Schema, function.Name) + "(" + renderFunctionIdentityArguments(function) + ")"
+}
+
+func renderFunctionIdentityArguments(function pgschema.Function) string {
+	parts := make([]string, 0, len(function.Arguments))
+	for _, arg := range function.Arguments {
+		if strings.EqualFold(arg.Mode, "OUT") {
+			continue
+		}
+		parts = append(parts, arg.Type)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func renderFunctionDisplayName(function pgschema.Function) string {
+	return renderQualifiedName(function.Schema, function.Name) + "(" + renderFunctionIdentityArguments(function) + ")"
+}
+
+func sortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
 }
 
 func quoteIdentifier(value string) string {

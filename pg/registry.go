@@ -12,10 +12,12 @@ import (
 var registry = struct {
 	namespaces        []pgschema.Namespace
 	extensions        []pgschema.Extension
+	roles             []*pgschema.Role
 	enums             []pgschema.Enum
 	sequences         []pgschema.Sequence
 	compositeTypes    []pgschema.CompositeType
 	domains           []*pgschema.Domain
+	functions         []*pgschema.Function
 	tables            []*ast.Table
 	views             []*pgschema.View
 	materializedViews []*pgschema.MaterializedView
@@ -44,6 +46,8 @@ func (provider) Dialect() kit.DialectInfo {
 			Snapshots:         true,
 			Views:             true,
 			MaterializedViews: true,
+			Roles:             true,
+			Functions:         true,
 		},
 	}
 }
@@ -62,13 +66,23 @@ func Schema() pgschema.Schema {
 
 	namespaces := append([]pgschema.Namespace(nil), registry.namespaces...)
 	extensions := append([]pgschema.Extension(nil), registry.extensions...)
+	roles := make([]pgschema.Role, 0, len(registry.roles))
 	enums := append([]pgschema.Enum(nil), registry.enums...)
 	sequences := append([]pgschema.Sequence(nil), registry.sequences...)
 	compositeTypes := append([]pgschema.CompositeType(nil), registry.compositeTypes...)
 	domains := make([]pgschema.Domain, 0, len(registry.domains))
+	functions := make([]pgschema.Function, 0, len(registry.functions))
+
+	for _, role := range registry.roles {
+		roles = append(roles, *role)
+	}
 
 	for _, domain := range registry.domains {
 		domains = append(domains, *domain)
+	}
+
+	for _, function := range registry.functions {
+		functions = append(functions, *function)
 	}
 
 	tables := make([]ast.Table, 0, len(registry.tables))
@@ -90,10 +104,12 @@ func Schema() pgschema.Schema {
 	return pgschema.Schema{
 		Namespaces:        namespaces,
 		Extensions:        extensions,
+		Roles:             roles,
 		Enums:             enums,
 		Sequences:         sequences,
 		CompositeTypes:    compositeTypes,
 		Domains:           domains,
+		Functions:         functions,
 		Tables:            tables,
 		Views:             views,
 		MaterializedViews: materializedViews,
@@ -129,10 +145,12 @@ func Reset() {
 	registry.tables = nil
 	registry.namespaces = nil
 	registry.extensions = nil
+	registry.roles = nil
 	registry.enums = nil
 	registry.sequences = nil
 	registry.compositeTypes = nil
 	registry.domains = nil
+	registry.functions = nil
 	registry.views = nil
 	registry.materializedViews = nil
 }
@@ -156,6 +174,13 @@ func registerExtension(extension pgschema.Extension) {
 	defer registry.Unlock()
 
 	registry.extensions = append(registry.extensions, extension)
+}
+
+func registerRole(role *pgschema.Role) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.roles = append(registry.roles, role)
 }
 
 func registerEnum(enum pgschema.Enum) {
@@ -184,6 +209,13 @@ func registerDomain(domain *pgschema.Domain) {
 	defer registry.Unlock()
 
 	registry.domains = append(registry.domains, domain)
+}
+
+func registerFunction(function *pgschema.Function) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.functions = append(registry.functions, function)
 }
 
 func registerView(view *pgschema.View) {

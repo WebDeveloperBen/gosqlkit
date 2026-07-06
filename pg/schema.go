@@ -14,6 +14,10 @@ type ExtensionDef struct {
 	def pgschema.Extension
 }
 
+type RoleDef struct {
+	def *pgschema.Role
+}
+
 type EnumDef struct {
 	def pgschema.Enum
 }
@@ -34,6 +38,14 @@ type DomainDef struct {
 	def *pgschema.Domain
 }
 
+type FunctionDef struct {
+	def *pgschema.Function
+}
+
+type FunctionArgumentDef struct {
+	def pgschema.FunctionArgument
+}
+
 func Namespace(name string) *NamespaceDef {
 	namespace := pgschema.Namespace{Name: name}
 	registerNamespace(namespace)
@@ -48,6 +60,107 @@ func ExtensionInSchema(schema, name string) *ExtensionDef {
 	extension := pgschema.Extension{Schema: schema, Name: name}
 	registerExtension(extension)
 	return &ExtensionDef{def: extension}
+}
+
+func Role(name string) *RoleDef {
+	role := &pgschema.Role{Name: name}
+	registerRole(role)
+	return &RoleDef{def: role}
+}
+
+func (r *RoleDef) Login() *RoleDef {
+	r.def.Login = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoLogin() *RoleDef {
+	r.def.Login = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) Superuser() *RoleDef {
+	r.def.Superuser = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoSuperuser() *RoleDef {
+	r.def.Superuser = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) CreateDB() *RoleDef {
+	r.def.CreateDB = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoCreateDB() *RoleDef {
+	r.def.CreateDB = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) CreateRole() *RoleDef {
+	r.def.CreateRole = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoCreateRole() *RoleDef {
+	r.def.CreateRole = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) Inherit() *RoleDef {
+	r.def.Inherit = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoInherit() *RoleDef {
+	r.def.Inherit = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) Replication() *RoleDef {
+	r.def.Replication = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoReplication() *RoleDef {
+	r.def.Replication = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) BypassRLS() *RoleDef {
+	r.def.BypassRLS = roleBool(true)
+	return r
+}
+
+func (r *RoleDef) NoBypassRLS() *RoleDef {
+	r.def.BypassRLS = roleBool(false)
+	return r
+}
+
+func (r *RoleDef) ConnectionLimit(limit int) *RoleDef {
+	r.def.ConnectionLimit = &limit
+	return r
+}
+
+func (r *RoleDef) ValidUntil(value string) *RoleDef {
+	r.def.ValidUntil = value
+	return r
+}
+
+func (r *RoleDef) MemberOf(roles ...string) *RoleDef {
+	r.def.MemberOf = append(r.def.MemberOf, roles...)
+	return r
+}
+
+func (r *RoleDef) AdminOf(roles ...string) *RoleDef {
+	r.def.AdminOf = append(r.def.AdminOf, roles...)
+	return r
+}
+
+func (r *RoleDef) PreviousName(name string) *RoleDef {
+	r.def.PreviousName = name
+	return r
 }
 
 func EnumType(name string, values ...string) *EnumDef {
@@ -92,6 +205,10 @@ func (e *EnumDef) TypeName() string {
 		return e.def.Name
 	}
 	return strings.Join([]string{e.def.Schema, e.def.Name}, ".")
+}
+
+func roleBool(value bool) *bool {
+	return &value
 }
 
 func CompositeType(name string, attributes ...*CompositeAttributeDef) *CompositeTypeDef {
@@ -151,6 +268,144 @@ func (d *DomainDef) TypeName() string {
 		return d.def.Name
 	}
 	return strings.Join([]string{d.def.Schema, d.def.Name}, ".")
+}
+
+func Function(name, returnType, body string) *FunctionDef {
+	return FunctionInSchema("", name, returnType, body)
+}
+
+func FunctionInSchema(schema, name, returnType, body string) *FunctionDef {
+	function := &pgschema.Function{
+		Schema:     schema,
+		Name:       name,
+		Language:   "sql",
+		ReturnType: returnType,
+		Body:       body,
+	}
+	registerFunction(function)
+	return &FunctionDef{def: function}
+}
+
+func FunctionArg(name, typ string) *FunctionArgumentDef {
+	return &FunctionArgumentDef{
+		def: pgschema.FunctionArgument{Name: name, Type: typ},
+	}
+}
+
+func FunctionArgType(typ string) *FunctionArgumentDef {
+	return &FunctionArgumentDef{
+		def: pgschema.FunctionArgument{Type: typ},
+	}
+}
+
+func (f *FunctionDef) Args(args ...*FunctionArgumentDef) *FunctionDef {
+	for _, arg := range args {
+		f.def.Arguments = append(f.def.Arguments, arg.def)
+	}
+	return f
+}
+
+func (f *FunctionDef) Language(language string) *FunctionDef {
+	f.def.Language = language
+	return f
+}
+
+func (f *FunctionDef) Immutable() *FunctionDef {
+	f.def.Volatility = "IMMUTABLE"
+	return f
+}
+
+func (f *FunctionDef) Stable() *FunctionDef {
+	f.def.Volatility = "STABLE"
+	return f
+}
+
+func (f *FunctionDef) Volatile() *FunctionDef {
+	f.def.Volatility = "VOLATILE"
+	return f
+}
+
+func (f *FunctionDef) Strict() *FunctionDef {
+	f.def.Strict = roleBool(true)
+	return f
+}
+
+func (f *FunctionDef) CalledOnNullInput() *FunctionDef {
+	f.def.Strict = roleBool(false)
+	return f
+}
+
+func (f *FunctionDef) SecurityDefiner() *FunctionDef {
+	f.def.SecurityDefiner = true
+	return f
+}
+
+func (f *FunctionDef) ParallelSafe() *FunctionDef {
+	f.def.Parallel = "SAFE"
+	return f
+}
+
+func (f *FunctionDef) ParallelRestricted() *FunctionDef {
+	f.def.Parallel = "RESTRICTED"
+	return f
+}
+
+func (f *FunctionDef) ParallelUnsafe() *FunctionDef {
+	f.def.Parallel = "UNSAFE"
+	return f
+}
+
+func (f *FunctionDef) Cost(cost float64) *FunctionDef {
+	f.def.Cost = &cost
+	return f
+}
+
+func (f *FunctionDef) Rows(rows int64) *FunctionDef {
+	f.def.Rows = &rows
+	return f
+}
+
+func (f *FunctionDef) Set(key, value string) *FunctionDef {
+	if f.def.Configuration == nil {
+		f.def.Configuration = map[string]string{}
+	}
+	f.def.Configuration[key] = value
+	return f
+}
+
+func (f *FunctionDef) Comment(text string) *FunctionDef {
+	f.def.Comment = text
+	return f
+}
+
+func (f *FunctionDef) PreviousName(name string) *FunctionDef {
+	f.def.PreviousName = name
+	return f
+}
+
+func (a *FunctionArgumentDef) In() *FunctionArgumentDef {
+	a.def.Mode = "IN"
+	return a
+}
+
+func (a *FunctionArgumentDef) Out() *FunctionArgumentDef {
+	a.def.Mode = "OUT"
+	return a
+}
+
+func (a *FunctionArgumentDef) InOut() *FunctionArgumentDef {
+	a.def.Mode = "INOUT"
+	return a
+}
+
+func (a *FunctionArgumentDef) Variadic() *FunctionArgumentDef {
+	a.def.Mode = "VARIADIC"
+	return a
+}
+
+func (a *FunctionArgumentDef) Default(expression string) *FunctionArgumentDef {
+	a.def.Default = expression
+	return a
 }
 
 type ViewDef struct {
