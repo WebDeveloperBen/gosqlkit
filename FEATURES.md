@@ -246,6 +246,109 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[ ]` Destructive-change default failure mode.
 - `[ ]` Explicit override for destructive changes.
 
+## Migration Engine Slices
+
+The migration engine should ship in reviewable vertical slices. Each slice
+must keep unsupported changes fail-closed rather than writing partial SQL.
+
+### Slice 1: Authoring V0 Hardening
+
+- `[x]` Baseline goose migration generation from the current schema.
+- `[x]` Empty goose migration generation for manual SQL.
+- `[~]` Conservative additive PostgreSQL diffs from embedded target snapshots.
+- `[x]` Embedded target snapshot metadata in generated migrations.
+- `[x]` Migration directory validation for filenames, metadata, goose
+  annotations, target snapshot IDs, and adjacent lineage.
+- `[x]` Fail-closed planner errors for unsupported table details not rendered
+  by v0 create-table/add-column planning.
+- `[x]` Fixture-style diff tests for every supported additive v0 operation.
+- `[x]` Fixture-style error tests for every unsupported/destructive v0
+  operation.
+
+### Slice 2: Structured Planner IR
+
+- `[x]` Planner changes include stable object kind and object key.
+- `[~]` Planner changes include create, drop, rename, alter, and replace
+  operations.
+- `[x]` Planner changes include dependency metadata.
+- `[x]` Planner changes include reversibility metadata.
+- `[x]` Planner changes include risk flags.
+- `[x]` Planner can emit a machine-readable plan summary without writing files.
+- `[x]` Goose renderer consumes structured plan data rather than plain SQL
+  slices.
+
+### Slice 3: Safe Additive PostgreSQL Coverage
+
+- `[x]` Add standalone indexes for new tables.
+- `[x]` Add standalone indexes for existing tables.
+- `[x]` Add table comments.
+- `[x]` Add column comments.
+- `[x]` Add table-level constraints to existing tables.
+- `[x]` Add exclusion constraints.
+- `[x]` Add RLS enable/force changes.
+- `[x]` Add RLS policies.
+- `[x]` Add roles.
+- `[ ]` Add sequences.
+- `[ ]` Add composite types.
+- `[ ]` Add domains.
+- `[ ]` Add functions.
+- `[ ]` Add triggers.
+- `[ ]` Add views.
+- `[ ]` Add materialized views.
+- `[ ]` Generate best-effort down SQL for simple create operations.
+
+### Slice 4: Destructive-Change Guardrails
+
+- `[ ]` Detect table removals.
+- `[ ]` Detect column removals.
+- `[ ]` Detect enum value removals.
+- `[ ]` Detect constraint, index, policy, trigger, view, function, sequence,
+  domain, and role removals.
+- `[ ]` Detect column type changes.
+- `[ ]` Detect column default changes.
+- `[ ]` Detect nullability changes.
+- `[ ]` Detect generated-column and identity changes.
+- `[ ]` Risk flags for destructive, data-loss, lock-heavy, non-transactional,
+  requires-backfill, and manual-review changes.
+- `[ ]` Destructive changes fail by default with actionable diagnostics.
+- `[ ]` Explicit destructive-change override.
+
+### Slice 5: Rename-Aware Diffing
+
+- `[ ]` Table rename planning from `previousName`.
+- `[ ]` Column rename planning from `previousName`.
+- `[ ]` Constraint rename planning from `previousName`.
+- `[ ]` Index rename planning from `previousName`.
+- `[ ]` Enum/type rename planning from `previousName`.
+- `[ ]` Sequence, view, function, trigger, policy, and role rename planning.
+- `[ ]` Rename metadata validation against previous snapshot object keys.
+- `[ ]` Rename-plus-alter combinations fail closed until semantic planning
+  supports them.
+
+### Slice 6: Sandbox Replay and Drift Check
+
+- `[ ]` PostgreSQL database connection plumbing for tooling commands.
+- `[ ]` PostgreSQL introspection to snapshot-compatible model.
+- `[ ]` Sandbox replay of committed migrations.
+- `[ ]` Replay result comparison against the latest embedded target snapshot.
+- `[ ]` `gosqlkit migrate check --sandbox-url ...`.
+- `[ ]` `gosqlkit drift check --url ...`.
+- `[ ]` Deterministic introspection output.
+
+### Slice 7: Auth, Apply, and Runner Expansion
+
+- `[ ]` Provider-neutral auth interface for tooling database connections.
+- `[ ]` Password and environment URL auth.
+- `[ ]` Custom token command auth.
+- `[ ]` Azure Entra token auth.
+- `[ ]` AWS IAM token auth.
+- `[ ]` GCP IAM token auth.
+- `[ ]` Credential and token redaction in diagnostics.
+- `[ ]` `gosqlkit migrate apply --url ...`.
+- `[ ]` `golang-migrate` renderer from the structured plan.
+- `[ ]` Machine-readable JSON command output.
+- `[ ]` Quiet command output mode.
+
 ## Database Connectivity and Auth
 
 Database connectivity is only needed for future introspection, drift checks, and migration diff workflows. It must not become part of the runtime application database layer.

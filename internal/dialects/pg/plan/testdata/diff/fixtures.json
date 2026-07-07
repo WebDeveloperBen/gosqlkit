@@ -1,0 +1,1877 @@
+[
+  {
+    "name": "create_schema",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "namespaces": [
+        {
+          "name": "billing"
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE SCHEMA billing;"
+    ]
+  },
+  {
+    "name": "create_extension",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "extensions": [
+        {
+          "name": "pgcrypto"
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE EXTENSION pgcrypto;"
+    ]
+  },
+  {
+    "name": "create_enum",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft",
+            "issued"
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TYPE invoice_status AS ENUM ('draft', 'issued');"
+    ]
+  },
+  {
+    "name": "append_enum_value",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft"
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft",
+            "issued"
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TYPE invoice_status ADD VALUE 'issued';"
+    ]
+  },
+  {
+    "name": "create_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid",
+              "primaryKey": true,
+              "default": "gen_random_uuid()"
+            },
+            {
+              "name": "email",
+              "type": "text",
+              "notNull": true,
+              "unique": true
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TABLE users (\n    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n    email text NOT NULL UNIQUE\n);"
+    ]
+  },
+  {
+    "name": "add_column",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "email",
+              "type": "text",
+              "notNull": true
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ADD COLUMN email text NOT NULL;"
+    ]
+  },
+  {
+    "name": "drop_schema",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "namespaces": [
+        {
+          "name": "billing"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "schemas were removed"
+  },
+  {
+    "name": "drop_extension",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "extensions": [
+        {
+          "name": "pgcrypto"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "extensions were removed"
+  },
+  {
+    "name": "drop_enum",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft"
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "enums were removed"
+  },
+  {
+    "name": "remove_enum_value",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft",
+            "issued"
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft"
+          ]
+        }
+      ]
+    },
+    "wantErr": "enum values were removed"
+  },
+  {
+    "name": "reorder_enum_values",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "draft",
+            "issued"
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "enums": [
+        {
+          "name": "invoice_status",
+          "values": [
+            "issued",
+            "draft"
+          ]
+        }
+      ]
+    },
+    "wantErr": "enum values were reordered or changed"
+  },
+  {
+    "name": "drop_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid",
+              "comment": "Primary key"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "tables were removed"
+  },
+  {
+    "name": "drop_column",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "columns were removed"
+  },
+  {
+    "name": "modify_column",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "varchar(320)"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "column modifications"
+  },
+  {
+    "name": "create_table_with_index",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "indexes": [
+            {
+              "name": "users_email_idx",
+              "columns": [
+                {
+                  "expression": "email"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TABLE users (\n    email text\n);",
+      "CREATE INDEX users_email_idx ON users (email);"
+    ]
+  },
+  {
+    "name": "add_index",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "indexes": [
+            {
+              "name": "users_email_idx",
+              "method": "btree",
+              "where": "email IS NOT NULL",
+              "columns": [
+                {
+                  "expression": "email",
+                  "opClass": "text_ops",
+                  "order": "DESC",
+                  "nulls": "LAST"
+                }
+              ],
+              "with": {
+                "fillfactor": "80"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE INDEX users_email_idx ON users USING btree (email text_ops DESC NULLS LAST) WITH (fillfactor = 80) WHERE email IS NOT NULL;"
+    ]
+  },
+  {
+    "name": "modify_index",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "indexes": [
+            {
+              "name": "users_email_idx",
+              "columns": [
+                {
+                  "expression": "email"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "indexes": [
+            {
+              "name": "users_email_idx",
+              "unique": true,
+              "columns": [
+                {
+                  "expression": "email"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "index modifications require semantic planning"
+  },
+  {
+    "name": "drop_index",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "indexes": [
+            {
+              "name": "users_email_idx",
+              "columns": [
+                {
+                  "expression": "email"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "indexes were removed"
+  },
+  {
+    "name": "create_table_with_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "comment": "Application users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid",
+              "comment": "Primary key"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TABLE users (\n    id uuid\n);",
+      "COMMENT ON TABLE users IS 'Application users';",
+      "COMMENT ON COLUMN users.id IS 'Primary key';"
+    ]
+  },
+  {
+    "name": "create_table_with_rls",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "forceRls": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TABLE users (\n    id uuid\n);",
+      "ALTER TABLE users ENABLE ROW LEVEL SECURITY;",
+      "ALTER TABLE users FORCE ROW LEVEL SECURITY;"
+    ]
+  },
+  {
+    "name": "enable_rls_existing_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ENABLE ROW LEVEL SECURITY;"
+    ]
+  },
+  {
+    "name": "force_rls_existing_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "forceRls": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users FORCE ROW LEVEL SECURITY;"
+    ]
+  },
+  {
+    "name": "disable_rls_existing_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "row level security was disabled"
+  },
+  {
+    "name": "unforce_rls_existing_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "forceRls": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "forced row level security was disabled"
+  },
+  {
+    "name": "create_table_with_exclusion",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "room_id",
+              "type": "uuid"
+            },
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ],
+          "exclusions": [
+            {
+              "name": "bookings_room_slot_excl",
+              "method": "gist",
+              "where": "cancelled_at IS NULL",
+              "deferrable": true,
+              "initially": "deferred",
+              "elements": [
+                {
+                  "expression": "room_id",
+                  "opClass": "uuid_ops",
+                  "operator": "="
+                },
+                {
+                  "expression": "slot",
+                  "operator": "&&",
+                  "order": "ASC",
+                  "nulls": "LAST"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TABLE bookings (\n    room_id uuid,\n    slot tsrange,\n    CONSTRAINT bookings_room_slot_excl EXCLUDE USING gist (room_id uuid_ops WITH =, slot WITH && ASC NULLS LAST) WHERE cancelled_at IS NULL DEFERRABLE INITIALLY DEFERRED\n);"
+    ]
+  },
+  {
+    "name": "add_column_with_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            },
+            {
+              "name": "email",
+              "type": "text",
+              "comment": "Login email"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ADD COLUMN email text;",
+      "COMMENT ON COLUMN users.email IS 'Login email';"
+    ]
+  },
+  {
+    "name": "add_table_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "comment": "Application users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "COMMENT ON TABLE users IS 'Application users';"
+    ]
+  },
+  {
+    "name": "add_column_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text",
+              "comment": "Login email"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "COMMENT ON COLUMN users.email IS 'Login email';"
+    ]
+  },
+  {
+    "name": "modify_table_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "comment": "Application users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "comment": "Account users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "table comment modifications require semantic planning"
+  },
+  {
+    "name": "drop_table_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "comment": "Application users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "table comments were removed"
+  },
+  {
+    "name": "modify_column_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text",
+              "comment": "Login email"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text",
+              "comment": "Primary login email"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "column comment modifications require semantic planning"
+  },
+  {
+    "name": "drop_column_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text",
+              "comment": "Login email"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "column comments were removed"
+  },
+  {
+    "name": "add_primary_key_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "primaryKeys": [
+            {
+              "name": "users_pkey",
+              "columns": [
+                "id"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);"
+    ]
+  },
+  {
+    "name": "add_unique_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "uniqueConstraints": [
+            {
+              "name": "users_email_key",
+              "columns": [
+                "email"
+              ],
+              "nullsNotDistinct": true,
+              "deferrable": true,
+              "initially": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email) DEFERRABLE INITIALLY DEFERRED;"
+    ]
+  },
+  {
+    "name": "add_foreign_key_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "orgs",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        },
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "org_id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "orgs",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        },
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "org_id",
+              "type": "uuid"
+            }
+          ],
+          "foreignKeys": [
+            {
+              "name": "users_org_id_fkey",
+              "columns": [
+                "org_id"
+              ],
+              "referencedTable": "orgs",
+              "referencedColumns": [
+                "id"
+              ],
+              "onDelete": "cascade",
+              "deferrable": true,
+              "initially": "immediate"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_org_id_fkey FOREIGN KEY (org_id) REFERENCES orgs (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;"
+    ]
+  },
+  {
+    "name": "add_check_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "checks": [
+            {
+              "name": "users_email_check",
+              "expression": "position('@' in email) > 1"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_email_check CHECK (position('@' in email) > 1);"
+    ]
+  },
+  {
+    "name": "add_exclusion_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ],
+          "exclusions": [
+            {
+              "name": "bookings_slot_excl",
+              "elements": [
+                {
+                  "expression": "slot",
+                  "operator": "&&"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "ALTER TABLE bookings ADD CONSTRAINT bookings_slot_excl EXCLUDE USING gist (slot WITH &&);"
+    ]
+  },
+  {
+    "name": "modify_check_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "checks": [
+            {
+              "name": "users_email_check",
+              "expression": "position('@' in email) > 1"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "checks": [
+            {
+              "name": "users_email_check",
+              "expression": "position('@' in email) > 0"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "check constraint modifications require semantic planning"
+  },
+  {
+    "name": "modify_exclusion_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ],
+          "exclusions": [
+            {
+              "name": "bookings_slot_excl",
+              "elements": [
+                {
+                  "expression": "slot",
+                  "operator": "&&"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ],
+          "exclusions": [
+            {
+              "name": "bookings_slot_excl",
+              "where": "cancelled_at IS NULL",
+              "elements": [
+                {
+                  "expression": "slot",
+                  "operator": "&&"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "exclusion constraint modifications require semantic planning"
+  },
+  {
+    "name": "drop_unique_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ],
+          "uniqueConstraints": [
+            {
+              "name": "users_email_key",
+              "columns": [
+                "email"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "email",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "unique constraints were removed"
+  },
+  {
+    "name": "drop_exclusion_constraint",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ],
+          "exclusions": [
+            {
+              "name": "bookings_slot_excl",
+              "elements": [
+                {
+                  "expression": "slot",
+                  "operator": "&&"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "bookings",
+          "columns": [
+            {
+              "name": "slot",
+              "type": "tsrange"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "exclusion constraints were removed"
+  },
+  {
+    "name": "add_policy",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "name": "users_read_self",
+          "table": "users",
+          "mode": "permissive",
+          "command": "select",
+          "roles": [
+            "app_writer",
+            "app_reader"
+          ],
+          "using": "id = current_setting('app.user_id')::uuid"
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE POLICY users_read_self ON users\nAS PERMISSIVE\nFOR SELECT\nTO app_reader, app_writer\nUSING (id = current_setting('app.user_id')::uuid);"
+    ]
+  },
+  {
+    "name": "modify_policy",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "name": "users_read_self",
+          "table": "users",
+          "command": "select",
+          "using": "true"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "name": "users_read_self",
+          "table": "users",
+          "command": "select",
+          "using": "id = current_setting('app.user_id')::uuid"
+        }
+      ]
+    },
+    "wantErr": "policy modifications require semantic planning"
+  },
+  {
+    "name": "drop_policy",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "policies": [
+        {
+          "name": "users_read_self",
+          "table": "users",
+          "command": "select",
+          "using": "id = current_setting('app.user_id')::uuid"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "rowLevelSecurity": true,
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "policies were removed"
+  },
+  {
+    "name": "add_role",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "roles": [
+        {
+          "name": "app_reader",
+          "login": true,
+          "superuser": false,
+          "createDb": false,
+          "inherit": true,
+          "connectionLimit": 10,
+          "validUntil": "infinity",
+          "memberOf": [
+            "base_writer",
+            "base_reader"
+          ],
+          "adminOf": [
+            "reporting"
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE ROLE app_reader WITH NOSUPERUSER NOCREATEDB INHERIT LOGIN CONNECTION LIMIT 10 VALID UNTIL 'infinity' IN ROLE base_reader, base_writer ADMIN reporting;"
+    ]
+  },
+  {
+    "name": "modify_role",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "roles": [
+        {
+          "name": "app_reader",
+          "login": true
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "roles": [
+        {
+          "name": "app_reader",
+          "login": false
+        }
+      ]
+    },
+    "wantErr": "role modifications require semantic planning"
+  },
+  {
+    "name": "drop_role",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "roles": [
+        {
+          "name": "app_reader"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "roles were removed"
+  },
+  {
+    "name": "composite_types_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "compositeTypes": [
+        {
+          "name": "money_amount",
+          "attributes": [
+            {
+              "name": "amount",
+              "type": "numeric"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "composite types changed"
+  },
+  {
+    "name": "domains_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "domains": [
+        {
+          "name": "email_address",
+          "baseType": "text"
+        }
+      ]
+    },
+    "wantErr": "domains changed"
+  },
+  {
+    "name": "sequences_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "sequences": [
+        {
+          "name": "invoice_number_seq"
+        }
+      ]
+    },
+    "wantErr": "sequences changed"
+  },
+  {
+    "name": "functions_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END"
+        }
+      ]
+    },
+    "wantErr": "functions changed"
+  },
+  {
+    "name": "views_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "views": [
+        {
+          "name": "active_users",
+          "query": "SELECT id FROM users"
+        }
+      ]
+    },
+    "wantErr": "views changed"
+  },
+  {
+    "name": "materialized_views_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "materializedViews": [
+        {
+          "name": "user_counts",
+          "query": "SELECT count(*) FROM users"
+        }
+      ]
+    },
+    "wantErr": "materialized views changed"
+  },
+  {
+    "name": "triggers_changed",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "triggers": [
+        {
+          "name": "users_touch_updated_at",
+          "target": "users",
+          "function": "touch_updated_at",
+          "timing": "before",
+          "events": [
+            "update"
+          ]
+        }
+      ]
+    },
+    "wantErr": "triggers changed"
+  }
+]

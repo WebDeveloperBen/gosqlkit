@@ -17,10 +17,21 @@ const (
 )
 
 type Change struct {
-	Op      string   `json:"op"`
-	Object  string   `json:"object"`
-	Summary string   `json:"summary,omitempty"`
-	Risks   []string `json:"risks,omitempty"`
+	Op           string      `json:"op"`
+	Summary      string      `json:"summary,omitempty"`
+	Object       ObjectRef   `json:"object"`
+	Risks        []string    `json:"risks,omitempty"`
+	Dependencies []ObjectRef `json:"dependencies,omitempty"`
+	Reversible   bool        `json:"reversible,omitempty"`
+}
+
+type ObjectRef struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+type Statement struct {
+	SQL string `json:"sql"`
 }
 
 type Plan struct {
@@ -31,6 +42,8 @@ type Plan struct {
 	ToSnapshotID   string
 	TargetSnapshot string
 	Changes        []Change
+	UpStatements   []Statement
+	DownStatements []Statement
 	UpSQL          []string
 	DownSQL        []string
 }

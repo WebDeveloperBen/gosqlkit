@@ -29,10 +29,10 @@ func (Renderer) Render(plan migrate.Plan) ([]migrate.File, error) {
 	var b strings.Builder
 	b.WriteString(meta)
 	b.WriteString("\n\n-- +goose Up\n")
-	writeSQLSection(&b, plan.UpSQL)
-	if plan.DownSQL != nil {
+	writeSQLSection(&b, sqlStatements(plan.UpStatements, plan.UpSQL))
+	if plan.DownStatements != nil || plan.DownSQL != nil {
 		b.WriteString("\n-- +goose Down\n")
-		writeSQLSection(&b, plan.DownSQL)
+		writeSQLSection(&b, sqlStatements(plan.DownStatements, plan.DownSQL))
 	}
 
 	return []migrate.File{{
@@ -53,6 +53,17 @@ func fileName(plan migrate.Plan) (string, error) {
 	}
 
 	return fmt.Sprintf("%s_%s.sql", createdAt.UTC().Format("20060102150405"), slug), nil
+}
+
+func sqlStatements(structured []migrate.Statement, fallback []string) []string {
+	if structured == nil {
+		return fallback
+	}
+	out := make([]string, 0, len(structured))
+	for _, statement := range structured {
+		out = append(out, statement.SQL)
+	}
+	return out
 }
 
 func writeSQLSection(b *strings.Builder, statements []string) {

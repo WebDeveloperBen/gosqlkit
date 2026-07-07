@@ -11,6 +11,7 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
+	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
 func TestMigrateCreateWithConfigWritesEmptyGooseMigration(t *testing.T) {
@@ -140,7 +141,7 @@ func TestMigrateCreateWithConfigWritesDiffMigration(t *testing.T) {
 		ToSnapshotID:   previousSnapshotID,
 		TargetSnapshot: previousSnapshot,
 		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
-		Changes:        []migrate.Change{{Op: "baseline", Object: "schema"}},
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
 		UpSQL:          []string{"SELECT 1;"},
 		DownSQL:        nil,
 	})
@@ -167,7 +168,9 @@ func TestMigrateCreateWithConfigWritesDiffMigration(t *testing.T) {
 	for _, want := range []string{
 		`--   "fromSnapshotId": "` + previousSnapshotID + `"`,
 		`--       "op": "alter"`,
-		`--       "object": "column.public.users.tags"`,
+		`--       "object": {`,
+		`--         "kind": "column"`,
+		`--         "key": "public.users.tags"`,
 		"ALTER TABLE users ADD COLUMN tags text[];",
 	} {
 		if !strings.Contains(string(content), want) {
@@ -192,6 +195,51 @@ func TestMigrateCreateWithConfigRejectsUnsupportedRunnerOverride(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), `unsupported migration runner "golang-migrate"`) {
 		t.Fatalf("expected unsupported runner error, got %v", err)
+	}
+}
+
+func TestReverseStatementsUsesReverseChangeOrder(t *testing.T) {
+	statements := reverseStatements([]migrateplan.Change{
+		migrateplan.NewChange(
+			migrateplan.OperationCreate,
+			migrateplan.Ref(migrateplan.ObjectKindTable, "public.users"),
+			"create users",
+			migrateplan.SQL("CREATE TABLE users (id uuid);"),
+		).WithReverse(migrateplan.SQL("DROP TABLE users;")),
+		migrateplan.NewChange(
+			migrateplan.OperationCreate,
+			migrateplan.Ref(migrateplan.ObjectKindIndex, "public.users.users_email_idx"),
+			"create users email index",
+			migrateplan.SQL("CREATE INDEX users_email_idx ON users (email);"),
+		).WithReverse(migrateplan.SQL("DROP INDEX users_email_idx;")),
+	})
+
+	if len(statements) != 2 {
+		t.Fatalf("statements = %#v", statements)
+	}
+	if statements[0].SQL != "DROP INDEX users_email_idx;" || statements[1].SQL != "DROP TABLE users;" {
+		t.Fatalf("unexpected reverse order %#v", statements)
+	}
+}
+
+func TestReverseStatementsRequiresEveryChangeToBeReversible(t *testing.T) {
+	statements := reverseStatements([]migrateplan.Change{
+		migrateplan.NewChange(
+			migrateplan.OperationCreate,
+			migrateplan.Ref(migrateplan.ObjectKindTable, "public.users"),
+			"create users",
+			migrateplan.SQL("CREATE TABLE users (id uuid);"),
+		).WithReverse(migrateplan.SQL("DROP TABLE users;")),
+		migrateplan.NewChange(
+			migrateplan.OperationAlter,
+			migrateplan.Ref(migrateplan.ObjectKindColumn, "public.users.email"),
+			"add users email",
+			migrateplan.SQL("ALTER TABLE users ADD COLUMN email text;"),
+		),
+	})
+
+	if statements != nil {
+		t.Fatalf("statements = %#v, want nil", statements)
 	}
 }
 

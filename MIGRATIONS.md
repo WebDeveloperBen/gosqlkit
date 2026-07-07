@@ -182,8 +182,8 @@ lineage:
 --   },
 --   "createdAt": "2026-07-06T14:30:00Z",
 --   "changes": [
---     {"op":"alter_table_enable_rls","object":"public.users"},
---     {"op":"create_policy","object":"public.users.users_read_self"}
+--     {"op":"alter","object":{"kind":"table","key":"public.users"}},
+--     {"op":"create","object":{"kind":"policy","key":"public.users.users_read_self"}}
 --   ]
 -- }
 
@@ -444,12 +444,214 @@ Current implementation status:
 - `migrate create <name>` with existing migrations uses the latest migration's
   embedded target snapshot as the previous state and currently supports
   conservative additive PostgreSQL changes: new schemas, extensions, enums,
-  appended enum values, new tables, and new columns.
+  appended enum values, new tables, new columns, standalone indexes, and
+  table/column comments, plus primary-key, unique, foreign-key, and check
+  constraints on existing tables, and exclusion constraints on new and
+  existing tables. It also supports enabling/forcing table RLS and creating
+  RLS policies, plus creating roles.
 - Destructive changes and unsupported modifications fail closed with an
   explicit planner error.
 - `migrate check` validates timestamped SQL filenames, embedded metadata, and
   goose annotations, plus adjacent snapshot lineage when both migrations
   declare snapshot IDs.
+- Fixture tests cover supported additive v0 diff operations and the current
+  unsupported/destructive planner error categories.
+- The internal planner IR now carries typed object references, typed
+  dependencies, reversibility, risk flags, and per-change forward/reverse SQL
+  statements while preserving the v0 statement slice used by compatibility
+  paths.
+- The goose renderer consumes runner-neutral structured SQL statements from
+  migration plans, with raw SQL slices retained only as a compatibility
+  fallback.
+- Safe additive PostgreSQL diff coverage includes standalone index creation on
+  new and existing tables, with table dependencies and reverse `DROP INDEX`
+  statements recorded in the structured plan.
+- Safe additive PostgreSQL diff coverage includes table and column comment
+  creation, with reverse `COMMENT ... IS NULL` statements recorded in the
+  structured plan.
+- Safe additive PostgreSQL diff coverage includes table-level primary-key,
+  unique, foreign-key, and check constraint creation on existing tables, with
+  table dependencies and reverse `ALTER TABLE ... DROP CONSTRAINT` statements
+  recorded in the structured plan.
+- Safe additive PostgreSQL diff coverage includes exclusion constraints on new
+  and existing tables, including method, element, partial predicate, and
+  deferrability options. Existing-table additions record reverse
+  `ALTER TABLE ... DROP CONSTRAINT` statements.
+- Safe additive PostgreSQL diff coverage includes enabling and forcing table
+  RLS, with reverse `DISABLE ROW LEVEL SECURITY` and
+  `NO FORCE ROW LEVEL SECURITY` statements. Disabling either state remains a
+  destructive change and fails closed.
+- Safe additive PostgreSQL diff coverage includes RLS policy creation, with
+  table dependencies and reverse `DROP POLICY ... ON ...` statements.
+- Safe additive PostgreSQL diff coverage includes role creation, with reverse
+  `DROP ROLE` statements.
+
+## Next Migration Engine Slices
+
+Ship the migration engine as reviewable vertical slices. Each slice should
+leave the CLI usable, fail closed for unsupported changes, and add fixture
+tests before broadening the planner.
+
+### Slice 1: Authoring V0 Hardening
+
+Goal: make the staged `migrate create` / `migrate check` workflow safe enough
+to release as the first migration-authoring loop.
+
+Scope:
+
+- Keep baseline migration generation from the current schema.
+- Keep empty goose migration generation for manual SQL.
+- Keep conservative additive PostgreSQL diffs from embedded target snapshots.
+- Fail closed for unsupported table details that are not rendered yet, such as
+  indexes, comments, RLS, exclusions, policies, triggers, and rename metadata.
+- Add fixture tests for supported additive changes and unsupported/destructive
+  changes.
+- Keep generated metadata stable and parseable after manual review.
+
+Acceptance criteria:
+
+- `gosqlkit migrate create init_schema` works in an empty migration directory.
+- `gosqlkit migrate create add_column` works after a baseline when the change
+  is one of the supported additive operations.
+- Unsupported modifications and removals return explicit planner errors and do
+  not write partial migration files.
+- `gosqlkit migrate check` catches malformed metadata, goose annotation
+  mistakes, invalid filenames, target snapshot ID mismatches, and broken
+  adjacent lineage.
+
+### Slice 2: Structured Planner IR
+
+Goal: move from statement-first planning to a richer change model that can
+support review, risk reporting, and multiple file renderers.
+
+Scope:
+
+- Expand `internal/migrate/plan.Change` with object kind, stable object key,
+  operation, dependencies, reversibility, risk flags, and optional statement
+  groups.
+- Represent create, drop, rename, alter, and replace operations explicitly.
+- Keep dialect-specific SQL rendering under `internal/dialects/<dialect>/plan`.
+- Keep runner-specific file layout under `internal/migrate/<runner>`.
+- Preserve stable ordering across namespaces, extensions, enum/type objects,
+  tables, table-attached objects, comments, policies, triggers, and indexes.
+
+Acceptance criteria:
+
+- Existing v0 generated files remain valid.
+- The planner can produce a machine-readable plan summary without rendering a
+  migration file.
+- Goose rendering consumes the structured plan rather than ad hoc SQL slices.
+- Unsupported operations carry enough context to explain the exact blocked
+  object.
+
+### Slice 3: Safe Additive PostgreSQL Coverage
+
+Goal: expand automatic diffs to common additive changes that are clearly
+reversible or fail-safe.
+
+Scope:
+
+- Add standalone indexes for new and existing tables.
+- Add table and column comments.
+- Add check, unique, foreign-key, primary-key, and exclusion constraints where
+  PostgreSQL can apply them directly.
+- Add RLS enable/force state and new policies.
+- Add roles, sequences, domains, composite types, functions, triggers, views,
+  and materialized views where the operation is create-only.
+- Generate best-effort `Down` SQL for simple creates and renames.
+
+Acceptance criteria:
+
+- New-table migrations do not omit any attached object present in the snapshot.
+- Additive changes are split into dependency-safe statements, following the
+  Atlas pattern of table creation, separate indexes/comments, then attached
+  policy/trigger style objects.
+- Fixture tests cover each supported object type.
+- Unsupported variants still fail closed.
+
+### Slice 4: Destructive-Change Guardrails
+
+Goal: make risky changes visible and blocked by default.
+
+Scope:
+
+- Detect table, column, enum value, constraint, index, policy, trigger, view,
+  function, sequence, domain, and role removals.
+- Detect column type/default/nullability/generated/identity changes.
+- Detect object replacements that require drop-and-recreate planning.
+- Mark risk flags such as destructive, data-loss, lock-heavy,
+  non-transactional, requires-backfill, and manual-review.
+- Add an explicit CLI override for destructive changes after the review model
+  is in place.
+
+Acceptance criteria:
+
+- Destructive changes fail by default with actionable diagnostics.
+- The planner reports every risky object before refusing to write files.
+- Explicit override behaviour is covered by tests and never applies to unknown
+  or unsupported changes silently.
+
+### Slice 5: Rename-Aware Diffing
+
+Goal: use existing `previousName` metadata to plan renames instead of
+drop/create pairs.
+
+Scope:
+
+- Support table, column, constraint, index, enum/type, sequence, view,
+  function, trigger, policy, and role renames where PostgreSQL has a direct
+  operation.
+- Validate rename metadata against previous snapshot object keys.
+- Reject ambiguous rename-plus-alter combinations until semantic planning
+  supports them.
+
+Acceptance criteria:
+
+- Rename migrations are reversible where PostgreSQL supports reversal.
+- Missing or mismatched rename metadata fails with a clear error.
+- Renames happen before dependent alter operations.
+
+### Slice 6: Sandbox Replay and Drift Check
+
+Goal: validate that committed migrations still produce the desired snapshot.
+
+Scope:
+
+- Add PostgreSQL connection plumbing for local/dev URLs.
+- Add sandbox replay that applies committed migrations to a temporary or
+  configured PostgreSQL database.
+- Add PostgreSQL introspection to produce a snapshot-compatible model.
+- Compare replayed database state to the latest embedded target snapshot.
+- Add `gosqlkit migrate check --sandbox-url ...` and later
+  `gosqlkit drift check --url ...`.
+
+Acceptance criteria:
+
+- Replay catches broken SQL, manual migration drift, and stale metadata.
+- Introspection output is deterministic.
+- Credentials and tokens are never written to generated files or logs.
+
+### Slice 7: Auth, Apply, and Runner Expansion
+
+Goal: make migration workflows practical in CI and managed database
+environments without turning `gosqlkit` into the runtime database layer.
+
+Scope:
+
+- Add provider-neutral database auth interfaces.
+- Support password, environment URL, custom token command, Azure Entra,
+  AWS IAM, and GCP IAM token flows in the database tooling layer.
+- Add `gosqlkit migrate apply --url ...` as a wrapper around generated
+  migration files.
+- Add a `golang-migrate` renderer from the same structured plan.
+- Add machine-readable command output and quiet mode for CI.
+
+Acceptance criteria:
+
+- Token material is acquired just before connection and redacted from
+  diagnostics.
+- `migrate apply` remains optional; generated SQL stays usable with goose.
+- Runner renderers do not change planner behaviour.
 
 ## Reasons For This Decision
 

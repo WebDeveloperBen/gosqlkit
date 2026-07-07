@@ -57,18 +57,18 @@ func MigrateCreateWithConfig(config *Config, opts MigrateCreateOptions) (*Migrat
 		dir = config.ResolvePath(dir)
 	}
 
-	downSQL := []string{}
+	downStatements := []migrate.Statement{}
 	if opts.NoDown {
-		downSQL = nil
+		downStatements = nil
 	}
 
 	plan := migrate.Plan{
-		Name:      opts.Name,
-		Dialect:   config.Dialect,
-		CreatedAt: opts.CreatedAt,
-		Changes:   []migrate.Change{},
-		UpSQL:     []string{},
-		DownSQL:   downSQL,
+		Name:           opts.Name,
+		Dialect:        config.Dialect,
+		CreatedAt:      opts.CreatedAt,
+		Changes:        []migrate.Change{},
+		UpStatements:   []migrate.Statement{},
+		DownStatements: downStatements,
 	}
 
 	if !opts.Empty {
@@ -133,11 +133,11 @@ func baselineMigrationPlan(config *Config, opts MigrateCreateOptions, sql, snaps
 		TargetSnapshot: snapshot,
 		Changes: []migrate.Change{{
 			Op:      "baseline",
-			Object:  "schema",
+			Object:  migrate.ObjectRef{Kind: "schema", Key: "schema"},
 			Summary: "Create baseline schema from current gosqlkit definitions",
 		}},
-		UpSQL:   []string{sql},
-		DownSQL: nil,
+		UpStatements:   []migrate.Statement{{SQL: sql}},
+		DownStatements: nil,
 	}
 }
 
@@ -155,18 +155,34 @@ func diffMigrationPlan(config *Config, opts MigrateCreateOptions, previous migra
 	}
 
 	changes := make([]migrate.Change, 0, len(planned.Changes))
+	upStatements := make([]migrate.Statement, 0, len(planned.Statements))
 	for _, change := range planned.Changes {
 		risks := make([]string, 0, len(change.Risks))
 		for _, risk := range change.Risks {
 			risks = append(risks, string(risk))
 		}
+		dependencies := make([]migrate.ObjectRef, 0, len(change.Dependencies))
+		for _, dependency := range change.Dependencies {
+			dependencies = append(dependencies, migrateObjectRef(dependency))
+		}
 		changes = append(changes, migrate.Change{
-			Op:      string(change.Op),
-			Object:  change.Object,
-			Summary: change.Summary,
-			Risks:   risks,
+			Op:           string(change.Op),
+			Object:       migrateObjectRef(change.Object),
+			Summary:      change.Summary,
+			Risks:        risks,
+			Dependencies: dependencies,
+			Reversible:   change.Reversible,
 		})
+		for _, statement := range change.Statements {
+			upStatements = append(upStatements, migrate.Statement{SQL: statement.SQL})
+		}
 	}
+	if len(upStatements) == 0 {
+		for _, statement := range planned.Statements {
+			upStatements = append(upStatements, migrate.Statement{SQL: statement})
+		}
+	}
+	downStatements := reverseStatements(planned.Changes)
 
 	return migrate.Plan{
 		Name:           opts.Name,
@@ -176,9 +192,31 @@ func diffMigrationPlan(config *Config, opts MigrateCreateOptions, previous migra
 		TargetSnapshot: snapshot,
 		CreatedAt:      opts.CreatedAt,
 		Changes:        changes,
-		UpSQL:          planned.Statements,
-		DownSQL:        nil,
+		UpStatements:   upStatements,
+		DownStatements: downStatements,
 	}, nil
+}
+
+func migrateObjectRef(ref migrateplan.ObjectRef) migrate.ObjectRef {
+	return migrate.ObjectRef{Kind: string(ref.Kind), Key: ref.Key}
+}
+
+func reverseStatements(changes []migrateplan.Change) []migrate.Statement {
+	if len(changes) == 0 {
+		return nil
+	}
+	for _, change := range changes {
+		if len(change.ReverseStatements) == 0 {
+			return nil
+		}
+	}
+	out := make([]migrate.Statement, 0, len(changes))
+	for i := len(changes) - 1; i >= 0; i-- {
+		for _, statement := range changes[i].ReverseStatements {
+			out = append(out, migrate.Statement{SQL: statement.SQL})
+		}
+	}
+	return out
 }
 
 func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateCheckResult, error) {
