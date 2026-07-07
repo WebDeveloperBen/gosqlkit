@@ -108,28 +108,7 @@ func GenerateWithConfig(config *Config, opts GenerateOptions) (*GenerateResult, 
 		opts.Stdout = io.Discard
 	}
 
-	root, err := ResolveRoot(config.RootDir())
-	if err != nil {
-		return nil, err
-	}
-
-	importPaths, moduleDir, err := resolvePackages(root, config.SchemaPaths())
-	if err != nil {
-		return nil, err
-	}
-
-	kitImportPath, err := resolveKitImportPath(root)
-	if err != nil {
-		return nil, err
-	}
-
-	d := dialect(config.Dialect)
-	sql, err := runPackageProgram(importPaths, kitImportPath, moduleDir, fmt.Sprintf(`sql, err := kit.RenderSQL(%q)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	fmt.Print(sql)`, d))
+	sql, importPaths, err := renderSQLWithConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -226,33 +205,12 @@ func SnapshotWithConfig(config *Config, opts SnapshotOptions) (*SnapshotResult, 
 		opts.Stdout = io.Discard
 	}
 
-	root, err := ResolveRoot(config.RootDir())
-	if err != nil {
-		return nil, err
-	}
-
-	importPaths, moduleDir, err := resolvePackages(root, config.SchemaPaths())
-	if err != nil {
-		return nil, err
-	}
-
-	kitImportPath, err := resolveKitImportPath(root)
-	if err != nil {
-		return nil, err
-	}
-
 	prevID, err := readPreviousSnapshotID(opts.PreviousSnap)
 	if err != nil {
 		return nil, err
 	}
 
-	d := dialect(config.Dialect)
-	rawJSON, err := runPackageProgram(importPaths, kitImportPath, moduleDir, snapshotBody(d))
-	if err != nil {
-		return nil, err
-	}
-
-	json, err := injectSnapshotIDs(rawJSON, prevID)
+	json, importPaths, err := renderSnapshotWithConfig(config, prevID)
 	if err != nil {
 		return nil, err
 	}
@@ -281,6 +239,60 @@ func SnapshotWithConfig(config *Config, opts SnapshotOptions) (*SnapshotResult, 
 		return nil, err
 	}
 	return &SnapshotResult{Packages: importPaths}, nil
+}
+
+func renderSQLWithConfig(config *Config) (sql string, importPaths []string, err error) {
+	importPaths, moduleDir, kitImportPath, err := resolveConfigProgram(config)
+	if err != nil {
+		return "", nil, err
+	}
+
+	d := dialect(config.Dialect)
+	sql, err = runPackageProgram(importPaths, kitImportPath, moduleDir, fmt.Sprintf(`sql, err := kit.RenderSQL(%q)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Print(sql)`, d))
+	if err != nil {
+		return "", nil, err
+	}
+	return sql, importPaths, nil
+}
+
+func renderSnapshotWithConfig(config *Config, previousSnapshotID string) (snapshot string, importPaths []string, err error) {
+	importPaths, moduleDir, kitImportPath, err := resolveConfigProgram(config)
+	if err != nil {
+		return "", nil, err
+	}
+
+	rawJSON, err := runPackageProgram(importPaths, kitImportPath, moduleDir, snapshotBody(dialect(config.Dialect)))
+	if err != nil {
+		return "", nil, err
+	}
+	snapshot, err = injectSnapshotIDs(rawJSON, previousSnapshotID)
+	if err != nil {
+		return "", nil, err
+	}
+	return snapshot, importPaths, nil
+}
+
+func resolveConfigProgram(config *Config) (importPaths []string, moduleDir, kitImportPath string, err error) {
+	root, err := ResolveRoot(config.RootDir())
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	importPaths, moduleDir, err = resolvePackages(root, config.SchemaPaths())
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	kitImportPath, err = resolveKitImportPath(root)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return importPaths, moduleDir, kitImportPath, nil
 }
 
 func snapshotBody(dialect string) string {
@@ -312,6 +324,19 @@ func readPreviousSnapshotID(path string) (string, error) {
 	}
 	if raw.SnapshotID == "" {
 		return "", fmt.Errorf("previous snapshot %q has no snapshotId", path)
+	}
+	return raw.SnapshotID, nil
+}
+
+func snapshotIDFromJSON(data string) (string, error) {
+	var raw struct {
+		SnapshotID string `json:"snapshotId"`
+	}
+	if err := json.Unmarshal([]byte(data), &raw); err != nil {
+		return "", fmt.Errorf("parse snapshot JSON: %w", err)
+	}
+	if raw.SnapshotID == "" {
+		return "", errors.New("snapshot JSON has no snapshotId")
 	}
 	return raw.SnapshotID, nil
 }

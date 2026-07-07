@@ -11,12 +11,18 @@ import (
 
 const ConfigName = "gosqlkit.yaml"
 
+const (
+	DefaultMigrationsDir    = "db/migrations"
+	DefaultMigrationsRunner = "goose"
+)
+
 type Config struct {
-	Out     OutSpec `json:"out" yaml:"out"`
-	Version string  `json:"version" yaml:"version"`
-	Dialect string  `json:"dialect" yaml:"dialect"`
-	rootDir string
-	Schema  SchemaSpec `json:"schema" yaml:"schema"`
+	Out        OutSpec       `json:"out" yaml:"out"`
+	Migrations MigrationSpec `json:"migrations" yaml:"migrations"`
+	Version    string        `json:"version" yaml:"version"`
+	Dialect    string        `json:"dialect" yaml:"dialect"`
+	rootDir    string
+	Schema     SchemaSpec `json:"schema" yaml:"schema"`
 }
 
 type SchemaSpec struct {
@@ -26,6 +32,11 @@ type SchemaSpec struct {
 type OutSpec struct {
 	SQL      string `json:"sql" yaml:"sql"`
 	Snapshot string `json:"snapshot" yaml:"snapshot"`
+}
+
+type MigrationSpec struct {
+	Dir    string `json:"dir" yaml:"dir"`
+	Runner string `json:"runner" yaml:"runner"`
 }
 
 func (s *SchemaSpec) UnmarshalYAML(value *yaml.Node) error {
@@ -81,6 +92,17 @@ func LoadConfig(path string) (*Config, error) {
 	if config.Dialect == "" {
 		config.Dialect = "postgres"
 	}
+	if config.Migrations.Dir == "" {
+		config.Migrations.Dir = DefaultMigrationsDir
+	}
+	config.Migrations.Runner = strings.TrimSpace(strings.ToLower(config.Migrations.Runner))
+	if config.Migrations.Runner == "" {
+		config.Migrations.Runner = DefaultMigrationsRunner
+	}
+	if config.Migrations.Runner != DefaultMigrationsRunner {
+		return nil, fmt.Errorf("config %q has unsupported migrations.runner %q; supported values: %s",
+			path, config.Migrations.Runner, DefaultMigrationsRunner)
+	}
 
 	config.rootDir = filepath.Dir(path)
 	return &config, nil
@@ -117,7 +139,12 @@ func (c *Config) SnapshotPath() string {
 	return c.ResolvePath(c.Out.Snapshot)
 }
 
+func (c *Config) MigrationsDir() string {
+	return c.ResolvePath(c.Migrations.Dir)
+}
+
 func (c *Config) String() string {
-	return fmt.Sprintf("config{dialect=%s schema=%s out.sql=%s out.snapshot=%s}",
-		c.Dialect, strings.Join(c.Schema.paths, ", "), c.Out.SQL, c.Out.Snapshot)
+	return fmt.Sprintf("config{dialect=%s schema=%s out.sql=%s out.snapshot=%s migrations.dir=%s migrations.runner=%s}",
+		c.Dialect, strings.Join(c.Schema.paths, ", "), c.Out.SQL, c.Out.Snapshot,
+		c.Migrations.Dir, c.Migrations.Runner)
 }

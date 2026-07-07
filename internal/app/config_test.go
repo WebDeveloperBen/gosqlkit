@@ -17,6 +17,9 @@ schema: "schema"
 out:
   sql: "db/schema.sql"
   snapshot: "db/schema.json"
+migrations:
+  dir: "db/migrations"
+  runner: goose
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -36,6 +39,12 @@ out:
 	}
 	if config.Out.Snapshot != "db/schema.json" {
 		t.Fatalf("out.snapshot = %q, want db/schema.json", config.Out.Snapshot)
+	}
+	if config.Migrations.Dir != "db/migrations" {
+		t.Fatalf("migrations.dir = %q, want db/migrations", config.Migrations.Dir)
+	}
+	if config.Migrations.Runner != "goose" {
+		t.Fatalf("migrations.runner = %q, want goose", config.Migrations.Runner)
 	}
 }
 
@@ -77,6 +86,47 @@ schema: "schema"
 	}
 	if config.Dialect != "postgres" {
 		t.Fatalf("default dialect = %q, want postgres", config.Dialect)
+	}
+}
+
+func TestLoadConfigDefaultsMigrations(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, app.ConfigName)
+	if err := os.WriteFile(configPath, []byte(`version: "1"
+schema: "schema"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := app.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Migrations.Dir != app.DefaultMigrationsDir {
+		t.Fatalf("migrations.dir = %q, want %q", config.Migrations.Dir, app.DefaultMigrationsDir)
+	}
+	if config.Migrations.Runner != app.DefaultMigrationsRunner {
+		t.Fatalf("migrations.runner = %q, want %q", config.Migrations.Runner, app.DefaultMigrationsRunner)
+	}
+	if got := config.MigrationsDir(); got != filepath.Join(dir, app.DefaultMigrationsDir) {
+		t.Fatalf("MigrationsDir() = %q", got)
+	}
+}
+
+func TestLoadConfigRejectsUnsupportedMigrationRunner(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, app.ConfigName)
+	if err := os.WriteFile(configPath, []byte(`version: "1"
+schema: "schema"
+migrations:
+  runner: golang-migrate
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := app.LoadConfig(configPath)
+	if err == nil {
+		t.Fatal("expected error for unsupported migration runner")
 	}
 }
 

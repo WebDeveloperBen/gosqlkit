@@ -4,3 +4,6 @@ schema: "schema"
 out:
   sql: "db/schema.generated.sql"
   snapshot: "db/schema.snapshot.json"
+migrations:
+  dir: "db/migrations"
+  runner: goose

@@ -55,6 +55,9 @@ schema: "schema"
 out:
   sql: "db/schema.generated.sql"
   snapshot: "db/schema.snapshot.json"
+migrations:
+  dir: "db/migrations"
+  runner: goose
 ```
 
 Generate SQL and snapshots (reads `gosqlkit.yaml` — no args needed):
@@ -69,6 +72,20 @@ Check committed output is current (CI gate):
 ```bash
 gosqlkit generate --check
 gosqlkit snapshot --check
+```
+
+Create a baseline goose-compatible migration from the current schema when the
+migration directory is empty:
+
+```bash
+gosqlkit migrate create init_schema
+gosqlkit migrate check
+```
+
+Create an empty migration for manual SQL:
+
+```bash
+gosqlkit migrate create add_users_table --empty
 ```
 
 Schema can be a single path or a list of paths:
@@ -113,6 +130,12 @@ sqlc generate
   and indexes
 - Dialect registry with PostgreSQL as the first provider
 - CLI generation, snapshot, and stale-output checks
+- Empty goose-compatible migration files for manual SQL
+- Baseline goose-compatible migration generation from the current schema, with
+  target snapshots embedded in `gosqlkit` metadata
+- Conservative additive PostgreSQL diff migrations from embedded snapshots
+- Migration directory checks for timestamped SQL files, embedded metadata,
+  snapshot lineage, and goose `Up` / `Down` annotations
 - `sqlc` compatibility example
 
 ## Example Project

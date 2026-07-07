@@ -46,6 +46,8 @@ Legend:
 - `[x]` CLI `snapshot`.
 - `[x]` CLI `snapshot --out`.
 - `[x]` CLI `snapshot --check`.
+- `[x]` CLI `migrate create` baseline migration from the current schema.
+- `[x]` CLI `migrate create --empty` for goose-compatible manual migrations.
 
 ## Dialect Provider Boundary
 
@@ -231,10 +233,11 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Column metadata map.
 - `[x]` Schema metadata map.
 - `[x]` Stable object keys for schema-qualified names.
+- `[x]` Embedded target snapshots in generated migration metadata.
 - `[ ]` Squashed/normalised representation for diffing.
 - `[x]` Deterministic serialisation to JSON.
 - `[ ]` Diff input from current database introspection.
-- `[ ]` Diff input from generated desired snapshot.
+- `[~]` Diff input from generated desired snapshot.
 - `[ ]` Drift check from database to generated schema.
 - `[x]` Rename annotations for tables.
 - `[x]` Rename annotations for columns.
@@ -322,14 +325,14 @@ Other provider requirement:
 - `[x]` `gosqlkit snapshot --prev` for previous snapshot ID tracking.
 - `[x]` `gosqlkit snapshot --out`.
 - `[x]` `gosqlkit snapshot --check`.
-- `[ ]` `gosqlkit migrate create <name>`.
-- `[ ]` `gosqlkit migrate create <name> --empty`.
-- `[ ]` `gosqlkit migrate check`.
+- `[~]` `gosqlkit migrate create <name>`.
+- `[x]` `gosqlkit migrate create <name> --empty`.
+- `[~]` `gosqlkit migrate check`.
 - `[ ]` `gosqlkit migrate apply --url ...`.
 - `[ ]` `gosqlkit drift check --url ...`.
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
-- `[ ]` Goose-compatible migration file output.
+- `[~]` Goose-compatible migration file output.
 - `[ ]` CI command for committed schema drift.
 - `[ ]` CI command for database drift.
 - `[ ]` Machine-readable JSON output for commands.
@@ -403,3 +406,26 @@ The Drizzle source is useful as a requirements reference, not as an implementati
 - Index modelling needs to account for methods, expressions, operator classes, sort direction, null ordering, partial predicates, concurrent creation, and storage parameters.
 - Defaults and generated expressions need structured handling, not just raw strings.
 - Migration-quality diffing needs stable metadata and object identity, not only generated SQL text.
+
+## Migration Planner Reference Notes
+
+Atlas and Drizzle Kit are architecture references, not runtime dependencies.
+Clone them into `/tmp` while working on migration planning:
+
+```bash
+rtk git clone --depth 1 https://github.com/ariga/atlas.git /tmp/gosqlkit-atlas-ref
+rtk git clone --depth 1 https://github.com/drizzle-team/drizzle-orm.git /tmp/gosqlkit-drizzle-ref
+```
+
+Reference patterns to mirror in Go-native form:
+
+- Atlas `sql/schema/migrate.go`: typed change IR.
+- Atlas `sql/postgres/{diff,migrate}.go`: dialect-specific diff and SQL planning.
+- Drizzle Kit `drizzle-kit/src/{jsonDiffer.js,jsonStatements.ts,sqlgenerator.ts}`:
+  snapshot differ -> structured statements -> SQL generator.
+
+Keep the implementation split as:
+
+- `internal/migrate/plan` for shared interfaces and change metadata.
+- `internal/dialects/<dialect>/plan` for dialect-specific diff/planning.
+- `internal/migrate/{goose,golangmigrate}` for runner-specific file output.

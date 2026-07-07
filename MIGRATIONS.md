@@ -9,10 +9,23 @@ database migrations across PostgreSQL first, and other dialects later.
 `gosqlkit` will own a cross-dialect migration planning layer instead of
 delegating the core migration diff to a PostgreSQL-only tool.
 
-The generated migration artefact should be one committed SQL file per
-migration by default. Machine-readable `gosqlkit` metadata is embedded in SQL
-comments inside that file. We will not create per-migration sidecar JSON files
-or a directory checksum file by default.
+The generated migration artefact should be runner-compatible SQL, not a
+`gosqlkit`-specific migration runtime format. Migration planning and migration
+file rendering are separate layers:
+
+```text
+snapshot diff -> migration plan / change IR -> runner-specific file renderer
+```
+
+The initial and default file renderer is `goose`. It emits one committed SQL
+file per migration with machine-readable `gosqlkit` metadata embedded in SQL
+comments. We will not create per-migration sidecar JSON files or a directory
+checksum file by default.
+
+The migration configuration should be shaped so a project can eventually
+choose a runner format, for example `goose` or `golang-migrate`. Only `goose`
+is implemented at first; unsupported runner values should fail validation
+rather than silently producing the wrong file layout.
 
 Initial migration application should stay compatible with `goose`. A future
 `gosqlkit migrate apply` command may wrap application, but it should not be a
@@ -49,6 +62,56 @@ Atlas is the strongest reference for migration discipline:
 The `gosqlkit` decision is to borrow these concepts, but keep our own core
 snapshot, diff, and migration IR so every dialect can participate.
 
+## Reference Implementation Research
+
+Atlas and Drizzle Kit are architecture references, not dependencies. Do not
+shell out to Atlas for planning and do not import Atlas or Drizzle code into
+`gosqlkit`. The reason for building `gosqlkit` is to keep the Go schema
+workflow free, reviewable, and owned by this project.
+
+Use the public source of both projects to understand proven migration-planning
+patterns before expanding this feature:
+
+- Atlas pattern: typed `schema.Change` IR plus dialect-specific diff/planning.
+  Reference:
+  `https://github.com/ariga/atlas/blob/master/sql/schema/migrate.go`
+- Atlas PostgreSQL planner pattern: the dialect planner turns typed changes
+  into ordered SQL, handles reversibility, and separates table-level changes
+  from independent index/comment/object statements. Reference:
+  `https://github.com/ariga/atlas/blob/master/sql/postgres/migrate.go`
+- Drizzle pattern: the snapshot differ produces structured JSON statements,
+  then the SQL generator renders those statements. Reference tree:
+  `https://github.com/drizzle-team/drizzle-orm/tree/main/drizzle-kit/src`
+
+When working on this feature, clone references into `/tmp` and inspect them
+locally so the repo stays clean:
+
+```bash
+rtk git clone --depth 1 https://github.com/ariga/atlas.git /tmp/gosqlkit-atlas-ref
+rtk git clone --depth 1 https://github.com/drizzle-team/drizzle-orm.git /tmp/gosqlkit-drizzle-ref
+```
+
+Useful files and search starting points:
+
+```bash
+rtk sed -n '1,260p' /tmp/gosqlkit-atlas-ref/sql/schema/migrate.go
+rtk sed -n '1,360p' /tmp/gosqlkit-atlas-ref/sql/postgres/diff.go
+rtk sed -n '1,420p' /tmp/gosqlkit-atlas-ref/sql/postgres/migrate.go
+rtk rg -n "applyJsonDiff|JsonStatement|alter_table|rename_table|drop_table" /tmp/gosqlkit-drizzle-ref/drizzle-kit/src
+rtk sed -n '1,260p' /tmp/gosqlkit-drizzle-ref/drizzle-kit/src/jsonStatements.ts
+rtk sed -n '1,260p' /tmp/gosqlkit-drizzle-ref/drizzle-kit/src/jsonDiffer.js
+```
+
+Translate the ideas into `gosqlkit`'s own model:
+
+- `internal/migrate/plan` owns the shared Go interfaces and change metadata.
+- `internal/dialects/<dialect>/plan` owns snapshot comparison, dialect
+  ordering, reversibility rules, risk flags, and SQL rendering.
+- `internal/migrate/goose` and future `internal/migrate/golangmigrate` own
+  runner file layout only.
+- `internal/app/migrate.go` orchestrates config, previous metadata lookup,
+  planner selection, file rendering, and write/check behaviour.
+
 ## Non-Goals
 
 - Do not build a runtime ORM.
@@ -82,9 +145,14 @@ gosqlkit migrate apply --url "$DATABASE_URL"
 but the generated SQL should remain plain, reviewable, and usable without a
 custom runner.
 
+Longer term, the same migration plan should be renderable for other runners
+without changing the diff planner. For example, a future `golang-migrate`
+renderer can emit split `.up.sql` and `.down.sql` files from the same plan that
+the `goose` renderer emits as a single annotated SQL file.
+
 ## Migration File Layout
 
-Default layout:
+Default `goose` layout:
 
 ```text
 db/migrations/
@@ -109,6 +177,9 @@ lineage:
 --   "dialect": "postgresql",
 --   "fromSnapshotId": "abc...",
 --   "toSnapshotId": "def...",
+--   "targetSnapshot": {
+--     "snapshotId": "def..."
+--   },
 --   "createdAt": "2026-07-06T14:30:00Z",
 --   "changes": [
 --     {"op":"alter_table_enable_rls","object":"public.users"},
@@ -130,7 +201,24 @@ ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ```
 
 This keeps Git review focused on one file per migration while preserving
-machine-readable context.
+machine-readable context. Generated migrations embed the target snapshot in
+metadata so the latest committed migration can serve as the previous desired
+schema for the next diff. Empty manual migrations may omit the snapshot payload
+until manual-result metadata is supported.
+
+A future `golang-migrate` renderer would use a different file layout while
+preserving the same `gosqlkit` plan and metadata concepts:
+
+```text
+db/migrations/
+  20260706143000_add_rls_policies.up.sql
+  20260706143000_add_rls_policies.down.sql
+```
+
+Runner-specific annotations, filename rules, and one-file versus two-file
+output belong in the file renderer. The migration plan, risk metadata,
+destructive-change handling, dependency ordering, and dialect SQL planning
+must stay independent of the runner format.
 
 ## Applied State
 
@@ -189,17 +277,25 @@ smallest realistic engine setup that validates their DDL.
 Proposed package shape:
 
 ```text
-internal/diff/
+internal/migrate/
+  Migration metadata parser/writer
+  Migration directory scanning
+  Metadata chain validation
+  Runner-neutral migration file model
+  Runner renderer registry
+
+internal/migrate/plan/
+  Shared planner interfaces
   Change IR
   Object keys
   Risk flags
   Dependency ordering primitives
 
-internal/migrate/
-  Migration metadata parser/writer
-  Migration directory scanning
-  Metadata chain validation
+internal/migrate/goose/
   Goose-compatible file rendering
+
+internal/migrate/golangmigrate/
+  Future golang-migrate split-file rendering
 
 internal/dialects/<dialect>/plan/
   Snapshot-to-snapshot diff rules
@@ -217,6 +313,18 @@ internal/dialects/<dialect>/validate/
 internal/app/migrate.go
   create/check/apply orchestration
 ```
+
+The renderer boundary should be intentionally small. A renderer receives a
+planned migration and returns one or more files to write. `goose` returns one
+file containing `-- +goose Up` and optional `-- +goose Down` sections.
+`golang-migrate` can later return separate `.up.sql` and `.down.sql` files.
+
+The planner boundary follows the same split used by Atlas and Drizzle Kit:
+compare structured snapshots into typed changes first, then let the dialect
+planner order and render those changes into SQL. `internal/migrate/plan`
+contains the shared interfaces and change metadata; each dialect owns its
+snapshot comparison and SQL planning details under
+`internal/dialects/<dialect>/plan/`.
 
 The core change IR should be dialect-neutral enough for command UX and review:
 
@@ -282,9 +390,14 @@ second committed file to maintain.
 
 Instead, `gosqlkit migrate check` should validate:
 
-- Migration filenames are timestamp ordered.
-- Embedded metadata is parseable.
-- The metadata chain is coherent.
+- `[x]` Migration filenames are timestamped.
+- `[x]` Embedded metadata is parseable.
+- `[x]` Embedded target snapshot IDs match `toSnapshotId` when target snapshots
+  are present.
+- `[x]` Goose files contain exactly one `-- +goose Up` annotation, at most one
+  `-- +goose Down` annotation, and `Down` appears after `Up`.
+- `[x]` Adjacent snapshot lineage is coherent when both sides declare
+  snapshot IDs.
 - No migration appears before the latest applied migration for a target
   database.
 - Replaying migrations in a sandbox reaches the expected final snapshot.
@@ -310,6 +423,34 @@ gosqlkit migrate apply --url "$DATABASE_URL"
 `migrate apply` should be a later wrapper around the same migration files. It
 should not block users from applying with goose or another runner.
 
+Configuration should reserve space for runner selection:
+
+```yaml
+migrations:
+  dir: db/migrations
+  runner: goose
+```
+
+For the first implementation, omitting `runner` is equivalent to `goose`, and
+any value other than `goose` is invalid.
+
+Current implementation status:
+
+- `migrate create <name>` creates a baseline migration from the current schema
+  when the migration directory has no existing migrations. The generated
+  metadata embeds both `toSnapshotId` and the target snapshot JSON.
+- `migrate create <name> --empty` creates an empty goose-compatible migration
+  for manual SQL.
+- `migrate create <name>` with existing migrations uses the latest migration's
+  embedded target snapshot as the previous state and currently supports
+  conservative additive PostgreSQL changes: new schemas, extensions, enums,
+  appended enum values, new tables, and new columns.
+- Destructive changes and unsupported modifications fail closed with an
+  explicit planner error.
+- `migrate check` validates timestamped SQL filenames, embedded metadata, and
+  goose annotations, plus adjacent snapshot lineage when both migrations
+  declare snapshot IDs.
+
 ## Reasons For This Decision
 
 - Multi-dialect support requires our own core migration model.
@@ -317,6 +458,12 @@ should not block users from applying with goose or another runner.
   possible implementation shortcuts, but not as the abstraction boundary.
 - One SQL file per migration keeps Git review clean.
 - Embedded metadata avoids sidecar churn while preserving machine context.
+- Embedding the generated target snapshot lets future diff creation use the
+  latest migration as the previous desired schema without requiring a sidecar
+  snapshot file.
+- Keeping runner rendering separate from migration planning lets the project
+  add `golang-migrate` or another file layout later without changing the diff
+  engine.
 - Database-applied state belongs in the database, not in committed JSON.
 - Goose compatibility gives a mature runner immediately.
 - Sandbox validation keeps generated SQL honest without making the sandbox the
@@ -326,8 +473,6 @@ should not block users from applying with goose or another runner.
 
 ## Open Questions
 
-- Should embedded metadata include the full target snapshot, only the snapshot
-  hash, or a compact signed/hashed representation?
 - Should `gosqlkit migrate create` require a sandbox for all dialects, or only
   for operations that cannot be validated from the model?
 - How should manual migrations declare their resulting snapshot?
