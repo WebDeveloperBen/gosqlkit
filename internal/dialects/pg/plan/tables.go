@@ -49,7 +49,21 @@ func (p planner) tables(previous, current []ast.Table) error {
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("tables were removed")
+		for _, table := range sortedTables(removedTables(prev)) {
+			key := tableKey(table)
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindTable, key),
+					"drop table "+key,
+					migrateplan.SQL("DROP TABLE "+renderTableName(table)+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(reverseCreateTable(table)),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -87,7 +101,23 @@ func (p planner) table(previous, current ast.Table) error {
 		delete(prevColumns, column.Name)
 	}
 	if len(prevColumns) > 0 {
-		return unsupportedDestructive("columns were removed")
+		for _, column := range sortedStrings(removedColumns(prevColumns)) {
+			key := tableKey(current) + "." + column
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindColumn, key),
+					"drop column "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DROP COLUMN "+column+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(reverseAddColumn(current, prevColumns[column])),
+				),
+			)
+		}
 	}
 	if err := p.constraints(previous, current); err != nil {
 		return err
@@ -166,7 +196,21 @@ func (p planner) primaryKeys(previous, current ast.Table) error {
 		delete(prev, primaryKey.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("primary keys were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			key := tableKey(current) + "." + name
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindConstraint, key),
+					"drop primary key "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DROP CONSTRAINT "+name+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -188,7 +232,21 @@ func (p planner) uniqueConstraints(previous, current ast.Table) error {
 		delete(prev, unique.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("unique constraints were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			key := tableKey(current) + "." + name
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindConstraint, key),
+					"drop unique constraint "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DROP CONSTRAINT "+name+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -216,7 +274,21 @@ func (p planner) foreignKeys(previous, current ast.Table) error {
 		delete(prev, foreignKey.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("foreign keys were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			key := tableKey(current) + "." + name
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindConstraint, key),
+					"drop foreign key "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DROP CONSTRAINT "+name+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -238,7 +310,21 @@ func (p planner) checks(previous, current ast.Table) error {
 		delete(prev, check.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("check constraints were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			key := tableKey(current) + "." + name
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindConstraint, key),
+					"drop check constraint "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DROP CONSTRAINT "+name+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -260,7 +346,21 @@ func (p planner) exclusions(previous, current ast.Table) error {
 		delete(prev, exclusion.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("exclusion constraints were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			key := tableKey(current) + "." + name
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindConstraint, key),
+					"drop exclusion constraint "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DROP CONSTRAINT "+name+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -315,7 +415,21 @@ func (p planner) indexes(previous, current ast.Table) error {
 		delete(prev, index.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("indexes were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			key := tableKey(current) + "." + name
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindIndex, key),
+					"drop index "+key,
+					migrateplan.SQL("DROP INDEX "+renderQualified(current.Schema, name)+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -336,7 +450,18 @@ func (p planner) comments(previous, current ast.Table) error {
 				),
 			)
 		case current.Comment == "":
-			return unsupportedDestructive("table comments were removed")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindTable, table),
+					"drop comment from table "+table,
+					migrateplan.SQL("COMMENT ON TABLE "+renderTableName(current)+" IS NULL;"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL("COMMENT ON TABLE " + renderTableName(current) + " IS " + quoteSQL(previous.Comment) + ";"),
+				),
+			)
 		default:
 			return unsupported("table comment modifications require semantic planning")
 		}
@@ -367,7 +492,20 @@ func (p planner) comments(previous, current ast.Table) error {
 				),
 			)
 		case column.Comment == "":
-			return unsupportedDestructive("column comments were removed")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindColumn, key),
+					"drop comment from column "+key,
+					migrateplan.SQL("COMMENT ON COLUMN "+renderTableName(current)+"."+column.Name+" IS NULL;"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, table),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL("COMMENT ON COLUMN " + renderTableName(current) + "." + column.Name + " IS " + quoteSQL(old.Comment) + ";"),
+				),
+			)
 		default:
 			return unsupported("column comment modifications require semantic planning")
 		}
@@ -390,7 +528,18 @@ func (p planner) rls(previous, current ast.Table) error {
 				),
 			)
 		} else {
-			return unsupportedDestructive("row level security was disabled")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindTable, table),
+					"disable row level security on table "+table,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" DISABLE ROW LEVEL SECURITY;"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " ENABLE ROW LEVEL SECURITY;"),
+				),
+			)
 		}
 	}
 	if previous.ForceRLS != current.ForceRLS {
@@ -406,7 +555,18 @@ func (p planner) rls(previous, current ast.Table) error {
 				),
 			)
 		} else {
-			return unsupportedDestructive("forced row level security was disabled")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindTable, table),
+					"unforce row level security on table "+table,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" NO FORCE ROW LEVEL SECURITY;"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " FORCE ROW LEVEL SECURITY;"),
+				),
+			)
 		}
 	}
 	return nil
@@ -500,4 +660,48 @@ func tableDependencyRefs(table ast.Table) []migrateplan.ObjectRef {
 func columnWithoutComment(column ast.Column) ast.Column {
 	column.Comment = ""
 	return column
+}
+
+func removedTables(prev map[string]ast.Table) []ast.Table {
+	out := make([]ast.Table, 0, len(prev))
+	for _, table := range prev {
+		out = append(out, table)
+	}
+	return out
+}
+
+func sortedTables(tables []ast.Table) []ast.Table {
+	return sortedBy(tables, tableKey)
+}
+
+func removedColumns(prev map[string]ast.Column) []string {
+	out := make([]string, 0, len(prev))
+	for name := range prev {
+		out = append(out, name)
+	}
+	return out
+}
+
+func removedNames[T any](prev map[string]T) []string {
+	out := make([]string, 0, len(prev))
+	for name := range prev {
+		out = append(out, name)
+	}
+	return out
+}
+
+func reverseCreateTable(table ast.Table) string {
+	stmt, err := renderCreateTable(table)
+	if err != nil {
+		return ""
+	}
+	return stmt
+}
+
+func reverseAddColumn(table ast.Table, column ast.Column) string {
+	def, err := renderColumn(column)
+	if err != nil {
+		return ""
+	}
+	return "ALTER TABLE " + renderTableName(table) + " ADD COLUMN " + def + ";"
 }

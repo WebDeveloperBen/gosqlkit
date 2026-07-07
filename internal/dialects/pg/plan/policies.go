@@ -36,7 +36,21 @@ func (p planner) policies(previous, current []pgschema.Policy) error {
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("policies were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			policy := prev[key]
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindPolicy, key),
+					"drop policy "+key,
+					migrateplan.SQL("DROP POLICY "+policy.Name+" ON "+renderReferencedTable(policy.Table)+";"),
+				).WithDependencies(
+					migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(policy.Table)),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+				),
+			)
+		}
 	}
 	return nil
 }

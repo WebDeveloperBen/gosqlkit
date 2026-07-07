@@ -33,7 +33,7 @@ type Document struct {
 	TriggerMetadata    map[string]TriggerMetadata  `json:"triggerMetadata,omitempty"`
 	PolicyMetadata     map[string]PolicyMetadata   `json:"policyMetadata,omitempty"`
 	SchemaMetadata     map[string]SchemaMetadata   `json:"schemaMetadata,omitempty"`
-	SnapshotID         string                      `json:"snapshotId"`
+	SnapshotID         string                      `json:"snapshotId,omitempty"`
 	PreviousSnapshotID string                      `json:"previousSnapshotId,omitempty"`
 	Dialect            string                      `json:"dialect"`
 	Namespaces         []Namespace                 `json:"namespaces,omitempty"`

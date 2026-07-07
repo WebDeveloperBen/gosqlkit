@@ -527,3 +527,139 @@ func TestSnapshotDiffRejectsAddColumnRenameMetadata(t *testing.T) {
 		t.Fatalf("expected column rename metadata error, got %v", err)
 	}
 }
+
+func TestSnapshotDiffEmitsDestructiveDropTable(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != "drop" || change.Object.Kind != "table" || change.Object.Key != "public.users" {
+		t.Fatalf("drop change = %#v", change)
+	}
+	if !change.RisksContainDestructive() {
+		t.Fatalf("expected destructive risk, got %#v", change.Risks)
+	}
+	if len(change.Statements) != 1 || change.Statements[0].SQL != "DROP TABLE users;" {
+		t.Fatalf("drop SQL = %#v", change.Statements)
+	}
+}
+
+func TestSnapshotDiffEmitsDestructiveDropColumn(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "email", Type: "text"},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !planned.HasDestructive() {
+		t.Fatalf("expected destructive changes, got %#v", planned.Changes)
+	}
+	if len(planned.Changes) != 1 || planned.Changes[0].Object.Key != "public.users.email" {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if !planned.Changes[0].RisksContainDestructive() {
+		t.Fatalf("expected destructive risk, got %#v", planned.Changes[0].Risks)
+	}
+}
+
+func TestSnapshotDiffEmitsDestructiveDisableRLS(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:             "users",
+			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+			RowLevelSecurity: true,
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !planned.HasDestructive() {
+		t.Fatalf("expected destructive changes, got %#v", planned.Changes)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "ALTER TABLE users DISABLE ROW LEVEL SECURITY;" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+}
+
+func TestSnapshotDiffEmitsDestructiveDropComment(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Comment: "Application users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid", Comment: "Primary key"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !planned.HasDestructive() {
+		t.Fatalf("expected destructive changes, got %#v", planned.Changes)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	for _, change := range planned.Changes {
+		if !change.RisksContainDestructive() {
+			t.Fatalf("expected destructive risk on %s, got %#v", change.Object.Key, change.Risks)
+		}
+	}
+}

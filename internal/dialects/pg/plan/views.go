@@ -41,14 +41,44 @@ func (p planner) views(previous, current []pgschema.View, tables []ast.Table, ma
 			p.addWith(viewCommentChange(view))
 		} else if old.Comment != view.Comment {
 			if view.Comment == "" {
-				return unsupportedDestructive("view comments were removed")
+				p.addWith(
+					migrateplan.NewChange(
+						migrateplan.OperationAlter,
+						migrateplan.Ref(migrateplan.ObjectKindView, key),
+						"drop comment from view "+key,
+						migrateplan.SQL("COMMENT ON VIEW "+renderQualified(view.Schema, view.Name)+" IS NULL;"),
+					).WithDependencies(
+						migrateplan.Ref(migrateplan.ObjectKindView, key),
+					).WithRisks(
+						migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+					).WithReverse(
+						migrateplan.SQL("COMMENT ON VIEW " + renderQualified(view.Schema, view.Name) + " IS " + quoteSQL(old.Comment) + ";"),
+					),
+				)
+			} else {
+				return unsupported("view comment modifications require semantic planning")
 			}
-			return unsupported("view comment modifications require semantic planning")
 		}
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("views were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			view := prev[key]
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindView, key),
+					"drop view "+key,
+					migrateplan.SQL("DROP VIEW "+renderQualified(view.Schema, view.Name)+";"),
+				).WithDependencies(
+					dependencyRefs(view.DependsOn, tables, current, materializedViews, migrateplan.Ref(migrateplan.ObjectKindView, key))...,
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(renderView(view)),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -86,14 +116,44 @@ func (p planner) materializedViews(previous, current []pgschema.MaterializedView
 			p.addWith(materializedViewCommentChange(view))
 		} else if old.Comment != view.Comment {
 			if view.Comment == "" {
-				return unsupportedDestructive("materialized view comments were removed")
+				p.addWith(
+					migrateplan.NewChange(
+						migrateplan.OperationAlter,
+						migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
+						"drop comment from materialized view "+key,
+						migrateplan.SQL("COMMENT ON MATERIALIZED VIEW "+renderQualified(view.Schema, view.Name)+" IS NULL;"),
+					).WithDependencies(
+						migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
+					).WithRisks(
+						migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+					).WithReverse(
+						migrateplan.SQL("COMMENT ON MATERIALIZED VIEW " + renderQualified(view.Schema, view.Name) + " IS " + quoteSQL(old.Comment) + ";"),
+					),
+				)
+			} else {
+				return unsupported("materialized view comment modifications require semantic planning")
 			}
-			return unsupported("materialized view comment modifications require semantic planning")
 		}
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("materialized views were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			matView := prev[key]
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
+					"drop materialized view "+key,
+					migrateplan.SQL("DROP MATERIALIZED VIEW "+renderQualified(matView.Schema, matView.Name)+";"),
+				).WithDependencies(
+					dependencyRefs(matView.DependsOn, tables, views, current, migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key))...,
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(renderMaterializedView(matView)),
+				),
+			)
+		}
 	}
 	return nil
 }

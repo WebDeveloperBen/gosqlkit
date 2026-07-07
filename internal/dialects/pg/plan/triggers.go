@@ -45,14 +45,44 @@ func (p planner) triggers(previous, current []pgschema.Trigger, tables []ast.Tab
 			p.addWith(triggerCommentChange(trigger, tables, views, materializedViews))
 		} else if old.Comment != trigger.Comment {
 			if trigger.Comment == "" {
-				return unsupportedDestructive("trigger comments were removed")
+				p.addWith(
+					migrateplan.NewChange(
+						migrateplan.OperationAlter,
+						migrateplan.Ref(migrateplan.ObjectKindTrigger, key),
+						"drop comment from trigger "+key,
+						migrateplan.SQL("COMMENT ON TRIGGER "+trigger.Name+" ON "+renderReferencedTable(trigger.Target)+" IS NULL;"),
+					).WithDependencies(
+						triggerTargetRef(trigger, tables, views, materializedViews),
+						migrateplan.Ref(migrateplan.ObjectKindTrigger, key),
+					).WithRisks(
+						migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+					).WithReverse(
+						migrateplan.SQL("COMMENT ON TRIGGER " + trigger.Name + " ON " + renderReferencedTable(trigger.Target) + " IS " + quoteSQL(old.Comment) + ";"),
+					),
+				)
+			} else {
+				return unsupported("trigger comment modifications require semantic planning")
 			}
-			return unsupported("trigger comment modifications require semantic planning")
 		}
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("triggers were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			trigger := prev[key]
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindTrigger, key),
+					"drop trigger "+key,
+					migrateplan.SQL("DROP TRIGGER "+trigger.Name+" ON "+renderReferencedTable(trigger.Target)+";"),
+				).WithDependencies(
+					triggerTargetRef(trigger, tables, views, materializedViews),
+					migrateplan.Ref(migrateplan.ObjectKindFunction, triggerFunctionKey(trigger)),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+				),
+			)
+		}
 	}
 	return nil
 }

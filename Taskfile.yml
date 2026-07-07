@@ -76,7 +76,7 @@ tasks:
   fmt:
     desc: Format all Go files with gofumpt
     cmds:
-      - go tool gofumpt -w .
+      - cmd: find . -name '*.go' -not -path './reference_code/*' -print0 | xargs -0 go tool gofumpt -w
 
   fmt:check:
     desc: Check Go files are formatted with gofumpt
@@ -84,7 +84,7 @@ tasks:
       - |
         set -e
 
-        files="$(go tool gofumpt -l .)"
+        files="$(find . -name '*.go' -not -path './reference_code/*' -print0 | xargs -0 go tool gofumpt -l)"
         if [ -n "$files" ]; then
           echo "The following files need formatting:"
           echo "$files"

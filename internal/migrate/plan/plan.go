@@ -18,8 +18,13 @@ const (
 type Risk string
 
 const (
-	RiskManualReview Risk = "manual-review"
-	RiskDestructive  Risk = "destructive"
+	RiskManualReview      Risk = "manual-review"
+	RiskDestructive       Risk = "destructive"
+	RiskDataLoss          Risk = "data-loss"
+	RiskLockHeavy         Risk = "lock-heavy"
+	RiskNonTransactional  Risk = "non-transactional"
+	RiskRequiresBackfill  Risk = "requires-backfill"
+	RiskRequiresDDLReview Risk = "requires-ddl-review"
 )
 
 type ObjectKind string
@@ -68,6 +73,46 @@ type Plan struct {
 	Statements []string `json:"statements,omitempty"`
 }
 
+func (p *Plan) DestructiveChanges() []Change {
+	if p == nil {
+		return nil
+	}
+	out := make([]Change, 0)
+	for _, change := range p.Changes {
+		for _, risk := range change.Risks {
+			if risk == RiskDestructive {
+				out = append(out, change)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func (p *Plan) HasDestructive() bool {
+	return len(p.DestructiveChanges()) > 0
+}
+
+func (p *Plan) DataLossChanges() []Change {
+	if p == nil {
+		return nil
+	}
+	out := make([]Change, 0)
+	for _, change := range p.Changes {
+		for _, risk := range change.Risks {
+			if risk == RiskDataLoss {
+				out = append(out, change)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func (p *Plan) HasDataLoss() bool {
+	return len(p.DataLossChanges()) > 0
+}
+
 type Summary struct {
 	Changes []Change `json:"changes"`
 }
@@ -108,6 +153,23 @@ func (c Change) WithReverse(statements ...Statement) Change {
 	c.ReverseStatements = append(c.ReverseStatements, statements...)
 	c.Reversible = len(c.ReverseStatements) > 0
 	return c
+}
+
+func (c Change) HasRisk(risk Risk) bool {
+	for _, r := range c.Risks {
+		if r == risk {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Change) RisksContainDestructive() bool {
+	return c.HasRisk(RiskDestructive)
+}
+
+func (c Change) RisksContainDataLoss() bool {
+	return c.HasRisk(RiskDataLoss)
 }
 
 func SummaryJSON(plan *Plan) ([]byte, error) {

@@ -20,8 +20,8 @@ Legend:
 - `[x]` No query builder.
 - `[x]` Preserve `sqlc` and `pgx` for runtime database access.
 - `[~]` CLI generation workflow.
-- `[ ]` Migration diff workflow.
-- `[ ]` Review-first destructive-change handling.
+- `[~]` Migration diff workflow.
+- `[x]` Review-first destructive-change handling.
 - `[x]` Snapshot metadata for stable diffs and rename support.
 
 ## Current Vertical Slice
@@ -242,9 +242,9 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Rename annotations for tables.
 - `[x]` Rename annotations for columns.
 - `[x]` Rename annotations for indexes and constraints.
-- `[ ]` Destructive-change detection.
-- `[ ]` Destructive-change default failure mode.
-- `[ ]` Explicit override for destructive changes.
+- `[x]` Destructive-change detection.
+- `[x]` Destructive-change default failure mode.
+- `[x]` Explicit override for destructive changes.
 
 ## Migration Engine Slices
 
@@ -299,19 +299,19 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 ### Slice 4: Destructive-Change Guardrails
 
-- `[ ]` Detect table removals.
-- `[ ]` Detect column removals.
+- `[x]` Detect table removals.
+- `[x]` Detect column removals.
 - `[ ]` Detect enum value removals.
-- `[ ]` Detect constraint, index, policy, trigger, view, function, sequence,
+- `[x]` Detect constraint, index, policy, trigger, view, function, sequence,
   domain, and role removals.
 - `[ ]` Detect column type changes.
 - `[ ]` Detect column default changes.
 - `[ ]` Detect nullability changes.
 - `[ ]` Detect generated-column and identity changes.
-- `[ ]` Risk flags for destructive, data-loss, lock-heavy, non-transactional,
+- `[x]` Risk flags for destructive, data-loss, lock-heavy, non-transactional,
   requires-backfill, and manual-review changes.
-- `[ ]` Destructive changes fail by default with actionable diagnostics.
-- `[ ]` Explicit destructive-change override.
+- `[x]` Destructive changes fail by default with actionable diagnostics.
+- `[x]` Explicit destructive-change override.
 
 ### Slice 5: Rename-Aware Diffing
 
@@ -430,6 +430,10 @@ Other provider requirement:
 - `[x]` `gosqlkit snapshot --check`.
 - `[~]` `gosqlkit migrate create <name>`.
 - `[x]` `gosqlkit migrate create <name> --empty`.
+- `[x]` `gosqlkit migrate create <name> --allow-destructive` to author a
+  migration containing drops, RLS disables, or comment removals.
+- `[x]` `gosqlkit migrate plan` to print the structured migration plan without
+  writing any files (`--json` for machine-readable output).
 - `[~]` `gosqlkit migrate check`.
 - `[ ]` `gosqlkit migrate apply --url ...`.
 - `[ ]` `gosqlkit drift check --url ...`.

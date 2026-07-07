@@ -15,12 +15,13 @@ import (
 )
 
 type MigrateCreateOptions struct {
-	CreatedAt time.Time
-	Name      string
-	Dir       string
-	Runner    string
-	Empty     bool
-	NoDown    bool
+	CreatedAt        time.Time
+	Name             string
+	Dir              string
+	Runner           string
+	Empty            bool
+	NoDown           bool
+	AllowDestructive bool
 }
 
 type MigrateCreateResult struct {
@@ -35,6 +36,21 @@ type MigrateCheckOptions struct {
 type MigrateCheckResult struct {
 	Dir   string `json:"dir"`
 	Count int    `json:"count"`
+}
+
+type MigratePlanOptions struct {
+	Dir      string
+	Runner   string
+	Snapshot string
+}
+
+type MigratePlanResult struct {
+	Dialect        string               `json:"dialect"`
+	FromSnapshotID string               `json:"fromSnapshotId,omitempty"`
+	ToSnapshotID   string               `json:"toSnapshotId"`
+	Changes        []migrate.Change     `json:"changes"`
+	Statements     []migrate.Statement  `json:"upStatements"`
+	Destructive    []migrateplan.Change `json:"destructiveChanges,omitempty"`
 }
 
 func MigrateCreateWithConfig(config *Config, opts MigrateCreateOptions) (*MigrateCreateResult, error) {
@@ -153,6 +169,9 @@ func diffMigrationPlan(config *Config, opts MigrateCreateOptions, previous migra
 	if len(planned.Statements) == 0 {
 		return migrate.Plan{}, errors.New("schema has no changes")
 	}
+	if planned.HasDestructive() && !opts.AllowDestructive {
+		return migrate.Plan{}, destructiveGuardError(planned)
+	}
 
 	changes := make([]migrate.Change, 0, len(planned.Changes))
 	upStatements := make([]migrate.Statement, 0, len(planned.Statements))
@@ -241,6 +260,98 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 	return &MigrateCheckResult{Dir: dir, Count: len(migrations)}, nil
 }
 
+func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePlanResult, error) {
+	if config == nil {
+		return nil, errors.New("config is required")
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		dir = config.MigrationsDir()
+	} else {
+		dir = config.ResolvePath(dir)
+	}
+
+	existing, err := migrate.ScanDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing) == 0 {
+		return nil, errors.New("no existing migrations to diff against; use 'migrate create' to author an initial migration")
+	}
+	latest := existing[len(existing)-1]
+	if len(latest.Metadata.TargetSnapshot) == 0 {
+		return nil, errors.New("latest migration has no targetSnapshot metadata; cannot compute plan")
+	}
+
+	snapshotData, _, err := renderSnapshotWithConfig(config, opts.Snapshot)
+	if err != nil {
+		return nil, err
+	}
+	snapshotID, err := snapshotIDFromJSON(snapshotData)
+	if err != nil {
+		return nil, err
+	}
+
+	planner, err := snapshotPlanner(config.Dialect)
+	if err != nil {
+		return nil, err
+	}
+	planned, err := planner.PlanSnapshotDiff(latest.Metadata.TargetSnapshot, []byte(snapshotData))
+	if err != nil {
+		return nil, err
+	}
+	if len(planned.Changes) == 0 {
+		return &MigratePlanResult{
+			Dialect:      config.Dialect,
+			ToSnapshotID: snapshotID,
+		}, nil
+	}
+
+	changes := make([]migrate.Change, 0, len(planned.Changes))
+	statements := make([]migrate.Statement, 0, len(planned.Statements))
+	for _, change := range planned.Changes {
+		risks := make([]string, 0, len(change.Risks))
+		for _, risk := range change.Risks {
+			risks = append(risks, string(risk))
+		}
+		dependencies := make([]migrate.ObjectRef, 0, len(change.Dependencies))
+		for _, dependency := range change.Dependencies {
+			dependencies = append(dependencies, migrateObjectRef(dependency))
+		}
+		changes = append(changes, migrate.Change{
+			Op:           string(change.Op),
+			Object:       migrateObjectRef(change.Object),
+			Summary:      change.Summary,
+			Risks:        risks,
+			Dependencies: dependencies,
+			Reversible:   change.Reversible,
+		})
+		for _, statement := range change.Statements {
+			statements = append(statements, migrate.Statement{SQL: statement.SQL})
+		}
+	}
+	if len(statements) == 0 {
+		for _, statement := range planned.Statements {
+			statements = append(statements, migrate.Statement{SQL: statement})
+		}
+	}
+
+	result := &MigratePlanResult{
+		Dialect:        config.Dialect,
+		FromSnapshotID: latest.Metadata.ToSnapshotID,
+		ToSnapshotID:   snapshotID,
+		Changes:        changes,
+		Statements:     statements,
+	}
+	if destructive := planned.DestructiveChanges(); len(destructive) > 0 {
+		destructiveOut := make([]migrateplan.Change, 0, len(destructive))
+		destructiveOut = append(destructiveOut, destructive...)
+		result.Destructive = destructiveOut
+	}
+	return result, nil
+}
+
 func renderMigrationFiles(runner string, plan migrate.Plan) ([]migrate.File, error) {
 	switch migrate.NormaliseRunner(runner) {
 	case migrate.RunnerGoose:
@@ -297,4 +408,18 @@ func writeNewFile(path, content string) error {
 		return err
 	}
 	return nil
+}
+
+func destructiveGuardError(plan *migrateplan.Plan) error {
+	destructive := plan.DestructiveChanges()
+	lines := make([]string, 0, len(destructive)+3)
+	lines = append(lines, fmt.Sprintf("migration plan contains %d destructive change(s); pass --allow-destructive to proceed:", len(destructive)))
+	for _, change := range destructive {
+		risks := make([]string, 0, len(change.Risks))
+		for _, risk := range change.Risks {
+			risks = append(risks, string(risk))
+		}
+		lines = append(lines, fmt.Sprintf("  - %s %s [%s]", change.Op, change.Object.Key, strings.Join(risks, ",")))
+	}
+	return errors.New(strings.Join(lines, "\n"))
 }

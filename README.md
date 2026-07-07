@@ -88,6 +88,20 @@ Create an empty migration for manual SQL:
 gosqlkit migrate create add_users_table --empty
 ```
 
+Preview the next migration plan without writing a file:
+
+```bash
+gosqlkit migrate plan
+gosqlkit migrate plan --json   # machine-readable
+```
+
+Author a migration that drops objects (disabled by default to keep destructive
+changes reviewable):
+
+```bash
+gosqlkit migrate create drop_legacy_columns --allow-destructive
+```
+
 Schema can be a single path or a list of paths:
 
 ```yaml
@@ -136,6 +150,8 @@ sqlc generate
 - Conservative additive PostgreSQL diff migrations from embedded snapshots
 - Migration directory checks for timestamped SQL files, embedded metadata,
   snapshot lineage, and goose `Up` / `Down` annotations
+- Destructive-change detection with `--allow-destructive` override and
+  `gosqlkit migrate plan` to preview the structured plan before writing
 - `sqlc` compatibility example
 
 ## Example Project

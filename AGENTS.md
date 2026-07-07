@@ -436,10 +436,11 @@ tracks are roughly:
 2. **Snapshot metadata + diff readiness** — stable snapshot IDs, previous
    snapshot ID, schema/table/column/view/role/function/trigger/policy metadata maps, stable
    object keys, rename annotations, squashed/normalised diff representation.
-   Prerequisite for high-quality migration diffing.
+   Prerequisite for high-quality migration diffing. Mostly landed; rename-aware
+   diffing is the remaining open piece (Slice 5).
 3. **Database connectivity + introspection + diff** — cross-dialect migration
    IR, dialect planners, sandbox validation, drift checks, and provider-pluggable
-   token auth for Azure/AWS/GCP. Largest track.
+   token auth for Azure/AWS/GCP. Largest track (Slices 6 and 7).
 4. **Advanced PG objects** — partitioned tables, grants, and other remaining PostgreSQL objects.
 
 When direction is ambiguous, ask the user which track rather than guessing.
@@ -558,13 +559,19 @@ update of this file:
   types, domains, roles, functions, triggers, RLS policies, views, materialized views, comments, safe
   default helpers, custom-type escape hatch.
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
-  for snapshot), `version`.
+  for snapshot), `version`, `migrate create` (with `--empty`, `--no-down`,
+  `--allow-destructive`), `migrate plan` (with `--json`), `migrate check`.
   Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
   (SHA-256), metadata maps (schema/table/column/view/role/function/trigger/policy), and rename
   annotations (previousName on all objects).
-- **Next tracks**: cross-dialect migration planning, DB connectivity,
-  introspection, and sandbox validation, then advanced PG objects
-  (partitioning, grants).
+  Migration planner emits structured changes with per-change risk flags
+  (`destructive`, `data-loss`, `lock-heavy`, `manual-review`,
+  `requires-ddl-review`) and best-effort reverse SQL. Destructive changes
+  (drops, RLS disables, comment removals) fail by default and require
+  `--allow-destructive` to author.
+- **Next tracks**: rename-aware diffing (Slice 5), sandbox replay and drift
+  check (Slice 6), auth/apply/runner expansion (Slice 7), then advanced PG
+  objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

@@ -1,51 +1,53 @@
 [
   {
     "name": "create_schema",
+    "wantStatements": [
+      "CREATE SCHEMA billing;"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "namespaces": [
         {
           "name": "billing"
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE SCHEMA billing;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "create_extension",
+    "wantStatements": [
+      "CREATE EXTENSION pgcrypto;"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "extensions": [
         {
           "name": "pgcrypto"
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE EXTENSION pgcrypto;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "create_enum",
+    "wantStatements": [
+      "CREATE TYPE invoice_status AS ENUM ('draft', 'issued');"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -54,17 +56,17 @@
             "issued"
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TYPE invoice_status AS ENUM ('draft', 'issued');"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "append_enum_value",
+    "wantStatements": [
+      "ALTER TYPE invoice_status ADD VALUE 'issued';"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -72,11 +74,11 @@
             "draft"
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -85,21 +87,21 @@
             "issued"
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TYPE invoice_status ADD VALUE 'issued';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "create_table",
+    "wantStatements": [
+      "CREATE TABLE users (\n    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n    email text NOT NULL UNIQUE\n);"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -107,8 +109,8 @@
             {
               "name": "id",
               "type": "uuid",
-              "primaryKey": true,
-              "default": "gen_random_uuid()"
+              "default": "gen_random_uuid()",
+              "primaryKey": true
             },
             {
               "name": "email",
@@ -118,17 +120,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TABLE users (\n    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n    email text NOT NULL UNIQUE\n);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_column",
+    "wantStatements": [
+      "ALTER TABLE users ADD COLUMN email text NOT NULL;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -139,11 +141,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -159,51 +161,55 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ADD COLUMN email text NOT NULL;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_schema",
+    "wantStatements": [
+      "DROP SCHEMA billing;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "namespaces": [
         {
           "name": "billing"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "schemas were removed"
+    }
   },
   {
     "name": "drop_extension",
+    "wantStatements": [
+      "DROP EXTENSION pgcrypto;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "extensions": [
         {
           "name": "pgcrypto"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "extensions were removed"
+    }
   },
   {
     "name": "drop_enum",
+    "wantStatements": [
+      "DROP TYPE invoice_status;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -211,19 +217,19 @@
             "draft"
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "enums were removed"
+    }
   },
   {
     "name": "remove_enum_value",
+    "wantErr": "enum values were removed",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -232,11 +238,11 @@
             "issued"
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -244,15 +250,15 @@
             "draft"
           ]
         }
-      ]
-    },
-    "wantErr": "enum values were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "reorder_enum_values",
+    "wantErr": "enum values were reordered or changed",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -261,11 +267,11 @@
             "issued"
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "enums": [
         {
           "name": "invoice_status",
@@ -274,15 +280,17 @@
             "draft"
           ]
         }
-      ]
-    },
-    "wantErr": "enum values were reordered or changed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_table",
+    "wantStatements": [
+      "DROP TABLE users;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -294,19 +302,21 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "tables were removed"
+    }
   },
   {
     "name": "drop_column",
+    "wantStatements": [
+      "ALTER TABLE users DROP COLUMN email;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -321,11 +331,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -336,15 +346,15 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "columns were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_column",
+    "wantErr": "column modifications",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -355,11 +365,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -370,19 +380,22 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "column modifications"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "create_table_with_index",
+    "wantStatements": [
+      "CREATE TABLE users (\n    email text\n);",
+      "CREATE INDEX users_email_idx ON users (email);"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -403,18 +416,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TABLE users (\n    email text\n);",
-      "CREATE INDEX users_email_idx ON users (email);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_index",
+    "wantStatements": [
+      "CREATE INDEX users_email_idx ON users USING btree (email text_ops DESC NULLS LAST) WITH (fillfactor = 80) WHERE email IS NOT NULL;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -425,11 +437,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -441,34 +453,32 @@
           ],
           "indexes": [
             {
+              "with": {
+                "fillfactor": "80"
+              },
               "name": "users_email_idx",
               "method": "btree",
               "where": "email IS NOT NULL",
               "columns": [
                 {
                   "expression": "email",
-                  "opClass": "text_ops",
                   "order": "DESC",
-                  "nulls": "LAST"
+                  "nulls": "LAST",
+                  "opClass": "text_ops"
                 }
-              ],
-              "with": {
-                "fillfactor": "80"
-              }
+              ]
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE INDEX users_email_idx ON users USING btree (email text_ops DESC NULLS LAST) WITH (fillfactor = 80) WHERE email IS NOT NULL;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_index",
+    "wantErr": "index modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -489,11 +499,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -506,24 +516,26 @@
           "indexes": [
             {
               "name": "users_email_idx",
-              "unique": true,
               "columns": [
                 {
                   "expression": "email"
                 }
-              ]
+              ],
+              "unique": true
             }
           ]
         }
-      ]
-    },
-    "wantErr": "index modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_index",
+    "wantStatements": [
+      "DROP INDEX users_email_idx;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -544,11 +556,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -559,19 +571,23 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "indexes were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "create_table_with_comment",
+    "wantStatements": [
+      "CREATE TABLE users (\n    id uuid\n);",
+      "COMMENT ON TABLE users IS 'Application users';",
+      "COMMENT ON COLUMN users.id IS 'Primary key';"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -584,200 +600,202 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TABLE users (\n    id uuid\n);",
-      "COMMENT ON TABLE users IS 'Application users';",
-      "COMMENT ON COLUMN users.id IS 'Primary key';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "create_table_with_rls",
-    "previous": {
-      "dialect": "postgresql",
-      "version": 1
-    },
-    "current": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "forceRls": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
     "wantStatements": [
       "CREATE TABLE users (\n    id uuid\n);",
       "ALTER TABLE users ENABLE ROW LEVEL SECURITY;",
       "ALTER TABLE users FORCE ROW LEVEL SECURITY;"
-    ]
-  },
-  {
-    "name": "enable_rls_existing_table",
-    "previous": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "current": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ENABLE ROW LEVEL SECURITY;"
-    ]
-  },
-  {
-    "name": "force_rls_existing_table",
-    "previous": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "current": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "forceRls": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users FORCE ROW LEVEL SECURITY;"
-    ]
-  },
-  {
-    "name": "disable_rls_existing_table",
-    "previous": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "current": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "wantErr": "row level security was disabled"
-  },
-  {
-    "name": "unforce_rls_existing_table",
-    "previous": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "forceRls": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "current": {
-      "dialect": "postgresql",
-      "version": 1,
-      "tables": [
-        {
-          "name": "users",
-          "rowLevelSecurity": true,
-          "columns": [
-            {
-              "name": "id",
-              "type": "uuid"
-            }
-          ]
-        }
-      ]
-    },
-    "wantErr": "forced row level security was disabled"
-  },
-  {
-    "name": "create_table_with_exclusion",
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true,
+          "forceRls": true
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
+    "name": "enable_rls_existing_table",
+    "wantStatements": [
+      "ALTER TABLE users ENABLE ROW LEVEL SECURITY;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
+    "name": "force_rls_existing_table",
+    "wantStatements": [
+      "ALTER TABLE users FORCE ROW LEVEL SECURITY;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true
+        }
+      ],
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true,
+          "forceRls": true
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
+    "name": "disable_rls_existing_table",
+    "wantStatements": [
+      "ALTER TABLE users DISABLE ROW LEVEL SECURITY;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true
+        }
+      ],
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
+    "name": "unforce_rls_existing_table",
+    "wantStatements": [
+      "ALTER TABLE users NO FORCE ROW LEVEL SECURITY;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true,
+          "forceRls": true
+        }
+      ],
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ],
+          "rowLevelSecurity": true
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
+    "name": "create_table_with_exclusion",
+    "wantStatements": [
+      "CREATE TABLE bookings (\n    room_id uuid,\n    slot tsrange,\n    CONSTRAINT bookings_room_slot_excl EXCLUDE USING gist (room_id uuid_ops WITH =, slot WITH \u0026\u0026 ASC NULLS LAST) WHERE cancelled_at IS NULL DEFERRABLE INITIALLY DEFERRED\n);"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
       "tables": [
         {
           "name": "bookings",
@@ -796,35 +814,36 @@
               "name": "bookings_room_slot_excl",
               "method": "gist",
               "where": "cancelled_at IS NULL",
-              "deferrable": true,
               "initially": "deferred",
               "elements": [
                 {
                   "expression": "room_id",
-                  "opClass": "uuid_ops",
-                  "operator": "="
+                  "operator": "=",
+                  "opClass": "uuid_ops"
                 },
                 {
                   "expression": "slot",
-                  "operator": "&&",
+                  "operator": "\u0026\u0026",
                   "order": "ASC",
                   "nulls": "LAST"
                 }
-              ]
+              ],
+              "deferrable": true
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TABLE bookings (\n    room_id uuid,\n    slot tsrange,\n    CONSTRAINT bookings_room_slot_excl EXCLUDE USING gist (room_id uuid_ops WITH =, slot WITH && ASC NULLS LAST) WHERE cancelled_at IS NULL DEFERRABLE INITIALLY DEFERRED\n);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_column_with_comment",
+    "wantStatements": [
+      "ALTER TABLE users ADD COLUMN email text;",
+      "COMMENT ON COLUMN users.email IS 'Login email';"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -835,11 +854,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -855,18 +874,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ADD COLUMN email text;",
-      "COMMENT ON COLUMN users.email IS 'Login email';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_table_comment",
+    "wantStatements": [
+      "COMMENT ON TABLE users IS 'Application users';"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -877,11 +895,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -893,17 +911,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "COMMENT ON TABLE users IS 'Application users';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_column_comment",
+    "wantStatements": [
+      "COMMENT ON COLUMN users.email IS 'Login email';"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -914,11 +932,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -930,17 +948,15 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "COMMENT ON COLUMN users.email IS 'Login email';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_table_comment",
+    "wantErr": "table comment modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -952,11 +968,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -968,15 +984,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "table comment modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_table_comment",
+    "wantStatements": [
+      "COMMENT ON TABLE users IS NULL;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -988,11 +1006,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1003,15 +1021,15 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "table comments were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_column_comment",
+    "wantErr": "column comment modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1023,11 +1041,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1039,15 +1057,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "column comment modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_column_comment",
+    "wantStatements": [
+      "COMMENT ON COLUMN users.email IS NULL;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1059,11 +1079,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1074,15 +1094,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "column comments were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_primary_key_constraint",
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1093,11 +1115,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1116,17 +1138,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_unique_constraint",
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email) DEFERRABLE INITIALLY DEFERRED;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1137,11 +1159,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1154,26 +1176,26 @@
           "uniqueConstraints": [
             {
               "name": "users_email_key",
+              "initially": "deferred",
               "columns": [
                 "email"
               ],
               "nullsNotDistinct": true,
-              "deferrable": true,
-              "initially": "deferred"
+              "deferrable": true
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE NULLS NOT DISTINCT (email) DEFERRABLE INITIALLY DEFERRED;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_foreign_key_constraint",
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_org_id_fkey FOREIGN KEY (org_id) REFERENCES orgs (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "orgs",
@@ -1193,11 +1215,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "orgs",
@@ -1219,30 +1241,30 @@
           "foreignKeys": [
             {
               "name": "users_org_id_fkey",
+              "referencedTable": "orgs",
+              "onDelete": "cascade",
+              "initially": "immediate",
               "columns": [
                 "org_id"
               ],
-              "referencedTable": "orgs",
               "referencedColumns": [
                 "id"
               ],
-              "onDelete": "cascade",
-              "deferrable": true,
-              "initially": "immediate"
+              "deferrable": true
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ADD CONSTRAINT users_org_id_fkey FOREIGN KEY (org_id) REFERENCES orgs (id) ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_check_constraint",
+    "wantStatements": [
+      "ALTER TABLE users ADD CONSTRAINT users_email_check CHECK (position('@' in email) \u003e 1);"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1253,11 +1275,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1270,21 +1292,21 @@
           "checks": [
             {
               "name": "users_email_check",
-              "expression": "position('@' in email) > 1"
+              "expression": "position('@' in email) \u003e 1"
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE users ADD CONSTRAINT users_email_check CHECK (position('@' in email) > 1);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_exclusion_constraint",
+    "wantStatements": [
+      "ALTER TABLE bookings ADD CONSTRAINT bookings_slot_excl EXCLUDE USING gist (slot WITH \u0026\u0026);"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "bookings",
@@ -1295,11 +1317,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "bookings",
@@ -1315,23 +1337,21 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "&&"
+                  "operator": "\u0026\u0026"
                 }
               ]
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "ALTER TABLE bookings ADD CONSTRAINT bookings_slot_excl EXCLUDE USING gist (slot WITH &&);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_check_constraint",
+    "wantErr": "check constraint modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1344,15 +1364,15 @@
           "checks": [
             {
               "name": "users_email_check",
-              "expression": "position('@' in email) > 1"
+              "expression": "position('@' in email) \u003e 1"
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1365,19 +1385,19 @@
           "checks": [
             {
               "name": "users_email_check",
-              "expression": "position('@' in email) > 0"
+              "expression": "position('@' in email) \u003e 0"
             }
           ]
         }
-      ]
-    },
-    "wantErr": "check constraint modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_exclusion_constraint",
+    "wantErr": "exclusion constraint modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "bookings",
@@ -1393,17 +1413,17 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "&&"
+                  "operator": "\u0026\u0026"
                 }
               ]
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "bookings",
@@ -1420,21 +1440,23 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "&&"
+                  "operator": "\u0026\u0026"
                 }
               ]
             }
           ]
         }
-      ]
-    },
-    "wantErr": "exclusion constraint modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_unique_constraint",
+    "wantStatements": [
+      "ALTER TABLE users DROP CONSTRAINT users_email_key;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1453,11 +1475,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
@@ -1468,15 +1490,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "unique constraints were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_exclusion_constraint",
+    "wantStatements": [
+      "ALTER TABLE bookings DROP CONSTRAINT bookings_slot_excl;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "bookings",
@@ -1492,17 +1516,17 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "&&"
+                  "operator": "\u0026\u0026"
                 }
               ]
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "bookings",
@@ -1513,76 +1537,76 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "exclusion constraints were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_policy",
+    "wantStatements": [
+      "CREATE POLICY users_read_self ON users\nAS PERMISSIVE\nFOR SELECT\nTO app_reader, app_writer\nUSING (id = current_setting('app.user_id')::uuid);"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
-          "rowLevelSecurity": true,
           "columns": [
             {
               "name": "id",
               "type": "uuid"
             }
-          ]
+          ],
+          "rowLevelSecurity": true
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
-          "rowLevelSecurity": true,
           "columns": [
             {
               "name": "id",
               "type": "uuid"
             }
-          ]
+          ],
+          "rowLevelSecurity": true
         }
       ],
       "policies": [
         {
           "name": "users_read_self",
           "table": "users",
-          "mode": "permissive",
           "command": "select",
+          "mode": "permissive",
+          "using": "id = current_setting('app.user_id')::uuid",
           "roles": [
             "app_writer",
             "app_reader"
-          ],
-          "using": "id = current_setting('app.user_id')::uuid"
+          ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE POLICY users_read_self ON users\nAS PERMISSIVE\nFOR SELECT\nTO app_reader, app_writer\nUSING (id = current_setting('app.user_id')::uuid);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_policy",
+    "wantErr": "policy modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
-          "rowLevelSecurity": true,
           "columns": [
             {
               "name": "id",
               "type": "uuid"
             }
-          ]
+          ],
+          "rowLevelSecurity": true
         }
       ],
       "policies": [
@@ -1592,21 +1616,21 @@
           "command": "select",
           "using": "true"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
-          "rowLevelSecurity": true,
           "columns": [
             {
               "name": "id",
               "type": "uuid"
             }
-          ]
+          ],
+          "rowLevelSecurity": true
         }
       ],
       "policies": [
@@ -1616,25 +1640,27 @@
           "command": "select",
           "using": "id = current_setting('app.user_id')::uuid"
         }
-      ]
-    },
-    "wantErr": "policy modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_policy",
+    "wantStatements": [
+      "DROP POLICY users_read_self ON users;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
-          "rowLevelSecurity": true,
           "columns": [
             {
               "name": "id",
               "type": "uuid"
             }
-          ]
+          ],
+          "rowLevelSecurity": true
         }
       ],
       "policies": [
@@ -1644,43 +1670,45 @@
           "command": "select",
           "using": "id = current_setting('app.user_id')::uuid"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "tables": [
         {
           "name": "users",
-          "rowLevelSecurity": true,
           "columns": [
             {
               "name": "id",
               "type": "uuid"
             }
-          ]
+          ],
+          "rowLevelSecurity": true
         }
-      ]
-    },
-    "wantErr": "policies were removed"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_role",
+    "wantStatements": [
+      "CREATE ROLE app_reader WITH NOSUPERUSER NOCREATEDB INHERIT LOGIN CONNECTION LIMIT 10 VALID UNTIL 'infinity' IN ROLE base_reader, base_writer ADMIN reporting;"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "roles": [
         {
-          "name": "app_reader",
           "login": true,
           "superuser": false,
           "createDb": false,
           "inherit": true,
           "connectionLimit": 10,
+          "name": "app_reader",
           "validUntil": "infinity",
           "memberOf": [
             "base_writer",
@@ -1690,62 +1718,64 @@
             "reporting"
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE ROLE app_reader WITH NOSUPERUSER NOCREATEDB INHERIT LOGIN CONNECTION LIMIT 10 VALID UNTIL 'infinity' IN ROLE base_reader, base_writer ADMIN reporting;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_role",
+    "wantErr": "role modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "roles": [
         {
-          "name": "app_reader",
-          "login": true
+          "login": true,
+          "name": "app_reader"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "roles": [
         {
-          "name": "app_reader",
-          "login": false
+          "login": false,
+          "name": "app_reader"
         }
-      ]
-    },
-    "wantErr": "role modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_role",
+    "wantStatements": [
+      "DROP ROLE app_reader;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "roles": [
         {
           "name": "app_reader"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "roles were removed"
+    }
   },
   {
     "name": "add_composite_type",
+    "wantStatements": [
+      "CREATE TYPE billing.money_amount AS (\n    amount numeric,\n    currency text\n);"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "compositeTypes": [
         {
           "schema": "billing",
@@ -1761,17 +1791,15 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TYPE billing.money_amount AS (\n    amount numeric,\n    currency text\n);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_composite_type",
+    "wantErr": "composite type modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "compositeTypes": [
         {
           "name": "money_amount",
@@ -1782,11 +1810,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "compositeTypes": [
         {
           "name": "money_amount",
@@ -1801,15 +1829,17 @@
             }
           ]
         }
-      ]
-    },
-    "wantErr": "composite type modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_composite_type",
+    "wantStatements": [
+      "DROP TYPE money_amount;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "compositeTypes": [
         {
           "name": "money_amount",
@@ -1820,116 +1850,122 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "composite types were removed"
+    }
   },
   {
     "name": "add_domain",
+    "wantStatements": [
+      "CREATE DOMAIN billing.email_address AS text DEFAULT 'unknown@example.com' NOT NULL CHECK (position('@' in VALUE) \u003e 1);"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "domains": [
         {
           "schema": "billing",
           "name": "email_address",
           "baseType": "text",
           "default": "'unknown@example.com'",
-          "notNull": true,
-          "check": "position('@' in VALUE) > 1"
+          "check": "position('@' in VALUE) \u003e 1",
+          "notNull": true
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE DOMAIN billing.email_address AS text DEFAULT 'unknown@example.com' NOT NULL CHECK (position('@' in VALUE) > 1);"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_domain",
+    "wantErr": "domain modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "domains": [
         {
           "name": "email_address",
           "baseType": "text"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "domains": [
         {
           "name": "email_address",
           "baseType": "text",
           "notNull": true
         }
-      ]
-    },
-    "wantErr": "domain modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_domain",
+    "wantStatements": [
+      "DROP DOMAIN email_address;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "domains": [
         {
           "name": "email_address",
           "baseType": "text"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "domains were removed"
+    }
   },
   {
     "name": "add_sequence",
+    "wantStatements": [
+      "CREATE SEQUENCE billing.invoice_number_seq INCREMENT 10 MINVALUE 1000 MAXVALUE 9999 START 1000 CACHE 20 CYCLE;"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "sequences": [
         {
-          "schema": "billing",
-          "name": "invoice_number_seq",
-          "increment": 10,
           "minValue": 1000,
           "maxValue": 9999,
           "startWith": 1000,
           "cache": 20,
+          "schema": "billing",
+          "name": "invoice_number_seq",
+          "increment": 10,
           "cycle": true
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE SEQUENCE billing.invoice_number_seq INCREMENT 10 MINVALUE 1000 MAXVALUE 9999 START 1000 CACHE 20 CYCLE;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_owned_sequence_for_new_table",
+    "wantStatements": [
+      "CREATE SEQUENCE invoice_number_seq;",
+      "CREATE TABLE invoices (\n    number bigint DEFAULT nextval('invoice_number_seq')\n);",
+      "ALTER SEQUENCE invoice_number_seq OWNED BY invoices.number;"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "sequences": [
         {
           "name": "invoice_number_seq",
@@ -1947,64 +1983,64 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE SEQUENCE invoice_number_seq;",
-      "CREATE TABLE invoices (\n    number bigint DEFAULT nextval('invoice_number_seq')\n);",
-      "ALTER SEQUENCE invoice_number_seq OWNED BY invoices.number;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_sequence",
+    "wantErr": "sequence modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "sequences": [
         {
           "name": "invoice_number_seq",
           "increment": 1
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "sequences": [
         {
           "name": "invoice_number_seq",
           "increment": 10
         }
-      ]
-    },
-    "wantErr": "sequence modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_sequence",
+    "wantStatements": [
+      "DROP SEQUENCE invoice_number_seq;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "sequences": [
         {
           "name": "invoice_number_seq"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "sequences were removed"
+    }
   },
   {
     "name": "add_function",
+    "wantStatements": [
+      "CREATE FUNCTION touch_updated_at()\nRETURNS trigger\nLANGUAGE plpgsql\nVOLATILE\nAS $$\nBEGIN RETURN NEW; END\n$$;"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "name": "touch_updated_at",
@@ -2013,17 +2049,15 @@
           "body": "BEGIN RETURN NEW; END",
           "volatility": "VOLATILE"
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE FUNCTION touch_updated_at()\nRETURNS trigger\nLANGUAGE plpgsql\nVOLATILE\nAS $$\nBEGIN RETURN NEW; END\n$$;"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_function",
+    "wantErr": "function modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "name": "touch_updated_at",
@@ -2031,11 +2065,11 @@
           "returnType": "trigger",
           "body": "BEGIN RETURN NEW; END"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "name": "touch_updated_at",
@@ -2043,15 +2077,17 @@
           "returnType": "trigger",
           "body": "BEGIN NEW.updated_at = now(); RETURN NEW; END"
         }
-      ]
-    },
-    "wantErr": "function modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "add_function_comment",
+    "wantStatements": [
+      "COMMENT ON FUNCTION billing.invoice_total(uuid) IS 'Calculates invoice totals';"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "schema": "billing",
@@ -2066,11 +2102,11 @@
             }
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "schema": "billing",
@@ -2086,17 +2122,15 @@
             }
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "COMMENT ON FUNCTION billing.invoice_total(uuid) IS 'Calculates invoice totals';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_function_comment",
+    "wantErr": "function comment modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "name": "invoice_total",
@@ -2105,11 +2139,11 @@
           "body": "SELECT 1",
           "comment": "Calculates invoice totals"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "name": "invoice_total",
@@ -2118,15 +2152,17 @@
           "body": "SELECT 1",
           "comment": "Returns invoice totals"
         }
-      ]
-    },
-    "wantErr": "function comment modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_function",
+    "wantStatements": [
+      "DROP FUNCTION touch_updated_at();"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "functions": [
         {
           "name": "touch_updated_at",
@@ -2134,23 +2170,26 @@
           "returnType": "trigger",
           "body": "BEGIN RETURN NEW; END"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "functions were removed"
+    }
   },
   {
     "name": "add_view",
+    "wantStatements": [
+      "CREATE SECURITY BARRIER SECURITY INVOKER VIEW active_users (id) AS\n    SELECT id FROM users;",
+      "COMMENT ON VIEW active_users IS 'Active users';"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "views": [
         {
           "name": "active_users",
@@ -2165,66 +2204,71 @@
           "securityBarrier": true,
           "securityInvoker": true
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE SECURITY BARRIER SECURITY INVOKER VIEW active_users (id) AS\n    SELECT id FROM users;",
-      "COMMENT ON VIEW active_users IS 'Active users';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_view",
+    "wantErr": "view modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "views": [
         {
           "name": "active_users",
           "query": "SELECT id FROM users"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "views": [
         {
           "name": "active_users",
           "query": "SELECT id FROM users WHERE active"
         }
-      ]
-    },
-    "wantErr": "view modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_view",
+    "wantStatements": [
+      "DROP VIEW active_users;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "views": [
         {
           "name": "active_users",
           "query": "SELECT id FROM users"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "views were removed"
+    }
   },
   {
     "name": "add_materialized_view",
+    "wantStatements": [
+      "CREATE MATERIALIZED VIEW user_counts (total) AS\n    SELECT count(*) AS total FROM users\nWITH (fillfactor = 80)\nWITH NO DATA;",
+      "COMMENT ON MATERIALIZED VIEW user_counts IS 'Cached user count';"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "materializedViews": [
         {
+          "with": {
+            "fillfactor": "80"
+          },
           "name": "user_counts",
           "query": "SELECT count(*) AS total FROM users",
           "comment": "Cached user count",
@@ -2234,90 +2278,94 @@
           "dependsOn": [
             "users"
           ],
-          "with": {
-            "fillfactor": "80"
-          },
           "noData": true
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE MATERIALIZED VIEW user_counts (total) AS\n    SELECT count(*) AS total FROM users\nWITH (fillfactor = 80)\nWITH NO DATA;",
-      "COMMENT ON MATERIALIZED VIEW user_counts IS 'Cached user count';"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_materialized_view",
+    "wantErr": "materialized view modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "materializedViews": [
         {
           "name": "user_counts",
           "query": "SELECT count(*) AS total FROM users"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "materializedViews": [
         {
           "name": "user_counts",
           "query": "SELECT count(*) AS total FROM users WHERE active"
         }
-      ]
-    },
-    "wantErr": "materialized view modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_materialized_view",
+    "wantStatements": [
+      "DROP MATERIALIZED VIEW user_counts;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "materializedViews": [
         {
           "name": "user_counts",
           "query": "SELECT count(*) AS total FROM users"
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "materialized views were removed"
+    }
   },
   {
     "name": "triggers_changed",
+    "wantStatements": [
+      "CREATE TRIGGER users_touch_updated_at\nBEFORE UPDATE ON users\nFOR EACH STATEMENT\nEXECUTE FUNCTION touch_updated_at();"
+    ],
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
       "triggers": [
         {
-          "name": "users_touch_updated_at",
           "target": "users",
           "function": "touch_updated_at",
           "timing": "before",
+          "name": "users_touch_updated_at",
           "events": [
             "update"
           ]
         }
-      ]
-    },
-    "wantStatements": [
-      "CREATE TRIGGER users_touch_updated_at\nBEFORE UPDATE ON users\nFOR EACH STATEMENT\nEXECUTE FUNCTION touch_updated_at();"
-    ]
+      ],
+      "version": 1
+    }
   },
   {
     "name": "modify_trigger",
+    "wantErr": "trigger modifications require semantic planning",
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END"
+        }
+      ],
       "tables": [
         {
           "name": "users",
@@ -2329,29 +2377,29 @@
           ]
         }
       ],
-      "functions": [
-        {
-          "name": "touch_updated_at",
-          "language": "plpgsql",
-          "returnType": "trigger",
-          "body": "BEGIN RETURN NEW; END"
-        }
-      ],
       "triggers": [
         {
-          "name": "users_touch_updated_at",
           "target": "users",
           "function": "touch_updated_at",
           "timing": "before",
+          "name": "users_touch_updated_at",
           "events": [
             "update"
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
-      "version": 1,
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END"
+        }
+      ],
       "tables": [
         {
           "name": "users",
@@ -2363,49 +2411,43 @@
           ]
         }
       ],
-      "functions": [
-        {
-          "name": "touch_updated_at",
-          "language": "plpgsql",
-          "returnType": "trigger",
-          "body": "BEGIN RETURN NEW; END"
-        }
-      ],
       "triggers": [
         {
-          "name": "users_touch_updated_at",
           "target": "users",
           "function": "touch_updated_at",
           "timing": "after",
+          "name": "users_touch_updated_at",
           "events": [
             "update"
           ]
         }
-      ]
-    },
-    "wantErr": "trigger modifications require semantic planning"
+      ],
+      "version": 1
+    }
   },
   {
     "name": "drop_trigger",
+    "wantStatements": [
+      "DROP TRIGGER users_touch_updated_at ON users;"
+    ],
     "previous": {
       "dialect": "postgresql",
-      "version": 1,
       "triggers": [
         {
-          "name": "users_touch_updated_at",
           "target": "users",
           "function": "touch_updated_at",
           "timing": "before",
+          "name": "users_touch_updated_at",
           "events": [
             "update"
           ]
         }
-      ]
+      ],
+      "version": 1
     },
     "current": {
       "dialect": "postgresql",
       "version": 1
-    },
-    "wantErr": "triggers were removed"
+    }
   }
 ]

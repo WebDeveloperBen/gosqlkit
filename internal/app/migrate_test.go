@@ -346,6 +346,154 @@ func TestMigrateCheckWithConfigValidatesGooseAnnotations(t *testing.T) {
 	}
 }
 
+func TestMigrateCreateWithConfigRejectsDestructiveChangesByDefault(t *testing.T) {
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+
+	currentSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	destructivePrevious := snapshotWithExtraColumn(t, currentSnapshot, "users", "legacy_column", "text")
+	destructivePreviousID, err := snapshotIDFromJSON(destructivePrevious)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   destructivePreviousID,
+		TargetSnapshot: destructivePrevious,
+		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:          []string{"SELECT 1;"},
+		DownSQL:        nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(config.Migrations.Dir, file.Name), []byte(file.Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, err = MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:      "drop legacy",
+		CreatedAt: time.Date(2026, 7, 6, 14, 31, 0, 0, time.UTC),
+	})
+	if err == nil || !strings.Contains(err.Error(), "destructive") {
+		t.Fatalf("expected destructive guard error, got %v", err)
+	}
+
+	result, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:             "drop legacy",
+		AllowDestructive: true,
+		CreatedAt:        time.Date(2026, 7, 6, 14, 32, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("expected success with --allow-destructive, got %v", err)
+	}
+	content, err := os.ReadFile(result.Files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "ALTER TABLE users DROP COLUMN legacy_column;") {
+		t.Fatalf("expected migration to drop legacy_column, got:\n%s", content)
+	}
+}
+
+func TestMigratePlanWithConfigReportsDestructive(t *testing.T) {
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+
+	currentSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanPrevious := snapshotWithoutColumn(t, currentSnapshot, "users", "tags")
+	cleanPreviousID, err := snapshotIDFromJSON(cleanPrevious)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   cleanPreviousID,
+		TargetSnapshot: cleanPrevious,
+		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:          []string{"SELECT 1;"},
+		DownSQL:        nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(config.Migrations.Dir, file.Name), []byte(file.Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	result, err := MigratePlanWithConfig(config, MigratePlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Destructive != nil {
+		t.Fatalf("expected no destructive changes, got %d", len(result.Destructive))
+	}
+
+	destructivePrevious := snapshotWithExtraColumn(t, currentSnapshot, "users", "legacy_column", "text")
+	destructivePreviousID, err := snapshotIDFromJSON(destructivePrevious)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err = (goose.Renderer{}).Render(migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   destructivePreviousID,
+		TargetSnapshot: destructivePrevious,
+		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:          []string{"SELECT 1;"},
+		DownSQL:        nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(config.Migrations.Dir, file.Name), []byte(file.Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	result, err = MigratePlanWithConfig(config, MigratePlanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Destructive) == 0 {
+		t.Fatalf("expected destructive changes, got %#v", result)
+	}
+}
+
 func snapshotWithoutColumn(t *testing.T, snapshot, tableName, columnName string) string {
 	t.Helper()
 
@@ -385,6 +533,43 @@ func snapshotWithoutColumn(t *testing.T, snapshot, tableName, columnName string)
 		t.Fatal(err)
 	}
 	raw["columnMetadata"] = data
+
+	data, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := injectSnapshotIDs(string(data), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func snapshotWithExtraColumn(t *testing.T, snapshot, tableName, columnName, columnType string) string {
+	t.Helper()
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(snapshot), &raw); err != nil {
+		t.Fatal(err)
+	}
+	var tables []ast.Table
+	if err := json.Unmarshal(raw["tables"], &tables); err != nil {
+		t.Fatal(err)
+	}
+	for i := range tables {
+		if tables[i].Name != tableName {
+			continue
+		}
+		tables[i].Columns = append(tables[i].Columns, ast.Column{
+			Name: columnName,
+			Type: columnType,
+		})
+	}
+	data, err := json.Marshal(tables)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw["tables"] = data
 
 	data, err = json.Marshal(raw)
 	if err != nil {

@@ -36,7 +36,20 @@ func (p planner) roles(previous, current []pgschema.Role) error {
 		delete(prev, role.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("roles were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindRole, name),
+					"drop role "+name,
+					migrateplan.SQL("DROP ROLE "+name+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+				).WithReverse(
+					migrateplan.SQL(renderRole(prev[name])),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -78,7 +91,20 @@ func (p planner) namespaces(previous, current []pgschema.Namespace) error {
 		delete(prev, item.Name)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("schemas were removed")
+		for _, name := range sortedStrings(removedNames(prev)) {
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindSchema, name),
+					"drop schema "+name,
+					migrateplan.SQL("DROP SCHEMA "+name+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL("CREATE SCHEMA " + name + ";"),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -107,7 +133,25 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("extensions were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			extension := prev[key]
+			stmt := "CREATE EXTENSION " + extension.Name
+			if extension.Schema != "" {
+				stmt += " WITH SCHEMA " + extension.Schema
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+					"drop extension "+key,
+					migrateplan.SQL("DROP EXTENSION "+extension.Name+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+				).WithReverse(
+					migrateplan.SQL(stmt + ";"),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -140,7 +184,25 @@ func (p planner) enums(previous, current []pgschema.Enum) error {
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("enums were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			enum := prev[key]
+			values := make([]string, 0, len(enum.Values))
+			for _, value := range enum.Values {
+				values = append(values, quoteSQL(value))
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindEnum, key),
+					"drop enum "+key,
+					migrateplan.SQL("DROP TYPE "+renderQualified(enum.Schema, enum.Name)+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL("CREATE TYPE " + renderQualified(enum.Schema, enum.Name) + " AS ENUM (" + strings.Join(values, ", ") + ");"),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -198,7 +260,25 @@ func (p planner) compositeTypes(previous, current []pgschema.CompositeType) erro
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("composite types were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			compositeType := prev[key]
+			stmt, err := renderCompositeType(compositeType)
+			if err != nil {
+				return err
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindCompositeType, key),
+					"drop composite type "+key,
+					migrateplan.SQL("DROP TYPE "+renderQualified(compositeType.Schema, compositeType.Name)+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(stmt),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -231,7 +311,25 @@ func (p planner) domains(previous, current []pgschema.Domain) error {
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("domains were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			domain := prev[key]
+			stmt, err := renderDomain(domain)
+			if err != nil {
+				return err
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindDomain, key),
+					"drop domain "+key,
+					migrateplan.SQL("DROP DOMAIN "+renderQualified(domain.Schema, domain.Name)+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(stmt),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -274,14 +372,46 @@ func (p planner) functions(previous, current []pgschema.Function) error {
 			p.addWith(functionCommentChange(function))
 		} else if old.Comment != function.Comment {
 			if function.Comment == "" {
-				return unsupportedDestructive("function comments were removed")
+				p.addWith(
+					migrateplan.NewChange(
+						migrateplan.OperationAlter,
+						migrateplan.Ref(migrateplan.ObjectKindFunction, key),
+						"drop comment from function "+key,
+						migrateplan.SQL("COMMENT ON FUNCTION "+renderQualified(function.Schema, function.Name)+"("+renderFunctionIdentityArguments(function)+") IS NULL;"),
+					).WithDependencies(
+						migrateplan.Ref(migrateplan.ObjectKindFunction, key),
+					).WithRisks(
+						migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+					).WithReverse(
+						migrateplan.SQL("COMMENT ON FUNCTION " + renderQualified(function.Schema, function.Name) + "(" + renderFunctionIdentityArguments(function) + ") IS " + quoteSQL(old.Comment) + ";"),
+					),
+				)
+			} else {
+				return unsupported("function comment modifications require semantic planning")
 			}
-			return unsupported("function comment modifications require semantic planning")
 		}
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("functions were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			function := prev[key]
+			stmt, err := renderFunction(function)
+			if err != nil {
+				return err
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindFunction, key),
+					"drop function "+key,
+					migrateplan.SQL("DROP FUNCTION "+renderQualified(function.Schema, function.Name)+"("+renderFunctionIdentityArguments(function)+");"),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+				).WithReverse(
+					migrateplan.SQL(stmt),
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -324,7 +454,21 @@ func (p planner) sequences(previous, current []pgschema.Sequence) error {
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
-		return unsupportedDestructive("sequences were removed")
+		for _, key := range sortedStrings(removedNames(prev)) {
+			sequence := prev[key]
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindSequence, key),
+					"drop sequence "+key,
+					migrateplan.SQL("DROP SEQUENCE "+renderQualified(sequence.Schema, sequence.Name)+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(renderSequence(sequence, false)),
+				),
+			)
+		}
 	}
 	return nil
 }
