@@ -10,11 +10,30 @@ import (
 
 func (p planner) roles(previous, current []pgschema.Role) error {
 	prev := mapBy(previous, func(role pgschema.Role) string { return role.Name })
+	renames := roleRenameMap(prev, current)
 	for _, role := range sortedBy(current, func(item pgschema.Role) string { return item.Name }) {
 		old, ok := prev[role.Name]
 		if !ok {
 			if role.PreviousName != "" {
-				return unsupported("role " + role.Name + " rename metadata requires semantic planning")
+				oldRole, hasOld := prev[role.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyRole(role, oldRole); err != nil {
+						return err
+					}
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindRole, role.Name),
+							"rename role "+role.PreviousName+" to "+role.Name,
+							migrateplan.SQL(renderRenameRole(role.PreviousName, role.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameRole(role.Name, role.PreviousName)),
+						),
+					)
+					delete(prev, role.PreviousName)
+					continue
+				}
+				return unsupported("role " + role.Name + " previousName " + role.PreviousName + " does not match any role in the previous snapshot")
 			}
 			p.addWith(
 				migrateplan.NewChange(
@@ -30,7 +49,13 @@ func (p planner) roles(previous, current []pgschema.Role) error {
 			)
 			continue
 		}
-		if !reflect.DeepEqual(old, role) {
+		normalizedOld := old
+		normalizedOld.MemberOf = sortedStrings(applyRoleRenames(old.MemberOf, renames))
+		normalizedOld.AdminOf = sortedStrings(applyRoleRenames(old.AdminOf, renames))
+		normalizedCurrent := role
+		normalizedCurrent.MemberOf = sortedStrings(role.MemberOf)
+		normalizedCurrent.AdminOf = sortedStrings(role.AdminOf)
+		if !reflect.DeepEqual(normalizedOld, normalizedCurrent) {
 			return unsupported("role modifications require semantic planning")
 		}
 		delete(prev, role.Name)
@@ -54,6 +79,37 @@ func (p planner) roles(previous, current []pgschema.Role) error {
 	return nil
 }
 
+func roleRenameMap(prev map[string]pgschema.Role, current []pgschema.Role) map[string]string {
+	renames := make(map[string]string)
+	for _, role := range current {
+		if role.PreviousName == "" {
+			continue
+		}
+		if _, exists := prev[role.Name]; exists {
+			continue
+		}
+		if _, ok := prev[role.PreviousName]; ok {
+			renames[role.PreviousName] = role.Name
+		}
+	}
+	return renames
+}
+
+func applyRoleRenames(names []string, renames map[string]string) []string {
+	if len(names) == 0 || len(renames) == 0 {
+		return names
+	}
+	out := make([]string, len(names))
+	for i, name := range names {
+		if renamed, ok := renames[name]; ok {
+			out[i] = renamed
+		} else {
+			out[i] = name
+		}
+	}
+	return out
+}
+
 func roleDependencyRefs(role pgschema.Role) []migrateplan.ObjectRef {
 	refs := make([]migrateplan.ObjectRef, 0, len(role.MemberOf)+len(role.AdminOf))
 	for _, memberOf := range role.MemberOf {
@@ -69,13 +125,71 @@ func roleDependencyRefs(role pgschema.Role) []migrateplan.ObjectRef {
 	return uniqueRefs(refs)
 }
 
-func (p planner) namespaces(previous, current []pgschema.Namespace) error {
+func occupiedSchemas(doc pgschema.Document) map[string]bool {
+	occupied := make(map[string]bool)
+	mark := func(schema string) {
+		if schema != "" {
+			occupied[schema] = true
+		}
+	}
+	for _, table := range doc.Tables {
+		mark(table.Schema)
+	}
+	for _, enum := range doc.Enums {
+		mark(enum.Schema)
+	}
+	for _, compositeType := range doc.CompositeTypes {
+		mark(compositeType.Schema)
+	}
+	for _, domain := range doc.Domains {
+		mark(domain.Schema)
+	}
+	for _, sequence := range doc.Sequences {
+		mark(sequence.Schema)
+	}
+	for _, function := range doc.Functions {
+		mark(function.Schema)
+	}
+	for _, view := range doc.Views {
+		mark(view.Schema)
+	}
+	for _, materializedView := range doc.MaterializedViews {
+		mark(materializedView.Schema)
+	}
+	return occupied
+}
+
+func (p planner) namespaces(previous, current []pgschema.Namespace, occupied map[string]bool) error {
 	prev := make(map[string]pgschema.Namespace, len(previous))
 	for _, item := range previous {
 		prev[item.Name] = item
 	}
 	for _, item := range current {
 		if _, ok := prev[item.Name]; !ok {
+			if item.PreviousName != "" {
+				oldNS, hasOld := prev[item.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyNamespace(item, oldNS); err != nil {
+						return err
+					}
+					if occupied[item.PreviousName] {
+						return unsupported("schema " + item.PreviousName + " rename to " + item.Name + " is not supported while it contained objects; ALTER SCHEMA ... RENAME moves the schema and its contents together, but those objects carry the new schema in the snapshot and would be planned as drop-and-recreate — this requires semantic planning")
+					}
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindSchema, item.Name),
+							"rename schema "+item.PreviousName+" to "+item.Name,
+							migrateplan.SQL(renderRenameSchema(item.PreviousName, item.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameSchema(item.Name, item.PreviousName)),
+						),
+					)
+					delete(prev, item.PreviousName)
+					continue
+				}
+				return unsupported("namespace " + item.Name + " previousName " + item.PreviousName + " does not match any namespace in the previous snapshot")
+			}
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationCreate,
@@ -114,6 +228,9 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 	for _, item := range current {
 		key := qualified(item.Schema, item.Name)
 		if _, ok := prev[key]; !ok {
+			if item.PreviousName != "" {
+				return unsupported("extension " + key + " rename metadata requires manual review; PostgreSQL does not support ALTER EXTENSION ... RENAME TO; drop and recreate the extension manually")
+			}
 			stmt := "CREATE EXTENSION " + item.Name
 			if item.Schema != "" {
 				stmt += " WITH SCHEMA " + item.Schema
@@ -162,6 +279,28 @@ func (p planner) enums(previous, current []pgschema.Enum) error {
 		key := qualified(item.Schema, item.Name)
 		old, ok := prev[key]
 		if !ok {
+			if item.PreviousName != "" {
+				oldEnum, hasOld := prev[qualified(item.Schema, item.PreviousName)]
+				if hasOld {
+					if err := ensureRenameOnlyEnum(item, oldEnum); err != nil {
+						return err
+					}
+					oldKey := qualified(item.Schema, item.PreviousName)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindEnum, key),
+							"rename enum "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameType(item.Schema, item.PreviousName, item.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameType(item.Schema, item.Name, item.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("enum " + key + " previousName " + item.PreviousName + " does not match any enum in the previous snapshot")
+			}
 			values := make([]string, 0, len(item.Values))
 			for _, value := range item.Values {
 				values = append(values, quoteSQL(value))
@@ -238,6 +377,28 @@ func (p planner) compositeTypes(previous, current []pgschema.CompositeType) erro
 		key := qualified(compositeType.Schema, compositeType.Name)
 		old, ok := prev[key]
 		if !ok {
+			if compositeType.PreviousName != "" {
+				oldCT, hasOld := prev[qualified(compositeType.Schema, compositeType.PreviousName)]
+				if hasOld {
+					if err := ensureRenameOnlyCompositeType(compositeType, oldCT); err != nil {
+						return err
+					}
+					oldKey := qualified(compositeType.Schema, compositeType.PreviousName)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindCompositeType, key),
+							"rename composite type "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameType(compositeType.Schema, compositeType.PreviousName, compositeType.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameType(compositeType.Schema, compositeType.Name, compositeType.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("composite type " + key + " previousName " + compositeType.PreviousName + " does not match any composite type in the previous snapshot")
+			}
 			stmt, err := renderCompositeType(compositeType)
 			if err != nil {
 				return err
@@ -289,6 +450,28 @@ func (p planner) domains(previous, current []pgschema.Domain) error {
 		key := qualified(domain.Schema, domain.Name)
 		old, ok := prev[key]
 		if !ok {
+			if domain.PreviousName != "" {
+				oldDomain, hasOld := prev[qualified(domain.Schema, domain.PreviousName)]
+				if hasOld {
+					if err := ensureRenameOnlyDomain(domain, oldDomain); err != nil {
+						return err
+					}
+					oldKey := qualified(domain.Schema, domain.PreviousName)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindDomain, key),
+							"rename domain "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameType(domain.Schema, domain.PreviousName, domain.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameType(domain.Schema, domain.Name, domain.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("domain " + key + " previousName " + domain.PreviousName + " does not match any domain in the previous snapshot")
+			}
 			stmt, err := renderDomain(domain)
 			if err != nil {
 				return err
@@ -341,7 +524,26 @@ func (p planner) functions(previous, current []pgschema.Function) error {
 		old, ok := prev[key]
 		if !ok {
 			if function.PreviousName != "" {
-				return unsupported("function " + key + " rename metadata requires semantic planning")
+				oldFn, hasOld := prev[functionPreviousKey(function)]
+				if hasOld {
+					if err := ensureRenameOnlyFunction(function, oldFn); err != nil {
+						return err
+					}
+					identity := renderFunctionIdentityArguments(function)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindFunction, key),
+							"rename function "+functionPreviousKey(function)+" to "+key,
+							migrateplan.SQL(renderRenameFunction(function.Schema, function.PreviousName, function.Name, identity)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameFunction(function.Schema, function.Name, function.PreviousName, identity)),
+						),
+					)
+					delete(prev, functionPreviousKey(function))
+					continue
+				}
+				return unsupported("function " + key + " previousName " + function.PreviousName + " does not match any function in the previous snapshot")
 			}
 			stmt, err := renderFunction(function)
 			if err != nil {
@@ -436,6 +638,28 @@ func (p planner) sequences(previous, current []pgschema.Sequence) error {
 		key := sequenceKey(sequence)
 		old, ok := prev[key]
 		if !ok {
+			if sequence.PreviousName != "" {
+				oldSeq, hasOld := prev[sequencePreviousKey(sequence)]
+				if hasOld {
+					if err := ensureRenameOnlySequence(sequence, oldSeq); err != nil {
+						return err
+					}
+					oldKey := sequencePreviousKey(sequence)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindSequence, key),
+							"rename sequence "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameSequence(sequence.Schema, sequence.PreviousName, sequence.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameSequence(sequence.Schema, sequence.Name, sequence.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("sequence " + key + " previousName " + sequence.PreviousName + " does not match any sequence in the previous snapshot")
+			}
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationCreate,
@@ -482,6 +706,11 @@ func (p planner) sequenceOwnerships(previous, current []pgschema.Sequence) error
 		if _, ok := prev[sequenceKey(sequence)]; ok {
 			continue
 		}
+		if sequence.PreviousName != "" {
+			if _, ok := prev[sequencePreviousKey(sequence)]; ok {
+				continue
+			}
+		}
 		change := migrateplan.NewChange(
 			migrateplan.OperationAlter,
 			migrateplan.Ref(migrateplan.ObjectKindSequence, sequenceKey(sequence)),
@@ -496,6 +725,102 @@ func (p planner) sequenceOwnerships(previous, current []pgschema.Sequence) error
 			change = change.WithDependencies(migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(table)))
 		}
 		p.addWith(change)
+	}
+	return nil
+}
+
+func ensureRenameOnlyRole(role, oldRole pgschema.Role) error {
+	renamed := oldRole
+	renamed.Name = role.Name
+	renamed.PreviousName = ""
+	current := role
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("role " + role.Name + " rename from " + oldRole.Name + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyNamespace(item, old pgschema.Namespace) error {
+	renamed := old
+	renamed.Name = item.Name
+	renamed.PreviousName = ""
+	current := item
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("namespace " + item.Name + " rename from " + old.Name + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyEnum(item, old pgschema.Enum) error {
+	renamed := old
+	renamed.Name = item.Name
+	renamed.PreviousName = ""
+	current := item
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("enum " + qualified(item.Schema, item.Name) + " rename from " + qualified(old.Schema, old.Name) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyCompositeType(item, old pgschema.CompositeType) error {
+	renamed := old
+	renamed.Name = item.Name
+	renamed.PreviousName = ""
+	current := item
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("composite type " + qualified(item.Schema, item.Name) + " rename from " + qualified(old.Schema, old.Name) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyDomain(item, old pgschema.Domain) error {
+	renamed := old
+	renamed.Name = item.Name
+	renamed.PreviousName = ""
+	current := item
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("domain " + qualified(item.Schema, item.Name) + " rename from " + qualified(old.Schema, old.Name) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyFunction(function, old pgschema.Function) error {
+	renamed := old
+	renamed.Name = function.Name
+	renamed.PreviousName = ""
+	current := function
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("function " + functionKey(function) + " rename from " + functionPreviousKey(function) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlySequence(sequence, old pgschema.Sequence) error {
+	renamed := old
+	renamed.Name = sequence.Name
+	renamed.PreviousName = ""
+	current := sequence
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("sequence " + sequenceKey(sequence) + " rename from " + sequencePreviousKey(sequence) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyPolicy(policy, old pgschema.Policy) error {
+	renamed := old
+	renamed.Name = policy.Name
+	renamed.PreviousName = ""
+	current := policy
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("policy " + policyKey(policy) + " rename from " + policyPreviousKey(policy) + " combined with other modifications requires semantic planning")
 	}
 	return nil
 }

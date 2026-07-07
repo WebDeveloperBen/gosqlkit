@@ -3,12 +3,13 @@ package pgschema
 import "sort"
 
 type Domain struct {
-	Schema   string `json:"schema,omitempty"`
-	Name     string `json:"name"`
-	BaseType string `json:"baseType"`
-	Default  string `json:"default,omitempty"`
-	Check    string `json:"check,omitempty"`
-	NotNull  bool   `json:"notNull,omitempty"`
+	PreviousName string `json:"previousName,omitempty"`
+	Schema       string `json:"schema,omitempty"`
+	Name         string `json:"name"`
+	BaseType     string `json:"baseType"`
+	Default      string `json:"default,omitempty"`
+	Check        string `json:"check,omitempty"`
+	NotNull      bool   `json:"notNull,omitempty"`
 }
 
 func sortedDomains(input []Domain) []Domain {

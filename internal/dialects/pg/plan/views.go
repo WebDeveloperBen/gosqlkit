@@ -14,6 +14,30 @@ func (p planner) views(previous, current []pgschema.View, tables []ast.Table, ma
 		key := viewKey(view)
 		old, ok := prev[key]
 		if !ok {
+			if view.PreviousName != "" {
+				oldView, hasOld := prev[viewPreviousKey(view)]
+				if hasOld {
+					if err := ensureRenameOnlyView(view, oldView); err != nil {
+						return err
+					}
+					oldKey := viewPreviousKey(view)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindView, key),
+							"rename view "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameView(view.Schema, view.PreviousName, view.Name)),
+						).WithDependencies(
+							dependencyRefs(view.DependsOn, tables, current, materializedViews, migrateplan.Ref(migrateplan.ObjectKindView, key))...,
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameView(view.Schema, view.Name, view.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("view " + key + " previousName " + view.PreviousName + " does not match any view in the previous snapshot")
+			}
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationCreate,
@@ -62,6 +86,7 @@ func (p planner) views(previous, current []pgschema.View, tables []ast.Table, ma
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
+		allViews := append(append([]pgschema.View(nil), previous...), current...)
 		for _, key := range sortedStrings(removedNames(prev)) {
 			view := prev[key]
 			p.addWith(
@@ -71,7 +96,7 @@ func (p planner) views(previous, current []pgschema.View, tables []ast.Table, ma
 					"drop view "+key,
 					migrateplan.SQL("DROP VIEW "+renderQualified(view.Schema, view.Name)+";"),
 				).WithDependencies(
-					dependencyRefs(view.DependsOn, tables, current, materializedViews, migrateplan.Ref(migrateplan.ObjectKindView, key))...,
+					dependencyRefs(view.DependsOn, tables, allViews, materializedViews, migrateplan.Ref(migrateplan.ObjectKindView, key))...,
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
 				).WithReverse(
@@ -89,6 +114,30 @@ func (p planner) materializedViews(previous, current []pgschema.MaterializedView
 		key := materializedViewKey(view)
 		old, ok := prev[key]
 		if !ok {
+			if view.PreviousName != "" {
+				oldMV, hasOld := prev[materializedViewPreviousKey(view)]
+				if hasOld {
+					if err := ensureRenameOnlyMaterializedView(view, oldMV); err != nil {
+						return err
+					}
+					oldKey := materializedViewPreviousKey(view)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
+							"rename materialized view "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameMaterializedView(view.Schema, view.PreviousName, view.Name)),
+						).WithDependencies(
+							dependencyRefs(view.DependsOn, tables, views, current, migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key))...,
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameMaterializedView(view.Schema, view.Name, view.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("materialized view " + key + " previousName " + view.PreviousName + " does not match any materialized view in the previous snapshot")
+			}
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationCreate,
@@ -137,6 +186,7 @@ func (p planner) materializedViews(previous, current []pgschema.MaterializedView
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
+		allMaterializedViews := append(append([]pgschema.MaterializedView(nil), previous...), current...)
 		for _, key := range sortedStrings(removedNames(prev)) {
 			matView := prev[key]
 			p.addWith(
@@ -146,7 +196,7 @@ func (p planner) materializedViews(previous, current []pgschema.MaterializedView
 					"drop materialized view "+key,
 					migrateplan.SQL("DROP MATERIALIZED VIEW "+renderQualified(matView.Schema, matView.Name)+";"),
 				).WithDependencies(
-					dependencyRefs(matView.DependsOn, tables, views, current, migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key))...,
+					dependencyRefs(matView.DependsOn, tables, views, allMaterializedViews, migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key))...,
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
 				).WithReverse(
@@ -184,6 +234,30 @@ func materializedViewCommentChange(view pgschema.MaterializedView) migrateplan.C
 	).WithReverse(
 		migrateplan.SQL("COMMENT ON MATERIALIZED VIEW " + renderQualified(view.Schema, view.Name) + " IS NULL;"),
 	)
+}
+
+func ensureRenameOnlyView(view, old pgschema.View) error {
+	renamed := old
+	renamed.Name = view.Name
+	renamed.PreviousName = ""
+	current := view
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("view " + viewKey(view) + " rename from " + viewPreviousKey(view) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyMaterializedView(view, old pgschema.MaterializedView) error {
+	renamed := old
+	renamed.Name = view.Name
+	renamed.PreviousName = ""
+	current := view
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("materialized view " + materializedViewKey(view) + " rename from " + materializedViewPreviousKey(view) + " combined with other modifications requires semantic planning")
+	}
+	return nil
 }
 
 func dependencyRefs(dependsOn []string, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView, self migrateplan.ObjectRef) []migrateplan.ObjectRef {

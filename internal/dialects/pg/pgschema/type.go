@@ -3,9 +3,10 @@ package pgschema
 import "sort"
 
 type CompositeType struct {
-	Schema     string               `json:"schema,omitempty"`
-	Name       string               `json:"name"`
-	Attributes []CompositeAttribute `json:"attributes,omitempty"`
+	PreviousName string               `json:"previousName,omitempty"`
+	Schema       string               `json:"schema,omitempty"`
+	Name         string               `json:"name"`
+	Attributes   []CompositeAttribute `json:"attributes,omitempty"`
 }
 
 type CompositeAttribute struct {

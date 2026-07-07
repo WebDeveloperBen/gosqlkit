@@ -3,6 +3,7 @@ package pgschema
 import "sort"
 
 type View struct {
+	PreviousName    string   `json:"previousName,omitempty"`
 	Schema          string   `json:"schema,omitempty"`
 	Name            string   `json:"name"`
 	Query           string   `json:"query"`
@@ -15,6 +16,7 @@ type View struct {
 }
 
 type MaterializedView struct {
+	PreviousName  string            `json:"previousName,omitempty"`
 	With          map[string]string `json:"with,omitempty"`
 	Schema        string            `json:"schema,omitempty"`
 	Name          string            `json:"name"`

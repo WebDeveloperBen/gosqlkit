@@ -467,7 +467,7 @@ func TestSnapshotDiffRejectsUnsupportedCreateTableDetails(t *testing.T) {
 			wantErr: "exclusion constraint public.bookings.bookings_slot_excl rename metadata requires semantic planning",
 		},
 		{
-			name: "index rename metadata",
+			name: "index rename metadata on new table",
 			table: ast.Table{
 				Name:    "users",
 				Columns: []ast.Column{{Name: "email", Type: "text"}},
@@ -477,7 +477,7 @@ func TestSnapshotDiffRejectsUnsupportedCreateTableDetails(t *testing.T) {
 					Columns:      []ast.IndexColumn{{Expression: "email"}},
 				}},
 			},
-			wantErr: "index public.users.users_email_idx rename metadata requires semantic planning",
+			wantErr: "index public.users.users_email_idx previousName old_users_email_idx does not match any index in the previous snapshot",
 		},
 	}
 
@@ -523,8 +523,8 @@ func TestSnapshotDiffRejectsAddColumnRenameMetadata(t *testing.T) {
 	})
 
 	_, err := plan.SnapshotDiff(previous, current)
-	if err == nil || !strings.Contains(err.Error(), "column public.users.email rename metadata requires semantic planning") {
-		t.Fatalf("expected column rename metadata error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "column public.users.email previousName old_email does not match any column in the previous snapshot") {
+		t.Fatalf("expected column previousName mismatch error, got %v", err)
 	}
 }
 

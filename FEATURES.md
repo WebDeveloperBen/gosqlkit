@@ -315,15 +315,18 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 ### Slice 5: Rename-Aware Diffing
 
-- `[ ]` Table rename planning from `previousName`.
-- `[ ]` Column rename planning from `previousName`.
-- `[ ]` Constraint rename planning from `previousName`.
-- `[ ]` Index rename planning from `previousName`.
-- `[ ]` Enum/type rename planning from `previousName`.
-- `[ ]` Sequence, view, function, trigger, policy, and role rename planning.
-- `[ ]` Rename metadata validation against previous snapshot object keys.
-- `[ ]` Rename-plus-alter combinations fail closed until semantic planning
+- `[x]` Table rename planning from `previousName`.
+- `[x]` Column rename planning from `previousName`.
+- `[x]` Constraint rename planning from `previousName`.
+- `[x]` Index rename planning from `previousName`.
+- `[x]` Enum/type rename planning from `previousName`.
+- `[x]` Sequence, view, function, materialized view, policy, role, schema
+  rename planning.
+- `[x]` Rename metadata validation against previous snapshot object keys.
+- `[x]` Rename-plus-alter combinations fail closed until semantic planning
   supports them.
+- `[ ]` Trigger and extension rename (PostgreSQL does not support in-place
+  rename; requires manual review).
 
 ### Slice 6: Sandbox Replay and Drift Check
 
@@ -428,7 +431,8 @@ Other provider requirement:
 - `[x]` `gosqlkit snapshot --prev` for previous snapshot ID tracking.
 - `[x]` `gosqlkit snapshot --out`.
 - `[x]` `gosqlkit snapshot --check`.
-- `[~]` `gosqlkit migrate create <name>`.
+- `[x]` `gosqlkit migrate create <name>` (additive, destructive, and rename
+  changes, with per-change risk flags and best-effort down SQL).
 - `[x]` `gosqlkit migrate create <name> --empty`.
 - `[x]` `gosqlkit migrate create <name> --allow-destructive` to author a
   migration containing drops, RLS disables, or comment removals.

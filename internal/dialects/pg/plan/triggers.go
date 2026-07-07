@@ -15,7 +15,7 @@ func (p planner) triggers(previous, current []pgschema.Trigger, tables []ast.Tab
 		old, ok := prev[key]
 		if !ok {
 			if trigger.PreviousName != "" {
-				return unsupported("trigger " + key + " rename metadata requires semantic planning")
+				return unsupported("trigger " + key + " rename metadata requires manual review; PostgreSQL does not support ALTER TRIGGER ... RENAME TO; drop and recreate the trigger manually")
 			}
 			p.addWith(
 				migrateplan.NewChange(

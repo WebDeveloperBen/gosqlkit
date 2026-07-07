@@ -3,9 +3,10 @@ package pgschema
 import "sort"
 
 type Enum struct {
-	Schema string   `json:"schema,omitempty"`
-	Name   string   `json:"name"`
-	Values []string `json:"values"`
+	PreviousName string   `json:"previousName,omitempty"`
+	Schema       string   `json:"schema,omitempty"`
+	Name         string   `json:"name"`
+	Values       []string `json:"values"`
 }
 
 func sortedEnums(input []Enum) []Enum {

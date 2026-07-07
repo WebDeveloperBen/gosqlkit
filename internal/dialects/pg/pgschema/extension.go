@@ -3,8 +3,9 @@ package pgschema
 import "sort"
 
 type Extension struct {
-	Name   string `json:"name"`
-	Schema string `json:"schema,omitempty"`
+	PreviousName string `json:"previousName,omitempty"`
+	Name         string `json:"name"`
+	Schema       string `json:"schema,omitempty"`
 }
 
 func sortedExtensions(input []Extension) []Extension {

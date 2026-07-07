@@ -639,3 +639,99 @@ func renderQualified(schema, name string) string {
 	}
 	return schema + "." + name
 }
+
+func renderRenameTable(oldSchema, oldName, newName string) string {
+	return "ALTER TABLE " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameTable(oldSchema, newName, oldName string) string {
+	return "ALTER TABLE " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameColumn(schema, table, oldColumn, newColumn string) string {
+	return "ALTER TABLE " + renderQualified(schema, table) + " RENAME COLUMN " + oldColumn + " TO " + newColumn + ";"
+}
+
+func renderReverseRenameColumn(schema, table, newColumn, oldColumn string) string {
+	return "ALTER TABLE " + renderQualified(schema, table) + " RENAME COLUMN " + newColumn + " TO " + oldColumn + ";"
+}
+
+func renderRenameConstraint(schema, table, oldName, newName string) string {
+	return "ALTER TABLE " + renderQualified(schema, table) + " RENAME CONSTRAINT " + oldName + " TO " + newName + ";"
+}
+
+func renderReverseRenameConstraint(schema, table, newName, oldName string) string {
+	return "ALTER TABLE " + renderQualified(schema, table) + " RENAME CONSTRAINT " + newName + " TO " + oldName + ";"
+}
+
+func renderRenameIndex(oldSchema, oldName, newName string) string {
+	return "ALTER INDEX " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameIndex(oldSchema, newName, oldName string) string {
+	return "ALTER INDEX " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameType(oldSchema, oldName, newName string) string {
+	return "ALTER TYPE " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameType(oldSchema, newName, oldName string) string {
+	return "ALTER TYPE " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameSequence(oldSchema, oldName, newName string) string {
+	return "ALTER SEQUENCE " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameSequence(oldSchema, newName, oldName string) string {
+	return "ALTER SEQUENCE " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameView(oldSchema, oldName, newName string) string {
+	return "ALTER VIEW " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameView(oldSchema, newName, oldName string) string {
+	return "ALTER VIEW " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameMaterializedView(oldSchema, oldName, newName string) string {
+	return "ALTER MATERIALIZED VIEW " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameMaterializedView(oldSchema, newName, oldName string) string {
+	return "ALTER MATERIALIZED VIEW " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameFunction(oldSchema, oldName, newName, identityArgs string) string {
+	return "ALTER FUNCTION " + renderQualified(oldSchema, oldName) + "(" + identityArgs + ") RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameFunction(oldSchema, newName, oldName, identityArgs string) string {
+	return "ALTER FUNCTION " + renderQualified(oldSchema, newName) + "(" + identityArgs + ") RENAME TO " + oldName + ";"
+}
+
+func renderRenamePolicy(table, oldName, newName string) string {
+	return "ALTER POLICY " + oldName + " ON " + renderReferencedTable(table) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenamePolicy(table, newName, oldName string) string {
+	return "ALTER POLICY " + newName + " ON " + renderReferencedTable(table) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameRole(oldName, newName string) string {
+	return "ALTER ROLE " + oldName + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameRole(newName, oldName string) string {
+	return "ALTER ROLE " + newName + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameSchema(oldName, newName string) string {
+	return "ALTER SCHEMA " + oldName + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameSchema(newName, oldName string) string {
+	return "ALTER SCHEMA " + newName + " RENAME TO " + oldName + ";"
+}

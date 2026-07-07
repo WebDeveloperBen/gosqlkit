@@ -13,6 +13,28 @@ func (p planner) tables(previous, current []ast.Table) error {
 		key := tableKey(table)
 		old, ok := prev[key]
 		if !ok {
+			if table.PreviousName != "" {
+				oldKey := qualified(table.Schema, table.PreviousName)
+				renamed, hasOld := prev[oldKey]
+				if hasOld {
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindTable, key),
+							"rename table "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameTable(renamed.Schema, renamed.Name, table.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameTable(table.Schema, table.Name, table.PreviousName)),
+						),
+					)
+					if err := p.table(renamed, table); err != nil {
+						return err
+					}
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("table " + key + " previousName " + table.PreviousName + " does not match any table in the previous snapshot")
+			}
 			if err := ensureCreateTableSupported(table); err != nil {
 				return err
 			}
@@ -73,6 +95,30 @@ func (p planner) table(previous, current ast.Table) error {
 	for _, column := range current.Columns {
 		old, ok := prevColumns[column.Name]
 		if !ok {
+			if column.PreviousName != "" {
+				oldCol, hasOld := prevColumns[column.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyColumn(current, column, oldCol); err != nil {
+						return err
+					}
+					key := tableKey(current) + "." + column.Name
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindColumn, key),
+							"rename column "+tableKey(current)+"."+column.PreviousName+" to "+key,
+							migrateplan.SQL(renderRenameColumn(current.Schema, current.Name, column.PreviousName, column.Name)),
+						).WithDependencies(
+							migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameColumn(current.Schema, current.Name, column.Name, column.PreviousName)),
+						),
+					)
+					delete(prevColumns, column.PreviousName)
+					continue
+				}
+				return unsupported("column " + tableKey(current) + "." + column.Name + " previousName " + column.PreviousName + " does not match any column in the previous snapshot")
+			}
 			if err := ensureAddColumnSupported(current, column); err != nil {
 				return err
 			}
@@ -154,6 +200,9 @@ func (p planner) table(previous, current ast.Table) error {
 	withoutColumnsCurrent.RowLevelSecurity = false
 	withoutColumnsPrevious.ForceRLS = false
 	withoutColumnsCurrent.ForceRLS = false
+	withoutColumnsPrevious.PreviousName = ""
+	withoutColumnsCurrent.PreviousName = ""
+	withoutColumnsPrevious.Name = withoutColumnsCurrent.Name
 	if !reflect.DeepEqual(withoutColumnsPrevious, withoutColumnsCurrent) {
 		return unsupported("table constraint, index, RLS, or comment changes require semantic planning")
 	}
@@ -185,7 +234,17 @@ func (p planner) primaryKeys(previous, current ast.Table) error {
 		old, ok := prev[primaryKey.Name]
 		if !ok {
 			if primaryKey.PreviousName != "" {
-				return unsupported("primary key " + tableKey(current) + "." + primaryKey.Name + " rename metadata requires semantic planning")
+				oldPK, hasOld := prev[primaryKey.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyPrimaryKey(current, primaryKey, oldPK); err != nil {
+						return err
+					}
+					key := tableKey(current) + "." + primaryKey.Name
+					p.addConstraintRename(current, primaryKey.PreviousName, primaryKey.Name, "primary key", key)
+					delete(prev, primaryKey.PreviousName)
+					continue
+				}
+				return unsupported("primary key " + tableKey(current) + "." + primaryKey.Name + " previousName " + primaryKey.PreviousName + " does not match any primary key in the previous snapshot")
 			}
 			p.addConstraint(current, primaryKey.Name, "add primary key "+tableKey(current)+"."+primaryKey.Name, renderPrimaryKeyConstraint(primaryKey), nil)
 			continue
@@ -208,6 +267,8 @@ func (p planner) primaryKeys(previous, current ast.Table) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " ADD " + renderPrimaryKeyConstraint(prev[name]) + ";"),
 				),
 			)
 		}
@@ -221,7 +282,17 @@ func (p planner) uniqueConstraints(previous, current ast.Table) error {
 		old, ok := prev[unique.Name]
 		if !ok {
 			if unique.PreviousName != "" {
-				return unsupported("unique constraint " + tableKey(current) + "." + unique.Name + " rename metadata requires semantic planning")
+				oldUQ, hasOld := prev[unique.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyUniqueConstraint(current, unique, oldUQ); err != nil {
+						return err
+					}
+					key := tableKey(current) + "." + unique.Name
+					p.addConstraintRename(current, unique.PreviousName, unique.Name, "unique constraint", key)
+					delete(prev, unique.PreviousName)
+					continue
+				}
+				return unsupported("unique constraint " + tableKey(current) + "." + unique.Name + " previousName " + unique.PreviousName + " does not match any unique constraint in the previous snapshot")
 			}
 			p.addConstraint(current, unique.Name, "add unique constraint "+tableKey(current)+"."+unique.Name, renderUniqueConstraint(unique), nil)
 			continue
@@ -244,6 +315,8 @@ func (p planner) uniqueConstraints(previous, current ast.Table) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " ADD " + renderUniqueConstraint(prev[name]) + ";"),
 				),
 			)
 		}
@@ -257,7 +330,17 @@ func (p planner) foreignKeys(previous, current ast.Table) error {
 		old, ok := prev[foreignKey.Name]
 		if !ok {
 			if foreignKey.PreviousName != "" {
-				return unsupported("foreign key " + tableKey(current) + "." + foreignKey.Name + " rename metadata requires semantic planning")
+				oldFK, hasOld := prev[foreignKey.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyForeignKey(current, foreignKey, oldFK); err != nil {
+						return err
+					}
+					key := tableKey(current) + "." + foreignKey.Name
+					p.addConstraintRename(current, foreignKey.PreviousName, foreignKey.Name, "foreign key", key)
+					delete(prev, foreignKey.PreviousName)
+					continue
+				}
+				return unsupported("foreign key " + tableKey(current) + "." + foreignKey.Name + " previousName " + foreignKey.PreviousName + " does not match any foreign key in the previous snapshot")
 			}
 			p.addConstraint(
 				current,
@@ -286,6 +369,8 @@ func (p planner) foreignKeys(previous, current ast.Table) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " ADD " + renderForeignKeyConstraint(prev[name]) + ";"),
 				),
 			)
 		}
@@ -299,7 +384,17 @@ func (p planner) checks(previous, current ast.Table) error {
 		old, ok := prev[check.Name]
 		if !ok {
 			if check.PreviousName != "" {
-				return unsupported("check constraint " + tableKey(current) + "." + check.Name + " rename metadata requires semantic planning")
+				oldCheck, hasOld := prev[check.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyCheck(current, check, oldCheck); err != nil {
+						return err
+					}
+					key := tableKey(current) + "." + check.Name
+					p.addConstraintRename(current, check.PreviousName, check.Name, "check constraint", key)
+					delete(prev, check.PreviousName)
+					continue
+				}
+				return unsupported("check constraint " + tableKey(current) + "." + check.Name + " previousName " + check.PreviousName + " does not match any check constraint in the previous snapshot")
 			}
 			p.addConstraint(current, check.Name, "add check constraint "+tableKey(current)+"."+check.Name, renderCheckConstraint(check), nil)
 			continue
@@ -322,6 +417,8 @@ func (p planner) checks(previous, current ast.Table) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
 				).WithRisks(
 					migrateplan.RiskDestructive,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " ADD " + renderCheckConstraint(prev[name]) + ";"),
 				),
 			)
 		}
@@ -335,7 +432,17 @@ func (p planner) exclusions(previous, current ast.Table) error {
 		old, ok := prev[exclusion.Name]
 		if !ok {
 			if exclusion.PreviousName != "" {
-				return unsupported("exclusion constraint " + tableKey(current) + "." + exclusion.Name + " rename metadata requires semantic planning")
+				oldExcl, hasOld := prev[exclusion.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyExclusion(current, exclusion, oldExcl); err != nil {
+						return err
+					}
+					key := tableKey(current) + "." + exclusion.Name
+					p.addConstraintRename(current, exclusion.PreviousName, exclusion.Name, "exclusion constraint", key)
+					delete(prev, exclusion.PreviousName)
+					continue
+				}
+				return unsupported("exclusion constraint " + tableKey(current) + "." + exclusion.Name + " previousName " + exclusion.PreviousName + " does not match any exclusion constraint in the previous snapshot")
 			}
 			p.addConstraint(current, exclusion.Name, "add exclusion constraint "+tableKey(current)+"."+exclusion.Name, renderExclusionConstraint(exclusion), nil)
 			continue
@@ -358,6 +465,8 @@ func (p planner) exclusions(previous, current ast.Table) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " ADD " + renderExclusionConstraint(prev[name]) + ";"),
 				),
 			)
 		}
@@ -381,11 +490,51 @@ func (p planner) addConstraint(table ast.Table, name, summary, definition string
 	)
 }
 
+func (p planner) addConstraintRename(table ast.Table, oldName, newName, kindLabel, key string) {
+	p.addWith(
+		migrateplan.NewChange(
+			migrateplan.OperationRename,
+			migrateplan.Ref(migrateplan.ObjectKindConstraint, key),
+			"rename "+kindLabel+" "+tableKey(table)+"."+oldName+" to "+key,
+			migrateplan.SQL(renderRenameConstraint(table.Schema, table.Name, oldName, newName)),
+		).WithDependencies(
+			migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(table)),
+		).WithReverse(
+			migrateplan.SQL(renderReverseRenameConstraint(table.Schema, table.Name, newName, oldName)),
+		),
+	)
+}
+
 func (p planner) indexes(previous, current ast.Table) error {
 	prev := mapBy(previous.Indexes, func(index ast.Index) string { return index.Name })
 	for _, index := range sortedBy(current.Indexes, func(item ast.Index) string { return item.Name }) {
 		old, ok := prev[index.Name]
 		if !ok {
+			if index.PreviousName != "" {
+				oldIdx, hasOld := prev[index.PreviousName]
+				if hasOld {
+					if err := ensureRenameOnlyIndex(current, index, oldIdx); err != nil {
+						return err
+					}
+					table := tableKey(current)
+					key := table + "." + index.Name
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindIndex, key),
+							"rename index "+table+"."+index.PreviousName+" to "+key,
+							migrateplan.SQL(renderRenameIndex(current.Schema, index.PreviousName, index.Name)),
+						).WithDependencies(
+							migrateplan.Ref(migrateplan.ObjectKindTable, table),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameIndex(current.Schema, index.Name, index.PreviousName)),
+						),
+					)
+					delete(prev, index.PreviousName)
+					continue
+				}
+				return unsupported("index " + tableKey(current) + "." + index.Name + " previousName " + index.PreviousName + " does not match any index in the previous snapshot")
+			}
 			if err := ensureAddIndexSupported(current, index); err != nil {
 				return err
 			}
@@ -417,6 +566,10 @@ func (p planner) indexes(previous, current ast.Table) error {
 	if len(prev) > 0 {
 		for _, name := range sortedStrings(removedNames(prev)) {
 			key := tableKey(current) + "." + name
+			reverse, err := renderIndex(current, prev[name])
+			if err != nil {
+				return err
+			}
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationDrop,
@@ -427,6 +580,8 @@ func (p planner) indexes(previous, current ast.Table) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(current)),
 				).WithRisks(
 					migrateplan.RiskDestructive, migrateplan.RiskLockHeavy,
+				).WithReverse(
+					migrateplan.SQL(reverse),
 				),
 			)
 		}
@@ -622,6 +777,104 @@ func ensureAddColumnSupported(table ast.Table, column ast.Column) error {
 	key := tableKey(table) + "." + column.Name
 	if column.PreviousName != "" {
 		return unsupported("column " + key + " rename metadata requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyColumn(table ast.Table, column, oldColumn ast.Column) error {
+	key := tableKey(table) + "." + column.Name
+	oldKey := tableKey(table) + "." + oldColumn.Name
+	renamed := oldColumn
+	renamed.Name = column.Name
+	renamed.PreviousName = ""
+	current := column
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("column " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyPrimaryKey(table ast.Table, primaryKey, oldPrimaryKey ast.PrimaryKey) error {
+	key := tableKey(table) + "." + primaryKey.Name
+	oldKey := tableKey(table) + "." + oldPrimaryKey.Name
+	renamed := oldPrimaryKey
+	renamed.Name = primaryKey.Name
+	renamed.PreviousName = ""
+	current := primaryKey
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("primary key " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyUniqueConstraint(table ast.Table, unique, oldUnique ast.UniqueConstraint) error {
+	key := tableKey(table) + "." + unique.Name
+	oldKey := tableKey(table) + "." + oldUnique.Name
+	renamed := oldUnique
+	renamed.Name = unique.Name
+	renamed.PreviousName = ""
+	current := unique
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("unique constraint " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyForeignKey(table ast.Table, foreignKey, oldForeignKey ast.ForeignKeyConstraint) error {
+	key := tableKey(table) + "." + foreignKey.Name
+	oldKey := tableKey(table) + "." + oldForeignKey.Name
+	renamed := oldForeignKey
+	renamed.Name = foreignKey.Name
+	renamed.PreviousName = ""
+	current := foreignKey
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("foreign key " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyCheck(table ast.Table, check, oldCheck ast.Check) error {
+	key := tableKey(table) + "." + check.Name
+	oldKey := tableKey(table) + "." + oldCheck.Name
+	renamed := oldCheck
+	renamed.Name = check.Name
+	renamed.PreviousName = ""
+	current := check
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("check constraint " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyExclusion(table ast.Table, exclusion, oldExclusion ast.ExclusionConstraint) error {
+	key := tableKey(table) + "." + exclusion.Name
+	oldKey := tableKey(table) + "." + oldExclusion.Name
+	renamed := oldExclusion
+	renamed.Name = exclusion.Name
+	renamed.PreviousName = ""
+	current := exclusion
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("exclusion constraint " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyIndex(table ast.Table, index, oldIndex ast.Index) error {
+	key := tableKey(table) + "." + index.Name
+	oldKey := tableKey(table) + "." + oldIndex.Name
+	renamed := oldIndex
+	renamed.Name = index.Name
+	renamed.PreviousName = ""
+	current := index
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("index " + key + " rename from " + oldKey + " combined with other modifications requires semantic planning")
 	}
 	return nil
 }

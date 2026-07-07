@@ -437,7 +437,8 @@ tracks are roughly:
    snapshot ID, schema/table/column/view/role/function/trigger/policy metadata maps, stable
    object keys, rename annotations, squashed/normalised diff representation.
    Prerequisite for high-quality migration diffing. Mostly landed; rename-aware
-   diffing is the remaining open piece (Slice 5).
+   diffing (Slice 5) and column-modification / replacement planning are the
+   remaining open pieces.
 3. **Database connectivity + introspection + diff** — cross-dialect migration
    IR, dialect planners, sandbox validation, drift checks, and provider-pluggable
    token auth for Azure/AWS/GCP. Largest track (Slices 6 and 7).
@@ -568,10 +569,13 @@ update of this file:
   (`destructive`, `data-loss`, `lock-heavy`, `manual-review`,
   `requires-ddl-review`) and best-effort reverse SQL. Destructive changes
   (drops, RLS disables, comment removals) fail by default and require
-  `--allow-destructive` to author.
-- **Next tracks**: rename-aware diffing (Slice 5), sandbox replay and drift
-  check (Slice 6), auth/apply/runner expansion (Slice 7), then advanced PG
-  objects (partitioning, grants).
+  `--allow-destructive` to author. Renames (table, column, constraint,
+  index, enum/type, sequence, view, materialized view, function, policy,
+  role, schema) are planned as `ALTER ... RENAME TO` with a reverse
+  `RENAME TO old_name`; mismatched `previousName` and rename-plus-alter
+  combinations fail closed.
+- **Next tracks**: sandbox replay and drift check (Slice 6), auth/apply/runner
+  expansion (Slice 7), then advanced PG objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

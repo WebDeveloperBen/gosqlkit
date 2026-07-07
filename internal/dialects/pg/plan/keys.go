@@ -32,6 +32,10 @@ func policyKey(policy pgschema.Policy) string {
 	return referencedTableKey(policy.Table) + "." + policy.Name
 }
 
+func policyPreviousKey(policy pgschema.Policy) string {
+	return referencedTableKey(policy.Table) + "." + policy.PreviousName
+}
+
 func triggerKey(trigger pgschema.Trigger) string {
 	return referencedTableKey(trigger.Target) + "." + trigger.Name
 }
@@ -40,16 +44,32 @@ func viewKey(view pgschema.View) string {
 	return qualified(view.Schema, view.Name)
 }
 
+func viewPreviousKey(view pgschema.View) string {
+	return qualified(view.Schema, view.PreviousName)
+}
+
 func materializedViewKey(view pgschema.MaterializedView) string {
 	return qualified(view.Schema, view.Name)
+}
+
+func materializedViewPreviousKey(view pgschema.MaterializedView) string {
+	return qualified(view.Schema, view.PreviousName)
 }
 
 func sequenceKey(sequence pgschema.Sequence) string {
 	return qualified(sequence.Schema, sequence.Name)
 }
 
+func sequencePreviousKey(sequence pgschema.Sequence) string {
+	return qualified(sequence.Schema, sequence.PreviousName)
+}
+
 func functionKey(function pgschema.Function) string {
 	return qualified(function.Schema, function.Name) + "(" + renderFunctionIdentityArguments(function) + ")"
+}
+
+func functionPreviousKey(function pgschema.Function) string {
+	return qualified(function.Schema, function.PreviousName) + "(" + renderFunctionIdentityArguments(function) + ")"
 }
 
 func renderFunctionIdentityArguments(function pgschema.Function) string {

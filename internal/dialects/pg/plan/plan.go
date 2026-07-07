@@ -31,7 +31,7 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.roles(previous.Roles, current.Roles); err != nil {
 		return nil, err
 	}
-	if err := planner.namespaces(previous.Namespaces, current.Namespaces); err != nil {
+	if err := planner.namespaces(previous.Namespaces, current.Namespaces, occupiedSchemas(previous)); err != nil {
 		return nil, err
 	}
 	if err := planner.extensions(previous.Extensions, current.Extensions); err != nil {
@@ -111,6 +111,22 @@ func sortChangesByDependencies(changes []migrateplan.Change) ([]migrateplan.Chan
 		byObject[change.Object] = i
 	}
 
+	// A dependency edge means the referenced object must exist before this
+	// change. For creates/alters that means the dependency is emitted first.
+	// For drops the ordering inverts: an object must be dropped before the
+	// objects it depends on, so a dropped object's dependents (other drops
+	// that reference it) must be emitted first. dropDependents maps an object
+	// ref to the drop changes that depend on it.
+	dropDependents := make(map[migrateplan.ObjectRef][]int, len(changes))
+	for i, change := range changes {
+		if change.Op != migrateplan.OperationDrop {
+			continue
+		}
+		for _, dependency := range change.Dependencies {
+			dropDependents[dependency] = append(dropDependents[dependency], i)
+		}
+	}
+
 	visiting := make(map[int]bool, len(changes))
 	visited := make(map[int]bool, len(changes))
 	sorted := make([]migrateplan.Change, 0, len(changes))
@@ -124,13 +140,27 @@ func sortChangesByDependencies(changes []migrateplan.Change) ([]migrateplan.Chan
 			return unsupported("migration changes have a dependency cycle")
 		}
 		visiting[i] = true
-		for _, dependency := range changes[i].Dependencies {
-			j, ok := byObject[dependency]
-			if !ok || j == i {
-				continue
+		if changes[i].Op == migrateplan.OperationDrop {
+			for _, j := range dropDependents[changes[i].Object] {
+				if j == i {
+					continue
+				}
+				if err := visit(j); err != nil {
+					return err
+				}
 			}
-			if err := visit(j); err != nil {
-				return err
+		} else {
+			for _, dependency := range changes[i].Dependencies {
+				j, ok := byObject[dependency]
+				if !ok || j == i {
+					continue
+				}
+				if changes[j].Op == migrateplan.OperationDrop {
+					continue
+				}
+				if err := visit(j); err != nil {
+					return err
+				}
 			}
 		}
 		visiting[i] = false

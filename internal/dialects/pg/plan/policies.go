@@ -14,7 +14,27 @@ func (p planner) policies(previous, current []pgschema.Policy) error {
 		old, ok := prev[key]
 		if !ok {
 			if policy.PreviousName != "" {
-				return unsupported("policy " + key + " rename metadata requires semantic planning")
+				oldPolicy, hasOld := prev[policyPreviousKey(policy)]
+				if hasOld {
+					if err := ensureRenameOnlyPolicy(policy, oldPolicy); err != nil {
+						return err
+					}
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindPolicy, key),
+							"rename policy "+policyPreviousKey(policy)+" to "+key,
+							migrateplan.SQL(renderRenamePolicy(policy.Table, policy.PreviousName, policy.Name)),
+						).WithDependencies(
+							migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(policy.Table)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenamePolicy(policy.Table, policy.Name, policy.PreviousName)),
+						),
+					)
+					delete(prev, policyPreviousKey(policy))
+					continue
+				}
+				return unsupported("policy " + key + " previousName " + policy.PreviousName + " does not match any policy in the previous snapshot")
 			}
 			p.addWith(
 				migrateplan.NewChange(
@@ -48,6 +68,8 @@ func (p planner) policies(previous, current []pgschema.Policy) error {
 					migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(policy.Table)),
 				).WithRisks(
 					migrateplan.RiskDestructive,
+				).WithReverse(
+					migrateplan.SQL(renderPolicy(policy)),
 				),
 			)
 		}

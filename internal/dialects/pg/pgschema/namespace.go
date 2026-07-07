@@ -3,7 +3,8 @@ package pgschema
 import "sort"
 
 type Namespace struct {
-	Name string `json:"name"`
+	PreviousName string `json:"previousName,omitempty"`
+	Name         string `json:"name"`
 }
 
 func sortedNamespaces(input []Namespace) []Namespace {
