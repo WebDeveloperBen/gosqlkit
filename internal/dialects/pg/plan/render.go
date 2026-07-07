@@ -52,6 +52,293 @@ func appendBoolRoleOption(parts []string, value *bool, on, off string) []string 
 	return append(parts, off)
 }
 
+func renderSequence(sequence pgschema.Sequence, includeOwnedBy bool) string {
+	var b strings.Builder
+	b.WriteString("CREATE SEQUENCE ")
+	b.WriteString(renderQualified(sequence.Schema, sequence.Name))
+	if sequence.Increment != 0 {
+		fmt.Fprintf(&b, " INCREMENT %d", sequence.Increment)
+	}
+	if sequence.MinValue != nil {
+		fmt.Fprintf(&b, " MINVALUE %d", *sequence.MinValue)
+	}
+	if sequence.MaxValue != nil {
+		fmt.Fprintf(&b, " MAXVALUE %d", *sequence.MaxValue)
+	}
+	if sequence.StartWith != nil {
+		fmt.Fprintf(&b, " START %d", *sequence.StartWith)
+	}
+	if sequence.Cache != nil {
+		fmt.Fprintf(&b, " CACHE %d", *sequence.Cache)
+	}
+	if sequence.Cycle {
+		b.WriteString(" CYCLE")
+	}
+	if includeOwnedBy && sequence.OwnedBy != "" {
+		b.WriteString(" OWNED BY ")
+		b.WriteString(sequence.OwnedBy)
+	}
+	b.WriteString(";")
+	return b.String()
+}
+
+func renderCompositeType(compositeType pgschema.CompositeType) (string, error) {
+	if len(compositeType.Attributes) == 0 {
+		return "", fmt.Errorf("composite type %q must have at least one attribute", renderQualified(compositeType.Schema, compositeType.Name))
+	}
+
+	var b strings.Builder
+	b.WriteString("CREATE TYPE ")
+	b.WriteString(renderQualified(compositeType.Schema, compositeType.Name))
+	b.WriteString(" AS (\n")
+	lines := make([]string, 0, len(compositeType.Attributes))
+	for _, attribute := range compositeType.Attributes {
+		if strings.TrimSpace(attribute.Type) == "" {
+			return "", fmt.Errorf("composite type %q attribute %q must have a type", compositeType.Name, attribute.Name)
+		}
+		lines = append(lines, "    "+attribute.Name+" "+attribute.Type)
+	}
+	b.WriteString(strings.Join(lines, ",\n"))
+	b.WriteString("\n);")
+	return b.String(), nil
+}
+
+func renderDomain(domain pgschema.Domain) (string, error) {
+	if strings.TrimSpace(domain.BaseType) == "" {
+		return "", fmt.Errorf("domain %q must have a base type", renderQualified(domain.Schema, domain.Name))
+	}
+
+	var b strings.Builder
+	b.WriteString("CREATE DOMAIN ")
+	b.WriteString(renderQualified(domain.Schema, domain.Name))
+	b.WriteString(" AS ")
+	b.WriteString(domain.BaseType)
+	if domain.Default != "" {
+		b.WriteString(" DEFAULT ")
+		b.WriteString(domain.Default)
+	}
+	if domain.NotNull {
+		b.WriteString(" NOT NULL")
+	}
+	if domain.Check != "" {
+		b.WriteString(" CHECK (")
+		b.WriteString(domain.Check)
+		b.WriteString(")")
+	}
+	b.WriteString(";")
+	return b.String(), nil
+}
+
+func renderFunction(function pgschema.Function) (string, error) {
+	if strings.TrimSpace(function.Language) == "" {
+		return "", fmt.Errorf("function %q must have a language", functionKey(function))
+	}
+	if strings.TrimSpace(function.ReturnType) == "" {
+		return "", fmt.Errorf("function %q must have a return type", functionKey(function))
+	}
+	if strings.TrimSpace(function.Body) == "" {
+		return "", fmt.Errorf("function %q must have a body", functionKey(function))
+	}
+
+	var b strings.Builder
+	b.WriteString("CREATE FUNCTION ")
+	b.WriteString(renderQualified(function.Schema, function.Name))
+	b.WriteString("(")
+	args := make([]string, 0, len(function.Arguments))
+	for _, arg := range function.Arguments {
+		args = append(args, renderFunctionArgument(arg))
+	}
+	b.WriteString(strings.Join(args, ", "))
+	b.WriteString(")\nRETURNS ")
+	b.WriteString(function.ReturnType)
+	b.WriteString("\nLANGUAGE ")
+	b.WriteString(function.Language)
+	if function.Volatility != "" {
+		b.WriteString("\n")
+		b.WriteString(strings.ToUpper(function.Volatility))
+	}
+	if function.Strict != nil {
+		if *function.Strict {
+			b.WriteString("\nSTRICT")
+		} else {
+			b.WriteString("\nCALLED ON NULL INPUT")
+		}
+	}
+	if function.SecurityDefiner {
+		b.WriteString("\nSECURITY DEFINER")
+	}
+	if function.Parallel != "" {
+		b.WriteString("\nPARALLEL ")
+		b.WriteString(strings.ToUpper(function.Parallel))
+	}
+	if function.Cost != nil {
+		fmt.Fprintf(&b, "\nCOST %g", *function.Cost)
+	}
+	if function.Rows != nil {
+		fmt.Fprintf(&b, "\nROWS %d", *function.Rows)
+	}
+	for _, setting := range renderFunctionConfiguration(function.Configuration) {
+		b.WriteString("\nSET ")
+		b.WriteString(setting)
+	}
+	b.WriteString("\nAS $$\n")
+	b.WriteString(function.Body)
+	b.WriteString("\n$$;")
+	return b.String(), nil
+}
+
+func renderFunctionArgument(arg pgschema.FunctionArgument) string {
+	parts := []string{}
+	if arg.Mode != "" {
+		parts = append(parts, strings.ToUpper(arg.Mode))
+	}
+	if arg.Name != "" {
+		parts = append(parts, arg.Name)
+	}
+	parts = append(parts, arg.Type)
+	if arg.Default != "" {
+		parts = append(parts, "DEFAULT", arg.Default)
+	}
+	return strings.Join(parts, " ")
+}
+
+func renderFunctionConfiguration(config map[string]string) []string {
+	if len(config) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(config))
+	for key := range config {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	settings := make([]string, 0, len(keys))
+	for _, key := range keys {
+		settings = append(settings, key+" = "+config[key])
+	}
+	return settings
+}
+
+func renderTrigger(trigger pgschema.Trigger) string {
+	var b strings.Builder
+	b.WriteString("CREATE ")
+	if trigger.Constraint {
+		b.WriteString("CONSTRAINT ")
+	}
+	b.WriteString("TRIGGER ")
+	b.WriteString(trigger.Name)
+	b.WriteString("\n")
+	b.WriteString(strings.ToUpper(trigger.Timing))
+	b.WriteString(" ")
+	b.WriteString(renderTriggerEvents(trigger))
+	b.WriteString(" ON ")
+	b.WriteString(renderReferencedTable(trigger.Target))
+	if trigger.ReferencedTable != "" {
+		b.WriteString("\nFROM ")
+		b.WriteString(renderReferencedTable(trigger.ReferencedTable))
+	}
+	if trigger.Deferrable {
+		b.WriteString(renderDeferrable(true, trigger.Initially))
+	}
+	level := trigger.Level
+	if level == "" {
+		if trigger.Constraint || strings.EqualFold(trigger.Timing, "INSTEAD OF") {
+			level = "ROW"
+		} else {
+			level = "STATEMENT"
+		}
+	}
+	b.WriteString("\nFOR EACH ")
+	b.WriteString(strings.ToUpper(level))
+	if trigger.When != "" {
+		b.WriteString("\nWHEN (")
+		b.WriteString(trigger.When)
+		b.WriteString(")")
+	}
+	b.WriteString("\nEXECUTE FUNCTION ")
+	b.WriteString(renderReferencedTable(trigger.Function))
+	b.WriteString("(")
+	args := make([]string, 0, len(trigger.Arguments))
+	for _, arg := range trigger.Arguments {
+		args = append(args, quoteSQL(arg))
+	}
+	b.WriteString(strings.Join(args, ", "))
+	b.WriteString(");")
+	return b.String()
+}
+
+func renderTriggerEvents(trigger pgschema.Trigger) string {
+	events := normalisedTriggerEvents(trigger.Events)
+	parts := make([]string, 0, len(events))
+	for _, event := range events {
+		if event == "UPDATE" && len(trigger.Columns) > 0 {
+			parts = append(parts, "UPDATE OF "+strings.Join(trigger.Columns, ", "))
+			continue
+		}
+		parts = append(parts, event)
+	}
+	return strings.Join(parts, " OR ")
+}
+
+func normalisedTriggerEvents(events []string) []string {
+	out := make([]string, 0, len(events))
+	for _, event := range events {
+		out = append(out, strings.ToUpper(event))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func renderView(view pgschema.View) string {
+	var b strings.Builder
+	b.WriteString("CREATE ")
+	if view.SecurityBarrier {
+		b.WriteString("SECURITY BARRIER ")
+	}
+	if view.SecurityInvoker {
+		b.WriteString("SECURITY INVOKER ")
+	}
+	b.WriteString("VIEW ")
+	b.WriteString(renderQualified(view.Schema, view.Name))
+	if len(view.ColumnAliases) > 0 {
+		b.WriteString(" (")
+		b.WriteString(strings.Join(view.ColumnAliases, ", "))
+		b.WriteString(")")
+	}
+	b.WriteString(" AS\n    ")
+	b.WriteString(view.Query)
+	if view.CheckOption != "" {
+		b.WriteString("\nWITH ")
+		b.WriteString(strings.ToUpper(view.CheckOption))
+		b.WriteString(" CHECK OPTION")
+	}
+	b.WriteString(";")
+	return b.String()
+}
+
+func renderMaterializedView(view pgschema.MaterializedView) string {
+	var b strings.Builder
+	b.WriteString("CREATE MATERIALIZED VIEW ")
+	b.WriteString(renderQualified(view.Schema, view.Name))
+	if len(view.ColumnAliases) > 0 {
+		b.WriteString(" (")
+		b.WriteString(strings.Join(view.ColumnAliases, ", "))
+		b.WriteString(")")
+	}
+	b.WriteString(" AS\n    ")
+	b.WriteString(view.Query)
+	if len(view.With) > 0 {
+		b.WriteString("\nWITH (")
+		b.WriteString(renderIndexWith(view.With))
+		b.WriteString(")")
+	}
+	if view.NoData {
+		b.WriteString("\nWITH NO DATA")
+	}
+	b.WriteString(";")
+	return b.String()
+}
+
 func renderCreateTable(table ast.Table) (string, error) {
 	var b strings.Builder
 	b.WriteString("CREATE TABLE ")

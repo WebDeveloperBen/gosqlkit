@@ -288,13 +288,13 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` Add RLS enable/force changes.
 - `[x]` Add RLS policies.
 - `[x]` Add roles.
-- `[ ]` Add sequences.
-- `[ ]` Add composite types.
-- `[ ]` Add domains.
-- `[ ]` Add functions.
-- `[ ]` Add triggers.
-- `[ ]` Add views.
-- `[ ]` Add materialized views.
+- `[x]` Add sequences.
+- `[x]` Add composite types.
+- `[x]` Add domains.
+- `[x]` Add functions.
+- `[x]` Add triggers.
+- `[x]` Add views.
+- `[x]` Add materialized views.
 - `[ ]` Generate best-effort down SQL for simple create operations.
 
 ### Slice 4: Destructive-Change Guardrails

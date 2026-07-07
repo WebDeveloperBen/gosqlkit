@@ -478,6 +478,363 @@ func TestSnapshotDiffProducesRoleReverse(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffProducesSequenceOwnershipDependencyAndReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "invoices",
+			Columns: []ast.Column{{Name: "number", Type: "bigint"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Sequences: []pgschema.Sequence{{
+			Name:    "invoice_number_seq",
+			OwnedBy: "invoices.number",
+		}},
+		Tables: []ast.Table{{
+			Name:    "invoices",
+			Columns: []ast.Column{{Name: "number", Type: "bigint"}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+
+	create := planned.Changes[0]
+	if create.Object.Kind != "sequence" || create.Object.Key != "public.invoice_number_seq" {
+		t.Fatalf("sequence object = %#v", create.Object)
+	}
+	if !create.Reversible || len(create.ReverseStatements) != 1 || create.ReverseStatements[0].SQL != "DROP SEQUENCE invoice_number_seq;" {
+		t.Fatalf("sequence reverse = %#v reversible=%v", create.ReverseStatements, create.Reversible)
+	}
+
+	ownership := planned.Changes[1]
+	if ownership.Object.Kind != "sequence" || ownership.Object.Key != "public.invoice_number_seq" {
+		t.Fatalf("ownership object = %#v", ownership.Object)
+	}
+	if len(ownership.Dependencies) != 2 {
+		t.Fatalf("ownership dependencies = %#v", ownership.Dependencies)
+	}
+	if ownership.Dependencies[0].Kind != "sequence" || ownership.Dependencies[0].Key != "public.invoice_number_seq" {
+		t.Fatalf("sequence dependency = %#v", ownership.Dependencies[0])
+	}
+	if ownership.Dependencies[1].Kind != "table" || ownership.Dependencies[1].Key != "public.invoices" {
+		t.Fatalf("table dependency = %#v", ownership.Dependencies[1])
+	}
+	if !ownership.Reversible || len(ownership.ReverseStatements) != 1 || ownership.ReverseStatements[0].SQL != "ALTER SEQUENCE invoice_number_seq OWNED BY NONE;" {
+		t.Fatalf("ownership reverse = %#v reversible=%v", ownership.ReverseStatements, ownership.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesCompositeTypeReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		CompositeTypes: []pgschema.CompositeType{{
+			Schema: "billing",
+			Name:   "money_amount",
+			Attributes: []pgschema.CompositeAttribute{
+				{Name: "amount", Type: "numeric"},
+				{Name: "currency", Type: "text"},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Object.Kind != "composite_type" || change.Object.Key != "billing.money_amount" {
+		t.Fatalf("composite type object = %#v", change.Object)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "DROP TYPE billing.money_amount;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesDomainReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Domains: []pgschema.Domain{{
+			Schema:   "billing",
+			Name:     "email_address",
+			BaseType: "text",
+			Check:    "position('@' in VALUE) > 1",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Object.Kind != "domain" || change.Object.Key != "billing.email_address" {
+		t.Fatalf("domain object = %#v", change.Object)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "DROP DOMAIN billing.email_address;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesFunctionReverseAndComment(t *testing.T) {
+	strict := true
+	cost := 5.0
+	rows := int64(10)
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Functions: []pgschema.Function{{
+			Schema:          "billing",
+			Name:            "invoice_total",
+			Language:        "sql",
+			ReturnType:      "integer",
+			Body:            "SELECT 1",
+			Volatility:      "STABLE",
+			Parallel:        "SAFE",
+			Strict:          &strict,
+			SecurityDefiner: true,
+			Cost:            &cost,
+			Rows:            &rows,
+			Configuration: map[string]string{
+				"search_path": "billing, public",
+			},
+			Comment: "Calculates invoice totals",
+			Arguments: []pgschema.FunctionArgument{
+				{Name: "invoice_id", Type: "uuid"},
+				{Name: "scale", Type: "integer", Default: "1"},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	create := planned.Changes[0]
+	if create.Object.Kind != "function" || create.Object.Key != "billing.invoice_total(uuid, integer)" {
+		t.Fatalf("function object = %#v", create.Object)
+	}
+	if !strings.Contains(create.Statements[0].SQL, "CREATE FUNCTION billing.invoice_total(invoice_id uuid, scale integer DEFAULT 1)") {
+		t.Fatalf("create statement = %q", create.Statements[0].SQL)
+	}
+	if !create.Reversible || len(create.ReverseStatements) != 1 || create.ReverseStatements[0].SQL != "DROP FUNCTION billing.invoice_total(uuid, integer);" {
+		t.Fatalf("reverse = %#v reversible=%v", create.ReverseStatements, create.Reversible)
+	}
+
+	comment := planned.Changes[1]
+	if comment.Object.Kind != "function" || comment.Object.Key != "billing.invoice_total(uuid, integer)" {
+		t.Fatalf("comment object = %#v", comment.Object)
+	}
+	if len(comment.Dependencies) != 1 || comment.Dependencies[0].Kind != "function" || comment.Dependencies[0].Key != "billing.invoice_total(uuid, integer)" {
+		t.Fatalf("comment dependencies = %#v", comment.Dependencies)
+	}
+	if !comment.Reversible || len(comment.ReverseStatements) != 1 || comment.ReverseStatements[0].SQL != "COMMENT ON FUNCTION billing.invoice_total(uuid, integer) IS NULL;" {
+		t.Fatalf("comment reverse = %#v reversible=%v", comment.ReverseStatements, comment.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesTriggerDependenciesAndReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Functions: []pgschema.Function{{
+			Name:       "touch_updated_at",
+			Language:   "plpgsql",
+			ReturnType: "trigger",
+			Body:       "BEGIN RETURN NEW; END",
+		}},
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Functions: []pgschema.Function{{
+			Name:       "touch_updated_at",
+			Language:   "plpgsql",
+			ReturnType: "trigger",
+			Body:       "BEGIN RETURN NEW; END",
+		}},
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+		Triggers: []pgschema.Trigger{{
+			Name:      "users_touch_updated_at",
+			Target:    "users",
+			Function:  "touch_updated_at",
+			Timing:    "BEFORE",
+			Events:    []string{"UPDATE"},
+			Level:     "ROW",
+			Comment:   "Maintains updated_at",
+			Arguments: []string{"updated_at"},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	create := planned.Changes[0]
+	if create.Object.Kind != "trigger" || create.Object.Key != "public.users.users_touch_updated_at" {
+		t.Fatalf("trigger object = %#v", create.Object)
+	}
+	if len(create.Dependencies) != 2 {
+		t.Fatalf("dependencies = %#v", create.Dependencies)
+	}
+	if create.Dependencies[0].Kind != "table" || create.Dependencies[0].Key != "public.users" {
+		t.Fatalf("target dependency = %#v", create.Dependencies[0])
+	}
+	if create.Dependencies[1].Kind != "function" || create.Dependencies[1].Key != "public.touch_updated_at()" {
+		t.Fatalf("function dependency = %#v", create.Dependencies[1])
+	}
+	if !create.Reversible || len(create.ReverseStatements) != 1 || create.ReverseStatements[0].SQL != "DROP TRIGGER users_touch_updated_at ON users;" {
+		t.Fatalf("reverse = %#v reversible=%v", create.ReverseStatements, create.Reversible)
+	}
+
+	comment := planned.Changes[1]
+	if comment.Object.Kind != "trigger" || comment.Object.Key != "public.users.users_touch_updated_at" {
+		t.Fatalf("comment object = %#v", comment.Object)
+	}
+	if !comment.Reversible || len(comment.ReverseStatements) != 1 || comment.ReverseStatements[0].SQL != "COMMENT ON TRIGGER users_touch_updated_at ON users IS NULL;" {
+		t.Fatalf("comment reverse = %#v reversible=%v", comment.ReverseStatements, comment.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesViewDependencyAndReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+		Views: []pgschema.View{{
+			Name:          "active_users",
+			Query:         "SELECT id FROM users",
+			Comment:       "Active users",
+			ColumnAliases: []string{"id"},
+			DependsOn:     []string{"users"},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	create := planned.Changes[0]
+	if create.Object.Kind != "view" || create.Object.Key != "public.active_users" {
+		t.Fatalf("view object = %#v", create.Object)
+	}
+	if len(create.Dependencies) != 1 || create.Dependencies[0].Kind != "table" || create.Dependencies[0].Key != "public.users" {
+		t.Fatalf("dependencies = %#v", create.Dependencies)
+	}
+	if !create.Reversible || len(create.ReverseStatements) != 1 || create.ReverseStatements[0].SQL != "DROP VIEW active_users;" {
+		t.Fatalf("reverse = %#v reversible=%v", create.ReverseStatements, create.Reversible)
+	}
+
+	comment := planned.Changes[1]
+	if comment.Object.Kind != "view" || comment.Object.Key != "public.active_users" {
+		t.Fatalf("comment object = %#v", comment.Object)
+	}
+	if !comment.Reversible || len(comment.ReverseStatements) != 1 || comment.ReverseStatements[0].SQL != "COMMENT ON VIEW active_users IS NULL;" {
+		t.Fatalf("comment reverse = %#v reversible=%v", comment.ReverseStatements, comment.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesMaterializedViewReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+		MaterializedViews: []pgschema.MaterializedView{{
+			Name:      "user_counts",
+			Query:     "SELECT count(*) AS total FROM users",
+			DependsOn: []string{"users"},
+			NoData:    true,
+			With: map[string]string{
+				"fillfactor": "80",
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Object.Kind != "materialized_view" || change.Object.Key != "public.user_counts" {
+		t.Fatalf("materialized view object = %#v", change.Object)
+	}
+	if len(change.Dependencies) != 1 || change.Dependencies[0].Kind != "table" || change.Dependencies[0].Key != "public.users" {
+		t.Fatalf("dependencies = %#v", change.Dependencies)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "DROP MATERIALIZED VIEW user_counts;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
 func TestSnapshotDiffRejectsColumnModification(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

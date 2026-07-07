@@ -40,31 +40,34 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.enums(previous.Enums, current.Enums); err != nil {
 		return nil, err
 	}
+	if err := planner.compositeTypes(previous.CompositeTypes, current.CompositeTypes); err != nil {
+		return nil, err
+	}
+	if err := planner.domains(previous.Domains, current.Domains); err != nil {
+		return nil, err
+	}
+	if err := planner.sequences(previous.Sequences, current.Sequences); err != nil {
+		return nil, err
+	}
 	if err := planner.tables(previous.Tables, current.Tables); err != nil {
+		return nil, err
+	}
+	if err := planner.sequenceOwnerships(previous.Sequences, current.Sequences); err != nil {
 		return nil, err
 	}
 	if err := planner.policies(previous.Policies, current.Policies); err != nil {
 		return nil, err
 	}
-	if err := rejectChangedCollection("composite types", previous.CompositeTypes, current.CompositeTypes); err != nil {
+	if err := planner.functions(previous.Functions, current.Functions); err != nil {
 		return nil, err
 	}
-	if err := rejectChangedCollection("domains", previous.Domains, current.Domains); err != nil {
+	if err := planner.views(previous.Views, current.Views); err != nil {
 		return nil, err
 	}
-	if err := rejectChangedCollection("sequences", previous.Sequences, current.Sequences); err != nil {
+	if err := planner.materializedViews(previous.MaterializedViews, current.MaterializedViews); err != nil {
 		return nil, err
 	}
-	if err := rejectChangedCollection("functions", previous.Functions, current.Functions); err != nil {
-		return nil, err
-	}
-	if err := rejectChangedCollection("views", previous.Views, current.Views); err != nil {
-		return nil, err
-	}
-	if err := rejectChangedCollection("materialized views", previous.MaterializedViews, current.MaterializedViews); err != nil {
-		return nil, err
-	}
-	if err := rejectChangedCollection("triggers", previous.Triggers, current.Triggers); err != nil {
+	if err := planner.triggers(previous.Triggers, current.Triggers, current.Tables, current.Views, current.MaterializedViews); err != nil {
 		return nil, err
 	}
 	return planner.plan, nil

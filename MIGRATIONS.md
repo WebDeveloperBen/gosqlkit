@@ -448,7 +448,8 @@ Current implementation status:
   table/column comments, plus primary-key, unique, foreign-key, and check
   constraints on existing tables, and exclusion constraints on new and
   existing tables. It also supports enabling/forcing table RLS and creating
-  RLS policies, plus creating roles.
+  RLS policies, plus creating roles, sequences, composite types, domains, and
+  functions.
 - Destructive changes and unsupported modifications fail closed with an
   explicit planner error.
 - `migrate check` validates timestamped SQL filenames, embedded metadata, and
@@ -485,6 +486,24 @@ Current implementation status:
   table dependencies and reverse `DROP POLICY ... ON ...` statements.
 - Safe additive PostgreSQL diff coverage includes role creation, with reverse
   `DROP ROLE` statements.
+- Safe additive PostgreSQL diff coverage includes sequence creation, with
+  reverse `DROP SEQUENCE` statements. `OWNED BY` is emitted as a separate
+  post-table `ALTER SEQUENCE ... OWNED BY ...` change so sequence defaults can
+  be available before table creation while ownership waits for the referenced
+  column to exist.
+- Safe additive PostgreSQL diff coverage includes composite type creation,
+  with reverse `DROP TYPE` statements.
+- Safe additive PostgreSQL diff coverage includes domain creation, with reverse
+  `DROP DOMAIN` statements.
+- Safe additive PostgreSQL diff coverage includes function creation and
+  function comments, keyed by identity arguments for overloaded functions, with
+  reverse `DROP FUNCTION` and `COMMENT ... IS NULL` statements.
+- Safe additive PostgreSQL diff coverage includes trigger creation and trigger
+  comments, with dependencies on the trigger target and trigger function and
+  reverse `DROP TRIGGER` / `COMMENT ... IS NULL` statements.
+- Safe additive PostgreSQL diff coverage includes view and materialized view
+  creation and comments, with dependency refs from `DependsOn` and reverse
+  `DROP VIEW` / `DROP MATERIALIZED VIEW` statements.
 
 ## Next Migration Engine Slices
 

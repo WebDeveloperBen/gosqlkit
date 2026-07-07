@@ -1738,12 +1738,38 @@
     "wantErr": "roles were removed"
   },
   {
-    "name": "composite_types_changed",
+    "name": "add_composite_type",
     "previous": {
       "dialect": "postgresql",
       "version": 1
     },
     "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "compositeTypes": [
+        {
+          "schema": "billing",
+          "name": "money_amount",
+          "attributes": [
+            {
+              "name": "amount",
+              "type": "numeric"
+            },
+            {
+              "name": "currency",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE TYPE billing.money_amount AS (\n    amount numeric,\n    currency text\n);"
+    ]
+  },
+  {
+    "name": "modify_composite_type",
+    "previous": {
       "dialect": "postgresql",
       "version": 1,
       "compositeTypes": [
@@ -1758,10 +1784,52 @@
         }
       ]
     },
-    "wantErr": "composite types changed"
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "compositeTypes": [
+        {
+          "name": "money_amount",
+          "attributes": [
+            {
+              "name": "amount",
+              "type": "numeric"
+            },
+            {
+              "name": "currency",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    "wantErr": "composite type modifications require semantic planning"
   },
   {
-    "name": "domains_changed",
+    "name": "drop_composite_type",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "compositeTypes": [
+        {
+          "name": "money_amount",
+          "attributes": [
+            {
+              "name": "amount",
+              "type": "numeric"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "composite types were removed"
+  },
+  {
+    "name": "add_domain",
     "previous": {
       "dialect": "postgresql",
       "version": 1
@@ -1771,15 +1839,64 @@
       "version": 1,
       "domains": [
         {
+          "schema": "billing",
+          "name": "email_address",
+          "baseType": "text",
+          "default": "'unknown@example.com'",
+          "notNull": true,
+          "check": "position('@' in VALUE) > 1"
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE DOMAIN billing.email_address AS text DEFAULT 'unknown@example.com' NOT NULL CHECK (position('@' in VALUE) > 1);"
+    ]
+  },
+  {
+    "name": "modify_domain",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "domains": [
+        {
           "name": "email_address",
           "baseType": "text"
         }
       ]
     },
-    "wantErr": "domains changed"
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "domains": [
+        {
+          "name": "email_address",
+          "baseType": "text",
+          "notNull": true
+        }
+      ]
+    },
+    "wantErr": "domain modifications require semantic planning"
   },
   {
-    "name": "sequences_changed",
+    "name": "drop_domain",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "domains": [
+        {
+          "name": "email_address",
+          "baseType": "text"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "domains were removed"
+  },
+  {
+    "name": "add_sequence",
     "previous": {
       "dialect": "postgresql",
       "version": 1
@@ -1789,14 +1906,98 @@
       "version": 1,
       "sequences": [
         {
+          "schema": "billing",
+          "name": "invoice_number_seq",
+          "increment": 10,
+          "minValue": 1000,
+          "maxValue": 9999,
+          "startWith": 1000,
+          "cache": 20,
+          "cycle": true
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE SEQUENCE billing.invoice_number_seq INCREMENT 10 MINVALUE 1000 MAXVALUE 9999 START 1000 CACHE 20 CYCLE;"
+    ]
+  },
+  {
+    "name": "add_owned_sequence_for_new_table",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "sequences": [
+        {
+          "name": "invoice_number_seq",
+          "ownedBy": "invoices.number"
+        }
+      ],
+      "tables": [
+        {
+          "name": "invoices",
+          "columns": [
+            {
+              "name": "number",
+              "type": "bigint",
+              "default": "nextval('invoice_number_seq')"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE SEQUENCE invoice_number_seq;",
+      "CREATE TABLE invoices (\n    number bigint DEFAULT nextval('invoice_number_seq')\n);",
+      "ALTER SEQUENCE invoice_number_seq OWNED BY invoices.number;"
+    ]
+  },
+  {
+    "name": "modify_sequence",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "sequences": [
+        {
+          "name": "invoice_number_seq",
+          "increment": 1
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "sequences": [
+        {
+          "name": "invoice_number_seq",
+          "increment": 10
+        }
+      ]
+    },
+    "wantErr": "sequence modifications require semantic planning"
+  },
+  {
+    "name": "drop_sequence",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "sequences": [
+        {
           "name": "invoice_number_seq"
         }
       ]
     },
-    "wantErr": "sequences changed"
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "sequences were removed"
   },
   {
-    "name": "functions_changed",
+    "name": "add_function",
     "previous": {
       "dialect": "postgresql",
       "version": 1
@@ -1809,14 +2010,140 @@
           "name": "touch_updated_at",
           "language": "plpgsql",
           "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END",
+          "volatility": "VOLATILE"
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE FUNCTION touch_updated_at()\nRETURNS trigger\nLANGUAGE plpgsql\nVOLATILE\nAS $$\nBEGIN RETURN NEW; END\n$$;"
+    ]
+  },
+  {
+    "name": "modify_function",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
           "body": "BEGIN RETURN NEW; END"
         }
       ]
     },
-    "wantErr": "functions changed"
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN NEW.updated_at = now(); RETURN NEW; END"
+        }
+      ]
+    },
+    "wantErr": "function modifications require semantic planning"
   },
   {
-    "name": "views_changed",
+    "name": "add_function_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "schema": "billing",
+          "name": "invoice_total",
+          "language": "sql",
+          "returnType": "integer",
+          "body": "SELECT 1",
+          "arguments": [
+            {
+              "name": "invoice_id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "schema": "billing",
+          "name": "invoice_total",
+          "language": "sql",
+          "returnType": "integer",
+          "body": "SELECT 1",
+          "comment": "Calculates invoice totals",
+          "arguments": [
+            {
+              "name": "invoice_id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ]
+    },
+    "wantStatements": [
+      "COMMENT ON FUNCTION billing.invoice_total(uuid) IS 'Calculates invoice totals';"
+    ]
+  },
+  {
+    "name": "modify_function_comment",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "name": "invoice_total",
+          "language": "sql",
+          "returnType": "integer",
+          "body": "SELECT 1",
+          "comment": "Calculates invoice totals"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "name": "invoice_total",
+          "language": "sql",
+          "returnType": "integer",
+          "body": "SELECT 1",
+          "comment": "Returns invoice totals"
+        }
+      ]
+    },
+    "wantErr": "function comment modifications require semantic planning"
+  },
+  {
+    "name": "drop_function",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "functions were removed"
+  },
+  {
+    "name": "add_view",
     "previous": {
       "dialect": "postgresql",
       "version": 1
@@ -1827,14 +2154,68 @@
       "views": [
         {
           "name": "active_users",
+          "query": "SELECT id FROM users",
+          "comment": "Active users",
+          "columnAliases": [
+            "id"
+          ],
+          "dependsOn": [
+            "users"
+          ],
+          "securityBarrier": true,
+          "securityInvoker": true
+        }
+      ]
+    },
+    "wantStatements": [
+      "CREATE SECURITY BARRIER SECURITY INVOKER VIEW active_users (id) AS\n    SELECT id FROM users;",
+      "COMMENT ON VIEW active_users IS 'Active users';"
+    ]
+  },
+  {
+    "name": "modify_view",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "views": [
+        {
+          "name": "active_users",
           "query": "SELECT id FROM users"
         }
       ]
     },
-    "wantErr": "views changed"
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "views": [
+        {
+          "name": "active_users",
+          "query": "SELECT id FROM users WHERE active"
+        }
+      ]
+    },
+    "wantErr": "view modifications require semantic planning"
   },
   {
-    "name": "materialized_views_changed",
+    "name": "drop_view",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "views": [
+        {
+          "name": "active_users",
+          "query": "SELECT id FROM users"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "views were removed"
+  },
+  {
+    "name": "add_materialized_view",
     "previous": {
       "dialect": "postgresql",
       "version": 1
@@ -1845,11 +2226,67 @@
       "materializedViews": [
         {
           "name": "user_counts",
-          "query": "SELECT count(*) FROM users"
+          "query": "SELECT count(*) AS total FROM users",
+          "comment": "Cached user count",
+          "columnAliases": [
+            "total"
+          ],
+          "dependsOn": [
+            "users"
+          ],
+          "with": {
+            "fillfactor": "80"
+          },
+          "noData": true
         }
       ]
     },
-    "wantErr": "materialized views changed"
+    "wantStatements": [
+      "CREATE MATERIALIZED VIEW user_counts (total) AS\n    SELECT count(*) AS total FROM users\nWITH (fillfactor = 80)\nWITH NO DATA;",
+      "COMMENT ON MATERIALIZED VIEW user_counts IS 'Cached user count';"
+    ]
+  },
+  {
+    "name": "modify_materialized_view",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "materializedViews": [
+        {
+          "name": "user_counts",
+          "query": "SELECT count(*) AS total FROM users"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "materializedViews": [
+        {
+          "name": "user_counts",
+          "query": "SELECT count(*) AS total FROM users WHERE active"
+        }
+      ]
+    },
+    "wantErr": "materialized view modifications require semantic planning"
+  },
+  {
+    "name": "drop_materialized_view",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "materializedViews": [
+        {
+          "name": "user_counts",
+          "query": "SELECT count(*) AS total FROM users"
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "materialized views were removed"
   },
   {
     "name": "triggers_changed",
@@ -1872,6 +2309,103 @@
         }
       ]
     },
-    "wantErr": "triggers changed"
+    "wantStatements": [
+      "CREATE TRIGGER users_touch_updated_at\nBEFORE UPDATE ON users\nFOR EACH STATEMENT\nEXECUTE FUNCTION touch_updated_at();"
+    ]
+  },
+  {
+    "name": "modify_trigger",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "users_touch_updated_at",
+          "target": "users",
+          "function": "touch_updated_at",
+          "timing": "before",
+          "events": [
+            "update"
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "tables": [
+        {
+          "name": "users",
+          "columns": [
+            {
+              "name": "id",
+              "type": "uuid"
+            }
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "touch_updated_at",
+          "language": "plpgsql",
+          "returnType": "trigger",
+          "body": "BEGIN RETURN NEW; END"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "users_touch_updated_at",
+          "target": "users",
+          "function": "touch_updated_at",
+          "timing": "after",
+          "events": [
+            "update"
+          ]
+        }
+      ]
+    },
+    "wantErr": "trigger modifications require semantic planning"
+  },
+  {
+    "name": "drop_trigger",
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1,
+      "triggers": [
+        {
+          "name": "users_touch_updated_at",
+          "target": "users",
+          "function": "touch_updated_at",
+          "timing": "before",
+          "events": [
+            "update"
+          ]
+        }
+      ]
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "wantErr": "triggers were removed"
   }
 ]
