@@ -295,7 +295,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` Add triggers.
 - `[x]` Add views.
 - `[x]` Add materialized views.
-- `[ ]` Generate best-effort down SQL for simple create operations.
+- `[x]` Generate best-effort down SQL for simple create operations.
 
 ### Slice 4: Destructive-Change Guardrails
 

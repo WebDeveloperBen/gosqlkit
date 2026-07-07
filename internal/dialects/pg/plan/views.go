@@ -3,11 +3,12 @@ package plan
 import (
 	"reflect"
 
+	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
-func (p planner) views(previous, current []pgschema.View) error {
+func (p planner) views(previous, current []pgschema.View, tables []ast.Table, materializedViews []pgschema.MaterializedView) error {
 	prev := mapBy(previous, viewKey)
 	for _, view := range sortedBy(current, viewKey) {
 		key := viewKey(view)
@@ -20,7 +21,7 @@ func (p planner) views(previous, current []pgschema.View) error {
 					"create view "+key,
 					migrateplan.SQL(renderView(view)),
 				).WithDependencies(
-					dependencyRefs(view.DependsOn)...,
+					dependencyRefs(view.DependsOn, tables, current, materializedViews, migrateplan.Ref(migrateplan.ObjectKindView, key))...,
 				).WithReverse(
 					migrateplan.SQL("DROP VIEW " + renderQualified(view.Schema, view.Name) + ";"),
 				),
@@ -52,7 +53,7 @@ func (p planner) views(previous, current []pgschema.View) error {
 	return nil
 }
 
-func (p planner) materializedViews(previous, current []pgschema.MaterializedView) error {
+func (p planner) materializedViews(previous, current []pgschema.MaterializedView, tables []ast.Table, views []pgschema.View) error {
 	prev := mapBy(previous, materializedViewKey)
 	for _, view := range sortedBy(current, materializedViewKey) {
 		key := materializedViewKey(view)
@@ -65,7 +66,7 @@ func (p planner) materializedViews(previous, current []pgschema.MaterializedView
 					"create materialized view "+key,
 					migrateplan.SQL(renderMaterializedView(view)),
 				).WithDependencies(
-					dependencyRefs(view.DependsOn)...,
+					dependencyRefs(view.DependsOn, tables, views, current, migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key))...,
 				).WithReverse(
 					migrateplan.SQL("DROP MATERIALIZED VIEW " + renderQualified(view.Schema, view.Name) + ";"),
 				),
@@ -125,10 +126,33 @@ func materializedViewCommentChange(view pgschema.MaterializedView) migrateplan.C
 	)
 }
 
-func dependencyRefs(dependsOn []string) []migrateplan.ObjectRef {
+func dependencyRefs(dependsOn []string, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView, self migrateplan.ObjectRef) []migrateplan.ObjectRef {
 	refs := make([]migrateplan.ObjectRef, 0, len(dependsOn))
 	for _, dependency := range dependsOn {
-		refs = append(refs, migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(dependency)))
+		ref := dependencyRef(dependency, tables, views, materializedViews)
+		if ref != self {
+			refs = append(refs, ref)
+		}
 	}
 	return uniqueRefs(refs)
+}
+
+func dependencyRef(dependency string, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.ObjectRef {
+	key := referencedTableKey(dependency)
+	for _, table := range tables {
+		if tableKey(table) == key {
+			return migrateplan.Ref(migrateplan.ObjectKindTable, key)
+		}
+	}
+	for _, view := range views {
+		if viewKey(view) == key {
+			return migrateplan.Ref(migrateplan.ObjectKindView, key)
+		}
+	}
+	for _, materializedView := range materializedViews {
+		if materializedViewKey(materializedView) == key {
+			return migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key)
+		}
+	}
+	return migrateplan.Ref(migrateplan.ObjectKindTable, key)
 }

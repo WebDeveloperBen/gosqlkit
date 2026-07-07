@@ -172,6 +172,8 @@ func TestMigrateCreateWithConfigWritesDiffMigration(t *testing.T) {
 		`--         "kind": "column"`,
 		`--         "key": "public.users.tags"`,
 		"ALTER TABLE users ADD COLUMN tags text[];",
+		"-- +goose Down",
+		"ALTER TABLE users DROP COLUMN tags;",
 	} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("content missing %q\n%s", want, content)

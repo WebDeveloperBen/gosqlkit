@@ -504,6 +504,15 @@ Current implementation status:
 - Safe additive PostgreSQL diff coverage includes view and materialized view
   creation and comments, with dependency refs from `DependsOn` and reverse
   `DROP VIEW` / `DROP MATERIALIZED VIEW` statements.
+- Safe additive PostgreSQL diff coverage now records best-effort down SQL for
+  simple create/add operations: schemas, extensions, enums, tables, columns,
+  constraints, indexes, comments, RLS enable/force, policies, roles,
+  sequences, composite types, domains, functions, triggers, views, and
+  materialized views. PostgreSQL enum value appends are marked manual-review
+  and remain intentionally non-reversible.
+- Planner changes are dependency-sorted before rendering, so referenced roles,
+  parent tables, trigger functions, view dependencies, sequence ownership
+  targets, and other known prerequisites are emitted before dependent changes.
 
 ## Next Migration Engine Slices
 

@@ -22,6 +22,8 @@ func (p planner) roles(previous, current []pgschema.Role) error {
 					migrateplan.Ref(migrateplan.ObjectKindRole, role.Name),
 					"create role "+role.Name,
 					migrateplan.SQL(renderRole(role)),
+				).WithDependencies(
+					roleDependencyRefs(role)...,
 				).WithReverse(
 					migrateplan.SQL("DROP ROLE " + role.Name + ";"),
 				),
@@ -39,6 +41,21 @@ func (p planner) roles(previous, current []pgschema.Role) error {
 	return nil
 }
 
+func roleDependencyRefs(role pgschema.Role) []migrateplan.ObjectRef {
+	refs := make([]migrateplan.ObjectRef, 0, len(role.MemberOf)+len(role.AdminOf))
+	for _, memberOf := range role.MemberOf {
+		if memberOf != role.Name {
+			refs = append(refs, migrateplan.Ref(migrateplan.ObjectKindRole, memberOf))
+		}
+	}
+	for _, adminOf := range role.AdminOf {
+		if adminOf != role.Name {
+			refs = append(refs, migrateplan.Ref(migrateplan.ObjectKindRole, adminOf))
+		}
+	}
+	return uniqueRefs(refs)
+}
+
 func (p planner) namespaces(previous, current []pgschema.Namespace) error {
 	prev := make(map[string]pgschema.Namespace, len(previous))
 	for _, item := range previous {
@@ -46,7 +63,16 @@ func (p planner) namespaces(previous, current []pgschema.Namespace) error {
 	}
 	for _, item := range current {
 		if _, ok := prev[item.Name]; !ok {
-			p.add(migrateplan.OperationCreate, migrateplan.ObjectKindSchema, item.Name, "create schema "+item.Name, "CREATE SCHEMA "+item.Name+";")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationCreate,
+					migrateplan.Ref(migrateplan.ObjectKindSchema, item.Name),
+					"create schema "+item.Name,
+					migrateplan.SQL("CREATE SCHEMA "+item.Name+";"),
+				).WithReverse(
+					migrateplan.SQL("DROP SCHEMA " + item.Name + ";"),
+				),
+			)
 			continue
 		}
 		delete(prev, item.Name)
@@ -66,7 +92,16 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 			if item.Schema != "" {
 				stmt += " WITH SCHEMA " + item.Schema
 			}
-			p.add(migrateplan.OperationCreate, migrateplan.ObjectKindExtension, key, "create extension "+key, stmt+";")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationCreate,
+					migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+					"create extension "+key,
+					migrateplan.SQL(stmt+";"),
+				).WithReverse(
+					migrateplan.SQL("DROP EXTENSION " + item.Name + ";"),
+				),
+			)
 			continue
 		}
 		delete(prev, key)
@@ -87,8 +122,16 @@ func (p planner) enums(previous, current []pgschema.Enum) error {
 			for _, value := range item.Values {
 				values = append(values, quoteSQL(value))
 			}
-			p.add(migrateplan.OperationCreate, migrateplan.ObjectKindEnum, key, "create enum "+key,
-				"CREATE TYPE "+renderQualified(item.Schema, item.Name)+" AS ENUM ("+strings.Join(values, ", ")+");")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationCreate,
+					migrateplan.Ref(migrateplan.ObjectKindEnum, key),
+					"create enum "+key,
+					migrateplan.SQL("CREATE TYPE "+renderQualified(item.Schema, item.Name)+" AS ENUM ("+strings.Join(values, ", ")+");"),
+				).WithReverse(
+					migrateplan.SQL("DROP TYPE " + renderQualified(item.Schema, item.Name) + ";"),
+				),
+			)
 			continue
 		}
 		if err := p.enumValues(old, item); err != nil {
@@ -113,8 +156,16 @@ func (p planner) enumValues(previous, current pgschema.Enum) error {
 	}
 	for _, value := range current.Values[len(previous.Values):] {
 		key := qualified(current.Schema, current.Name)
-		p.add(migrateplan.OperationAlter, migrateplan.ObjectKindEnum, key, "add enum value "+value+" to "+key,
-			"ALTER TYPE "+renderQualified(current.Schema, current.Name)+" ADD VALUE "+quoteSQL(value)+";")
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				migrateplan.Ref(migrateplan.ObjectKindEnum, key),
+				"add enum value "+value+" to "+key,
+				migrateplan.SQL("ALTER TYPE "+renderQualified(current.Schema, current.Name)+" ADD VALUE "+quoteSQL(value)+";"),
+			).WithRisks(
+				migrateplan.RiskManualReview,
+			),
+		)
 	}
 	return nil
 }

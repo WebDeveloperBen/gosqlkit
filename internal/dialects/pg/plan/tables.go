@@ -20,7 +20,18 @@ func (p planner) tables(previous, current []ast.Table) error {
 			if err != nil {
 				return err
 			}
-			p.add(migrateplan.OperationCreate, migrateplan.ObjectKindTable, key, "create table "+key, stmt)
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationCreate,
+					migrateplan.Ref(migrateplan.ObjectKindTable, key),
+					"create table "+key,
+					migrateplan.SQL(stmt),
+				).WithDependencies(
+					tableDependencyRefs(table)...,
+				).WithReverse(
+					migrateplan.SQL("DROP TABLE " + renderTableName(table) + ";"),
+				),
+			)
 			if err := p.indexes(ast.Table{}, table); err != nil {
 				return err
 			}
@@ -56,8 +67,18 @@ func (p planner) table(previous, current ast.Table) error {
 				return err
 			}
 			key := tableKey(current) + "." + column.Name
-			p.add(migrateplan.OperationAlter, migrateplan.ObjectKindColumn, key, "add column "+key,
-				"ALTER TABLE "+renderTableName(current)+" ADD COLUMN "+def+";")
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationAlter,
+					migrateplan.Ref(migrateplan.ObjectKindColumn, key),
+					"add column "+key,
+					migrateplan.SQL("ALTER TABLE "+renderTableName(current)+" ADD COLUMN "+def+";"),
+				).WithDependencies(
+					columnDependencyRefs(current, column)...,
+				).WithReverse(
+					migrateplan.SQL("ALTER TABLE " + renderTableName(current) + " DROP COLUMN " + column.Name + ";"),
+				),
+			)
 			continue
 		}
 		if !reflect.DeepEqual(columnWithoutComment(old), columnWithoutComment(column)) {
@@ -443,6 +464,37 @@ func ensureAddColumnSupported(table ast.Table, column ast.Column) error {
 		return unsupported("column " + key + " rename metadata requires semantic planning")
 	}
 	return nil
+}
+
+func columnDependencyRefs(table ast.Table, column ast.Column) []migrateplan.ObjectRef {
+	refs := []migrateplan.ObjectRef{migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(table))}
+	if column.References != nil {
+		ref := migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(column.References.Table))
+		if ref.Key != tableKey(table) {
+			refs = append(refs, ref)
+		}
+	}
+	return uniqueRefs(refs)
+}
+
+func tableDependencyRefs(table ast.Table) []migrateplan.ObjectRef {
+	refs := make([]migrateplan.ObjectRef, 0, len(table.Columns)+len(table.ForeignKeys))
+	for _, column := range table.Columns {
+		if column.References == nil {
+			continue
+		}
+		ref := migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(column.References.Table))
+		if ref.Key != tableKey(table) {
+			refs = append(refs, ref)
+		}
+	}
+	for _, foreignKey := range table.ForeignKeys {
+		ref := migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(foreignKey.ReferencedTable))
+		if ref.Key != tableKey(table) {
+			refs = append(refs, ref)
+		}
+	}
+	return uniqueRefs(refs)
 }
 
 func columnWithoutComment(column ast.Column) ast.Column {

@@ -104,6 +104,140 @@ func TestSnapshotDiffAddsTableAndColumn(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffOrdersNewTablesByForeignKeyDependency(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{
+				Name: "invoices",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "user_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{{
+					Name:              "invoices_user_id_fkey",
+					Columns:           []string{"user_id"},
+					ReferencedTable:   "users",
+					ReferencedColumns: []string{"id"},
+				}},
+			},
+			{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+		},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	users := strings.Index(got, "CREATE TABLE users")
+	invoices := strings.Index(got, "CREATE TABLE invoices")
+	if users < 0 || invoices < 0 || users > invoices {
+		t.Fatalf("statements not dependency ordered:\n%s", got)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if len(planned.Changes[1].Dependencies) != 1 || planned.Changes[1].Dependencies[0].Kind != "table" || planned.Changes[1].Dependencies[0].Key != "public.users" {
+		t.Fatalf("child table dependencies = %#v", planned.Changes[1].Dependencies)
+	}
+}
+
+func TestSnapshotDiffOrdersNewTablesByCreateChangeWhenParentHasComment(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{
+				Name: "invoices",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "user_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{{
+					Name:              "invoices_user_id_fkey",
+					Columns:           []string{"user_id"},
+					ReferencedTable:   "users",
+					ReferencedColumns: []string{"id"},
+				}},
+			},
+			{
+				Name:    "users",
+				Comment: "Application users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+		},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	users := strings.Index(got, "CREATE TABLE users")
+	comment := strings.Index(got, "COMMENT ON TABLE users")
+	invoices := strings.Index(got, "CREATE TABLE invoices")
+	if users < 0 || comment < 0 || invoices < 0 || users > comment || users > invoices {
+		t.Fatalf("dependent changes not anchored to parent table creation:\n%s", got)
+	}
+}
+
+func TestSnapshotDiffRejectsNewTableForeignKeyCycle(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{
+				Name: "accounts",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "user_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{{
+					Name:              "accounts_user_id_fkey",
+					Columns:           []string{"user_id"},
+					ReferencedTable:   "users",
+					ReferencedColumns: []string{"id"},
+				}},
+			},
+			{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "account_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{{
+					Name:              "users_account_id_fkey",
+					Columns:           []string{"account_id"},
+					ReferencedTable:   "accounts",
+					ReferencedColumns: []string{"id"},
+				}},
+			},
+		},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+		t.Fatalf("expected dependency cycle error, got %v", err)
+	}
+}
+
 func TestSnapshotDiffAddsEnumValue(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
@@ -128,6 +262,12 @@ func TestSnapshotDiffAddsEnumValue(t *testing.T) {
 	}
 	if len(planned.Statements) != 1 || planned.Statements[0] != "ALTER TYPE status ADD VALUE 'issued';" {
 		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 || len(planned.Changes[0].Risks) != 1 || planned.Changes[0].Risks[0] != "manual-review" {
+		t.Fatalf("change risks = %#v", planned.Changes)
+	}
+	if planned.Changes[0].Reversible || len(planned.Changes[0].ReverseStatements) != 0 {
+		t.Fatalf("enum value append should not be automatically reversible: %#v", planned.Changes[0])
 	}
 }
 
@@ -478,6 +618,173 @@ func TestSnapshotDiffProducesRoleReverse(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffOrdersRolesByMembershipDependency(t *testing.T) {
+	login := true
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Roles: []pgschema.Role{
+			{
+				Name:     "app_writer",
+				Login:    &login,
+				MemberOf: []string{"app_base"},
+			},
+			{
+				Name: "app_base",
+			},
+		},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	base := strings.Index(got, "CREATE ROLE app_base")
+	writer := strings.Index(got, "CREATE ROLE app_writer")
+	if base < 0 || writer < 0 || base > writer {
+		t.Fatalf("roles not dependency ordered:\n%s", got)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if len(planned.Changes[1].Dependencies) != 1 || planned.Changes[1].Dependencies[0].Kind != "role" || planned.Changes[1].Dependencies[0].Key != "app_base" {
+		t.Fatalf("role dependencies = %#v", planned.Changes[1].Dependencies)
+	}
+}
+
+func TestSnapshotDiffOrdersFunctionsBeforeTables(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Functions: []pgschema.Function{{
+			Name:       "new_invoice_number",
+			Language:   "sql",
+			ReturnType: "bigint",
+			Body:       "SELECT 1",
+		}},
+		Tables: []ast.Table{{
+			Name: "invoices",
+			Columns: []ast.Column{{
+				Name:    "number",
+				Type:    "bigint",
+				Default: "new_invoice_number()",
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	function := strings.Index(got, "CREATE FUNCTION new_invoice_number()")
+	table := strings.Index(got, "CREATE TABLE invoices")
+	if function < 0 || table < 0 || function > table {
+		t.Fatalf("function should be created before table default can reference it:\n%s", got)
+	}
+}
+
+func TestSnapshotDiffProducesSimpleCreateReverses(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Namespaces: []pgschema.Namespace{{
+			Name: "billing",
+		}},
+		Extensions: []pgschema.Extension{{
+			Name: "pgcrypto",
+		}},
+		Enums: []pgschema.Enum{{
+			Schema: "billing",
+			Name:   "invoice_status",
+			Values: []string{"draft"},
+		}},
+		Tables: []ast.Table{{
+			Schema: "billing",
+			Name:   "invoices",
+			Columns: []ast.Column{{
+				Name: "id",
+				Type: "uuid",
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"schema:billing":              "DROP SCHEMA billing;",
+		"extension:public.pgcrypto":   "DROP EXTENSION pgcrypto;",
+		"enum:billing.invoice_status": "DROP TYPE billing.invoice_status;",
+		"table:billing.invoices":      "DROP TABLE billing.invoices;",
+	}
+	for _, change := range planned.Changes {
+		key := string(change.Object.Kind) + ":" + change.Object.Key
+		reverse, ok := want[key]
+		if !ok {
+			continue
+		}
+		if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != reverse {
+			t.Fatalf("%s reverse = %#v reversible=%v", key, change.ReverseStatements, change.Reversible)
+		}
+		delete(want, key)
+	}
+	if len(want) > 0 {
+		t.Fatalf("missing reverses for %#v in %#v", want, planned.Changes)
+	}
+}
+
+func TestSnapshotDiffProducesAddColumnReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "email", Type: "text"},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "ALTER TABLE users DROP COLUMN email;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+	if len(change.Dependencies) != 1 || change.Dependencies[0].Kind != "table" || change.Dependencies[0].Key != "public.users" {
+		t.Fatalf("dependencies = %#v", change.Dependencies)
+	}
+}
+
 func TestSnapshotDiffProducesSequenceOwnershipDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
@@ -786,6 +1093,45 @@ func TestSnapshotDiffProducesViewDependencyAndReverse(t *testing.T) {
 	}
 	if !comment.Reversible || len(comment.ReverseStatements) != 1 || comment.ReverseStatements[0].SQL != "COMMENT ON VIEW active_users IS NULL;" {
 		t.Fatalf("comment reverse = %#v reversible=%v", comment.ReverseStatements, comment.Reversible)
+	}
+}
+
+func TestSnapshotDiffOrdersViewsByViewDependency(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Views: []pgschema.View{
+			{
+				Name:      "active_user_emails",
+				Query:     "SELECT id FROM active_users",
+				DependsOn: []string{"active_users"},
+			},
+			{
+				Name:  "active_users",
+				Query: "SELECT id FROM users",
+			},
+		},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	base := strings.Index(got, "CREATE VIEW active_users")
+	dependent := strings.Index(got, "CREATE VIEW active_user_emails")
+	if base < 0 || dependent < 0 || base > dependent {
+		t.Fatalf("views not dependency ordered:\n%s", got)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if len(planned.Changes[1].Dependencies) != 1 || planned.Changes[1].Dependencies[0].Kind != "view" || planned.Changes[1].Dependencies[0].Key != "public.active_users" {
+		t.Fatalf("view dependencies = %#v", planned.Changes[1].Dependencies)
 	}
 }
 

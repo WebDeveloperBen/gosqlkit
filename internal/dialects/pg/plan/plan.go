@@ -49,6 +49,9 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.sequences(previous.Sequences, current.Sequences); err != nil {
 		return nil, err
 	}
+	if err := planner.functions(previous.Functions, current.Functions); err != nil {
+		return nil, err
+	}
 	if err := planner.tables(previous.Tables, current.Tables); err != nil {
 		return nil, err
 	}
@@ -58,16 +61,16 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.policies(previous.Policies, current.Policies); err != nil {
 		return nil, err
 	}
-	if err := planner.functions(previous.Functions, current.Functions); err != nil {
+	if err := planner.views(previous.Views, current.Views, current.Tables, current.MaterializedViews); err != nil {
 		return nil, err
 	}
-	if err := planner.views(previous.Views, current.Views); err != nil {
-		return nil, err
-	}
-	if err := planner.materializedViews(previous.MaterializedViews, current.MaterializedViews); err != nil {
+	if err := planner.materializedViews(previous.MaterializedViews, current.MaterializedViews, current.Tables, current.Views); err != nil {
 		return nil, err
 	}
 	if err := planner.triggers(previous.Triggers, current.Triggers, current.Tables, current.Views, current.MaterializedViews); err != nil {
+		return nil, err
+	}
+	if err := planner.sortChanges(); err != nil {
 		return nil, err
 	}
 	return planner.plan, nil
@@ -77,13 +80,69 @@ type planner struct {
 	plan *migrateplan.Plan
 }
 
-func (p planner) add(op migrateplan.Operation, kind migrateplan.ObjectKind, key, summary, statement string) {
-	p.addWith(migrateplan.NewChange(op, migrateplan.Ref(kind, key), summary, migrateplan.SQL(statement)))
-}
-
 func (p planner) addWith(change migrateplan.Change) {
 	p.plan.Changes = append(p.plan.Changes, change)
 	for _, statement := range change.Statements {
 		p.plan.Statements = append(p.plan.Statements, statement.SQL)
 	}
+}
+
+func (p planner) sortChanges() error {
+	changes, err := sortChangesByDependencies(p.plan.Changes)
+	if err != nil {
+		return err
+	}
+	p.plan.Changes = changes
+	p.plan.Statements = p.plan.Statements[:0]
+	for _, change := range changes {
+		for _, statement := range change.Statements {
+			p.plan.Statements = append(p.plan.Statements, statement.SQL)
+		}
+	}
+	return nil
+}
+
+func sortChangesByDependencies(changes []migrateplan.Change) ([]migrateplan.Change, error) {
+	byObject := make(map[migrateplan.ObjectRef]int, len(changes))
+	for i, change := range changes {
+		if _, ok := byObject[change.Object]; ok {
+			continue
+		}
+		byObject[change.Object] = i
+	}
+
+	visiting := make(map[int]bool, len(changes))
+	visited := make(map[int]bool, len(changes))
+	sorted := make([]migrateplan.Change, 0, len(changes))
+
+	var visit func(int) error
+	visit = func(i int) error {
+		if visited[i] {
+			return nil
+		}
+		if visiting[i] {
+			return unsupported("migration changes have a dependency cycle")
+		}
+		visiting[i] = true
+		for _, dependency := range changes[i].Dependencies {
+			j, ok := byObject[dependency]
+			if !ok || j == i {
+				continue
+			}
+			if err := visit(j); err != nil {
+				return err
+			}
+		}
+		visiting[i] = false
+		visited[i] = true
+		sorted = append(sorted, changes[i])
+		return nil
+	}
+
+	for i := range changes {
+		if err := visit(i); err != nil {
+			return nil, err
+		}
+	}
+	return sorted, nil
 }
