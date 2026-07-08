@@ -469,8 +469,8 @@ Other provider requirement:
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[~]` Goose-compatible migration file output.
-- `[ ]` CI command for committed schema drift.
-- `[ ]` CI command for database drift.
+- `[x]` CI command for committed schema drift (`gosqlkit ci schema`).
+- `[x]` CI command for database drift (`gosqlkit ci database`).
 - `[x]` Machine-readable JSON output for commands.
 - `[x]` Quiet output mode for scripts.
 - `[ ]` Shell completion.

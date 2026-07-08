@@ -346,78 +346,108 @@ func promptRenameCandidates(stdin io.Reader, stdout io.Writer) app.RenameDecisio
 		if len(candidates) == 0 {
 			return nil, nil
 		}
-		title := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("12")).
-			Render("ambiguous rename candidates")
-		if _, err := fmt.Fprintln(stdout, title); err != nil {
-			return nil, err
-		}
-		if _, err := fmt.Fprintln(stdout); err != nil {
-			return nil, err
-		}
-		if _, err := fmt.Fprintln(stdout, renameCandidateTable(candidates)); err != nil {
-			return nil, err
-		}
-		if _, err := fmt.Fprintln(stdout); err != nil {
-			return nil, err
-		}
-		if _, err := fmt.Fprint(stdout, "Select renames to accept (numbers, comma-separated; all; none): "); err != nil {
-			return nil, err
-		}
-
-		answer, err := bufio.NewReader(stdin).ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, err
-		}
-		selected, err := parseRenameSelection(answer, len(candidates))
-		if err != nil {
-			return nil, err
-		}
-		decisions := make([]app.RenameDecision, 0, len(candidates))
-		for i, candidate := range candidates {
-			_, accept := selected[i]
-			decisions = append(decisions, app.RenameDecision{Candidate: candidate, Accept: accept})
+		reader := bufio.NewReader(stdin)
+		decisions := make([]app.RenameDecision, 0)
+		usedSources := map[string]struct{}{}
+		for _, group := range renameCandidateGroups(candidates) {
+			available := make([]app.RenameCandidate, 0, len(group))
+			for _, candidate := range group {
+				if _, used := usedSources[candidate.FromKey]; !used {
+					available = append(available, candidate)
+				}
+			}
+			if len(available) == 0 {
+				continue
+			}
+			selected, renamed, err := promptRenameCandidateGroup(reader, stdout, available)
+			if err != nil {
+				return nil, err
+			}
+			if !renamed {
+				for _, candidate := range available {
+					decisions = append(decisions, app.RenameDecision{Candidate: candidate})
+				}
+				continue
+			}
+			usedSources[selected.FromKey] = struct{}{}
+			decisions = append(decisions, app.RenameDecision{Candidate: selected, Accept: true})
 		}
 		return decisions, nil
 	}
 }
 
-func renameCandidateTable(candidates []app.RenameCandidate) string {
-	t := styledTable("#", "Kind", "From", "To", "Parent")
+func renameCandidateGroups(candidates []app.RenameCandidate) [][]app.RenameCandidate {
+	groups := make([][]app.RenameCandidate, 0)
+	byTarget := map[string]int{}
+	for _, candidate := range candidates {
+		idx, ok := byTarget[candidate.ToKey]
+		if !ok {
+			byTarget[candidate.ToKey] = len(groups)
+			groups = append(groups, nil)
+			idx = len(groups) - 1
+		}
+		groups[idx] = append(groups[idx], candidate)
+	}
+	return groups
+}
+
+func promptRenameCandidateGroup(reader *bufio.Reader, stdout io.Writer, candidates []app.RenameCandidate) (app.RenameCandidate, bool, error) {
+	target := candidates[0]
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("12")).
+		Render("ambiguous rename candidate")
+	if _, err := fmt.Fprintln(stdout, title); err != nil {
+		return app.RenameCandidate{}, false, err
+	}
+	if _, err := fmt.Fprintf(stdout, "\nIs %s %s created, or renamed from an existing %s?\n\n", target.ToKey, target.Kind, target.Kind); err != nil {
+		return app.RenameCandidate{}, false, err
+	}
+	if _, err := fmt.Fprintln(stdout, renameCandidateDecisionTable(candidates)); err != nil {
+		return app.RenameCandidate{}, false, err
+	}
+	if _, err := fmt.Fprintf(stdout, "\nSelect action for %s (1-%d): ", target.ToKey, len(candidates)+1); err != nil {
+		return app.RenameCandidate{}, false, err
+	}
+	answer, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return app.RenameCandidate{}, false, err
+	}
+	idx, err := parseRenameDecisionSelection(answer, len(candidates)+1)
+	if err != nil {
+		return app.RenameCandidate{}, false, err
+	}
+	if idx == 0 {
+		return app.RenameCandidate{}, false, nil
+	}
+	return candidates[idx-1], true, nil
+}
+
+func renameCandidateDecisionTable(candidates []app.RenameCandidate) string {
+	t := styledTable("#", "Decision", "Kind", "From", "To", "Parent")
+	target := candidates[0]
+	t.Row("1", "create", target.Kind, "", target.ToKey, target.ParentKey)
 	for i, candidate := range candidates {
-		t.Row(strconv.Itoa(i+1), candidate.Kind, candidate.FromKey, candidate.ToKey, candidate.ParentKey)
+		t.Row(strconv.Itoa(i+2), "rename", candidate.Kind, candidate.FromKey, candidate.ToKey, candidate.ParentKey)
 	}
 	return t.String()
 }
 
-func parseRenameSelection(answer string, count int) (map[int]struct{}, error) {
+func parseRenameDecisionSelection(answer string, count int) (int, error) {
 	answer = strings.TrimSpace(strings.ToLower(answer))
-	selected := map[int]struct{}{}
 	switch answer {
-	case "", "n", "no", "none":
-		return selected, nil
-	case "a", "all":
-		for i := range count {
-			selected[i] = struct{}{}
-		}
-		return selected, nil
+	case "", "c", "create", "n", "no", "none":
+		return 0, nil
 	}
-	parts := strings.FieldsFunc(answer, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\t'
-	})
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		idx, err := strconv.Atoi(part)
-		if err != nil {
-			return nil, fmt.Errorf("invalid rename selection %q", part)
-		}
-		if idx < 1 || idx > count {
-			return nil, fmt.Errorf("rename selection %d is out of range", idx)
-		}
-		selected[idx-1] = struct{}{}
+	idx, err := strconv.Atoi(answer)
+	if err != nil {
+		return 0, fmt.Errorf("invalid rename selection %q", answer)
 	}
-	return selected, nil
+	if idx < 1 || idx > count {
+		return 0, fmt.Errorf("rename selection %d is out of range", idx)
+	}
+	if idx == 1 {
+		return 0, nil
+	}
+	return idx - 1, nil
 }

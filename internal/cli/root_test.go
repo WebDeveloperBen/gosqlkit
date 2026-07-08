@@ -28,6 +28,24 @@ func runWithRecover(t *testing.T, args []string) (code int, err error) {
 	return code, err
 }
 
+func mustModuleDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found")
+		}
+		dir = parent
+	}
+}
+
 func TestRunNoArgsPrintsHelp(t *testing.T) {
 	code, err := runWithRecover(t, nil)
 	if err != nil {
@@ -224,6 +242,24 @@ migrations:
 	}
 }
 
+func TestRunCISchemaPrintsJSON(t *testing.T) {
+	root := filepath.Join(mustModuleDir(t), "examples", "basic")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code, err := run([]string{"--root", root, "ci", "schema", "--json"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run(ci schema --json) returned error: %v\nstderr=%s", err, stderr.String())
+	}
+	if code != 0 {
+		t.Fatalf("run(ci schema --json) returned code %d, want 0", code)
+	}
+	for _, want := range []string{`"generate":`, `"snapshot":`, `"migration":`, `"checked": true`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout missing %q\n%s", want, stdout.String())
+		}
+	}
+}
+
 func TestPrintHumanHonoursQuietAndJSON(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -242,6 +278,40 @@ func TestPrintHumanHonoursQuietAndJSON(t *testing.T) {
 				t.Fatalf("printHuman(%v, %v) = %v, want %v", tt.json, tt.quiet, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPrintCISchemaRendersTable(t *testing.T) {
+	var stdout bytes.Buffer
+	err := printCISchema(&stdout, &app.CISchemaResult{
+		Generate:  &app.GenerateResult{Out: "db/schema.generated.sql", Checked: true},
+		Snapshot:  &app.SnapshotResult{Out: "db/schema.snapshot.json", Checked: true},
+		Migration: &app.MigrateCheckResult{Dir: "db/migrations", Count: 2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := stdout.String()
+	for _, want := range []string{"Check", "Status", "generated SQL", "snapshot JSON", "migrations", "ok", "2"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("ci schema output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestPrintCIDatabaseRendersTable(t *testing.T) {
+	var stdout bytes.Buffer
+	err := printCIDatabase(&stdout, &app.CIDatabaseResult{
+		Drift: &app.DriftCheckResult{DatabaseSnapshotID: "database-id"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := stdout.String()
+	for _, want := range []string{"Check", "Status", "database drift", "ok", "database-id"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("ci database output missing %q\n%s", want, output)
+		}
 	}
 }
 
@@ -371,7 +441,7 @@ schema: "schema"
 }
 
 func TestPromptRenameCandidatesSelectsAcceptedRenames(t *testing.T) {
-	stdin := strings.NewReader("1\n")
+	stdin := strings.NewReader("2\n1\n")
 	var stdout bytes.Buffer
 	decide := promptRenameCandidates(stdin, &stdout)
 
@@ -390,10 +460,11 @@ func TestPromptRenameCandidatesSelectsAcceptedRenames(t *testing.T) {
 	}
 	output := stdout.String()
 	for _, want := range []string{
-		"ambiguous rename candidates",
+		"ambiguous rename candidate",
 		"public.old_users",
 		"public.users.email",
-		"Select renames to accept",
+		"Is public.users table created",
+		"Select action for public.users",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("prompt output missing %q\n%s", want, output)
@@ -401,28 +472,50 @@ func TestPromptRenameCandidatesSelectsAcceptedRenames(t *testing.T) {
 	}
 }
 
-func TestParseRenameSelectionSupportsAllAndNone(t *testing.T) {
-	all, err := parseRenameSelection("all", 3)
+func TestPromptRenameCandidatesConsumesSelectedSource(t *testing.T) {
+	stdin := strings.NewReader("2\n")
+	var stdout bytes.Buffer
+	decide := promptRenameCandidates(stdin, &stdout)
+
+	decisions, err := decide([]app.RenameCandidate{
+		{Kind: "table", FromKey: "public.old_users", ToKey: "public.users"},
+		{Kind: "table", FromKey: "public.old_users", ToKey: "public.accounts"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 3 {
-		t.Fatalf("all selection = %#v", all)
+	if len(decisions) != 1 || !decisions[0].Accept || decisions[0].Candidate.ToKey != "public.users" {
+		t.Fatalf("unexpected decisions %#v", decisions)
 	}
-	none, err := parseRenameSelection("none", 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(none) != 0 {
-		t.Fatalf("none selection = %#v", none)
+	if strings.Contains(stdout.String(), "public.accounts") {
+		t.Fatalf("selected source should not be offered for a later target\n%s", stdout.String())
 	}
 }
 
-func TestParseRenameSelectionRejectsInvalidInput(t *testing.T) {
-	if _, err := parseRenameSelection("4", 3); err == nil || !strings.Contains(err.Error(), "out of range") {
+func TestParseRenameDecisionSelectionSupportsCreate(t *testing.T) {
+	for _, input := range []string{"", "1", "create", "none"} {
+		got, err := parseRenameDecisionSelection(input, 3)
+		if err != nil {
+			t.Fatalf("parseRenameDecisionSelection(%q) error: %v", input, err)
+		}
+		if got != 0 {
+			t.Fatalf("parseRenameDecisionSelection(%q) = %d, want 0", input, got)
+		}
+	}
+	got, err := parseRenameDecisionSelection("2", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 1 {
+		t.Fatalf("parseRenameDecisionSelection(2) = %d, want 1", got)
+	}
+}
+
+func TestParseRenameDecisionSelectionRejectsInvalidInput(t *testing.T) {
+	if _, err := parseRenameDecisionSelection("4", 3); err == nil || !strings.Contains(err.Error(), "out of range") {
 		t.Fatalf("expected out of range error, got %v", err)
 	}
-	if _, err := parseRenameSelection("nope", 3); err == nil || !strings.Contains(err.Error(), "invalid rename selection") {
+	if _, err := parseRenameDecisionSelection("nope", 3); err == nil || !strings.Contains(err.Error(), "invalid rename selection") {
 		t.Fatalf("expected invalid selection error, got %v", err)
 	}
 }

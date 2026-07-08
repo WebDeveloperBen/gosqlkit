@@ -72,6 +72,7 @@ Check committed output is current (CI gate):
 ```bash
 gosqlkit generate --check
 gosqlkit snapshot --check
+gosqlkit ci schema
 ```
 
 Run the Docker-backed PostgreSQL integration suite when you want the full
@@ -92,6 +93,7 @@ gosqlkit migrate check --sandbox-url "$DATABASE_URL"
 gosqlkit inspect --url "$DATABASE_URL"
 gosqlkit inspect --url "$DATABASE_URL" --drift-projection
 gosqlkit drift check --url "$DATABASE_URL"
+gosqlkit ci database --url "$DATABASE_URL"
 gosqlkit migrate apply --url "$DATABASE_URL"
 gosqlkit migrate apply --token-command "az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv"
 ```
@@ -188,6 +190,9 @@ sqlc generate
   standalone indexes, comments, RLS flags, policies, triggers, views, and
   materialized views, with object-level diagnostics for missing, extra, and
   changed objects in a styled terminal table and JSON output
+- CI-friendly wrappers: `gosqlkit ci schema` checks committed generated SQL,
+  snapshot JSON, and migration metadata; `gosqlkit ci database` checks live
+  database drift
 - `gosqlkit migrate apply --url ...` for goose-compatible migrations, with
   applied versions tracked in `goose_db_version`
 - `DATABASE_URL` / `--url-env` support for database-backed commands, plus JSON
