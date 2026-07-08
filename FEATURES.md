@@ -301,13 +301,13 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 - `[x]` Detect table removals.
 - `[x]` Detect column removals.
-- `[ ]` Detect enum value removals.
+- `[x]` Detect enum value removals.
 - `[x]` Detect constraint, index, policy, trigger, view, function, sequence,
   domain, and role removals.
-- `[ ]` Detect column type changes.
-- `[ ]` Detect column default changes.
-- `[ ]` Detect nullability changes.
-- `[ ]` Detect generated-column and identity changes.
+- `[x]` Detect column type changes.
+- `[x]` Detect column default changes.
+- `[x]` Detect nullability changes.
+- `[x]` Detect generated-column and identity changes.
 - `[x]` Risk flags for destructive, data-loss, lock-heavy, non-transactional,
   requires-backfill, and manual-review changes.
 - `[x]` Destructive changes fail by default with actionable diagnostics.
@@ -325,8 +325,9 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` Rename metadata validation against previous snapshot object keys.
 - `[x]` Rename-plus-alter combinations fail closed until semantic planning
   supports them.
-- `[ ]` Trigger and extension rename (PostgreSQL does not support in-place
-  rename; requires manual review).
+- `[x]` Trigger rename planning.
+- `[x]` Extension rename metadata detection as a manual-review replacement
+  (PostgreSQL does not support `ALTER EXTENSION ... RENAME TO`).
 
 ### Slice 6: Sandbox Replay and Drift Check
 
@@ -487,8 +488,9 @@ Other provider requirement:
 - `[x]` Function rendering tests.
 - `[x]` Trigger rendering tests.
 - `[x]` RLS policy rendering tests.
-- `[ ]` Diff fixture tests.
-- `[ ]` Destructive-change fixture tests.
+- `[x]` Diff fixture tests.
+- `[x]` Destructive-change fixture tests.
+- `[x]` Rename-aware diff tests.
 - `[ ]` Integration test against live PostgreSQL.
 - `[ ]` Testcontainers integration test against live PostgreSQL.
 - `[ ]` Testcontainers integration test per supported dialect.

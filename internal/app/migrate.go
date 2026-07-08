@@ -166,11 +166,14 @@ func diffMigrationPlan(config *Config, opts MigrateCreateOptions, previous migra
 	if err != nil {
 		return migrate.Plan{}, err
 	}
-	if len(planned.Statements) == 0 {
+	if len(planned.Changes) == 0 {
 		return migrate.Plan{}, errors.New("schema has no changes")
 	}
 	if planned.HasDestructive() && !opts.AllowDestructive {
 		return migrate.Plan{}, destructiveGuardError(planned)
+	}
+	if len(planned.Statements) == 0 {
+		return migrate.Plan{}, errors.New("migration plan has no executable SQL statements; manual migration authoring is required")
 	}
 
 	changes := make([]migrate.Change, 0, len(planned.Changes))

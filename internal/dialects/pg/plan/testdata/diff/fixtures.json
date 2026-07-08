@@ -227,7 +227,6 @@
   },
   {
     "name": "remove_enum_value",
-    "wantErr": "enum values were removed",
     "previous": {
       "dialect": "postgresql",
       "enums": [
@@ -352,7 +351,9 @@
   },
   {
     "name": "modify_column",
-    "wantErr": "column modifications",
+    "wantStatements": [
+      "ALTER TABLE users ALTER COLUMN email TYPE varchar(320);"
+    ],
     "previous": {
       "dialect": "postgresql",
       "tables": [
@@ -2447,6 +2448,43 @@
     },
     "current": {
       "dialect": "postgresql",
+      "version": 1
+    }
+  },
+  {
+    "name": "rename_trigger",
+    "wantStatements": [
+      "ALTER TRIGGER old_users_touch_updated_at ON users RENAME TO users_touch_updated_at;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "triggers": [
+        {
+          "target": "users",
+          "function": "touch_updated_at",
+          "timing": "before",
+          "name": "old_users_touch_updated_at",
+          "events": [
+            "update"
+          ]
+        }
+      ],
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "triggers": [
+        {
+          "target": "users",
+          "function": "touch_updated_at",
+          "timing": "before",
+          "previousName": "old_users_touch_updated_at",
+          "name": "users_touch_updated_at",
+          "events": [
+            "update"
+          ]
+        }
+      ],
       "version": 1
     }
   },

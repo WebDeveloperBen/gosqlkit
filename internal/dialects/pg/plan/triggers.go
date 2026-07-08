@@ -15,7 +15,27 @@ func (p planner) triggers(previous, current []pgschema.Trigger, tables []ast.Tab
 		old, ok := prev[key]
 		if !ok {
 			if trigger.PreviousName != "" {
-				return unsupported("trigger " + key + " rename metadata requires manual review; PostgreSQL does not support ALTER TRIGGER ... RENAME TO; drop and recreate the trigger manually")
+				oldTrigger, hasOld := prev[triggerPreviousKey(trigger)]
+				if hasOld {
+					if err := ensureRenameOnlyTrigger(trigger, oldTrigger); err != nil {
+						return err
+					}
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindTrigger, key),
+							"rename trigger "+triggerPreviousKey(trigger)+" to "+key,
+							migrateplan.SQL(renderRenameTrigger(trigger.Target, trigger.PreviousName, trigger.Name)),
+						).WithDependencies(
+							triggerTargetRef(trigger, tables, views, materializedViews),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameTrigger(trigger.Target, trigger.Name, trigger.PreviousName)),
+						),
+					)
+					delete(prev, triggerPreviousKey(trigger))
+					continue
+				}
+				return unsupported("trigger " + key + " previousName " + trigger.PreviousName + " does not match any trigger in the previous snapshot")
 			}
 			p.addWith(
 				migrateplan.NewChange(
@@ -83,6 +103,18 @@ func (p planner) triggers(previous, current []pgschema.Trigger, tables []ast.Tab
 				),
 			)
 		}
+	}
+	return nil
+}
+
+func ensureRenameOnlyTrigger(trigger, old pgschema.Trigger) error {
+	renamed := old
+	renamed.Name = trigger.Name
+	renamed.PreviousName = ""
+	current := trigger
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("trigger " + triggerKey(trigger) + " rename from " + triggerPreviousKey(trigger) + " combined with other modifications requires semantic planning")
 	}
 	return nil
 }

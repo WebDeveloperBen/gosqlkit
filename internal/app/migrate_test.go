@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
@@ -412,6 +413,54 @@ func TestMigrateCreateWithConfigRejectsDestructiveChangesByDefault(t *testing.T)
 	}
 }
 
+func TestDiffMigrationPlanRejectsUnrenderedDestructiveChanges(t *testing.T) {
+	previousSnapshot := snapshotJSON(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Enums: []pgschema.Enum{{
+			Name:   "invoice_status",
+			Values: []string{"draft", "issued"},
+		}},
+	})
+	currentSnapshot := snapshotJSON(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Enums: []pgschema.Enum{{
+			Name:   "invoice_status",
+			Values: []string{"draft"},
+		}},
+	})
+	previousID, err := snapshotIDFromJSON(previousSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config := &Config{Dialect: "postgresql"}
+	previous := migrate.Migration{Metadata: migrate.Metadata{
+		ToSnapshotID:   previousID,
+		TargetSnapshot: []byte(previousSnapshot),
+	}}
+
+	_, err = diffMigrationPlan(config, MigrateCreateOptions{
+		Name: "remove enum value",
+	}, previous, currentSnapshot, currentID)
+	if err == nil || !strings.Contains(err.Error(), "destructive") || !strings.Contains(err.Error(), "public.invoice_status") {
+		t.Fatalf("expected destructive enum-value guard, got %v", err)
+	}
+
+	_, err = diffMigrationPlan(config, MigrateCreateOptions{
+		Name:             "remove enum value",
+		AllowDestructive: true,
+	}, previous, currentSnapshot, currentID)
+	if err == nil || !strings.Contains(err.Error(), "no executable SQL") {
+		t.Fatalf("expected no executable SQL error, got %v", err)
+	}
+}
+
 func TestMigratePlanWithConfigReportsDestructive(t *testing.T) {
 	config := &Config{
 		Dialect: "postgres",
@@ -535,6 +584,19 @@ func snapshotWithoutColumn(t *testing.T, snapshot, tableName, columnName string)
 	raw["columnMetadata"] = data
 
 	data, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := injectSnapshotIDs(string(data), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func snapshotJSON(t *testing.T, doc pgschema.Document) string {
+	t.Helper()
+	data, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
 	}

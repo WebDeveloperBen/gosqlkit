@@ -513,6 +513,23 @@ Current implementation status:
 - Planner changes are dependency-sorted before rendering, so referenced roles,
   parent tables, trigger functions, view dependencies, sequence ownership
   targets, and other known prerequisites are emitted before dependent changes.
+- Column modification planning now emits structured PostgreSQL `ALTER COLUMN`
+  changes for type, default, nullability, generated expression, and identity
+  changes. Risk metadata follows the Atlas/Drizzle-style semantic operation
+  split: type changes are destructive/data-loss/lock-heavy by default,
+  `SET NOT NULL` is marked lock-heavy/requires-backfill, and generated or
+  identity changes require manual DDL review. Inline column constraint or
+  reference mutations still fail closed.
+- PostgreSQL enum value removals are detected as structured replacement
+  changes with destructive/data-loss/manual-review risk metadata. The planner
+  intentionally emits no automatic SQL for this path because PostgreSQL
+  requires a rebuild-style workflow; `migrate plan --json` reports the change,
+  while `migrate create` refuses to author it until manual migration support
+  can safely model the rebuild.
+- Trigger renames are planned with `ALTER TRIGGER ... ON ... RENAME TO ...`
+  and reverse SQL. Extension rename metadata is detected as a structured
+  manual-review replacement with no automatic SQL because PostgreSQL supports
+  extension update/schema/member alteration but not extension renaming.
 
 ## Next Migration Engine Slices
 
@@ -627,8 +644,10 @@ drop/create pairs.
 Scope:
 
 - Support table, column, constraint, index, enum/type, sequence, view,
-  function, trigger, policy, and role renames where PostgreSQL has a direct
-  operation.
+  materialized view, function, trigger, policy, role, and schema renames where
+  PostgreSQL has a direct operation.
+- Detect extension rename metadata as a manual-review replacement because
+  PostgreSQL cannot rename extensions.
 - Validate rename metadata against previous snapshot object keys.
 - Reject ambiguous rename-plus-alter combinations until semantic planning
   supports them.

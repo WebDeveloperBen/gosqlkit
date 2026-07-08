@@ -568,12 +568,18 @@ update of this file:
   Migration planner emits structured changes with per-change risk flags
   (`destructive`, `data-loss`, `lock-heavy`, `manual-review`,
   `requires-ddl-review`) and best-effort reverse SQL. Destructive changes
-  (drops, RLS disables, comment removals) fail by default and require
-  `--allow-destructive` to author. Renames (table, column, constraint,
-  index, enum/type, sequence, view, materialized view, function, policy,
-  role, schema) are planned as `ALTER ... RENAME TO` with a reverse
-  `RENAME TO old_name`; mismatched `previousName` and rename-plus-alter
-  combinations fail closed.
+  (drops, RLS disables, comment removals, enum value removals, and column type
+  changes) fail by default and require `--allow-destructive` to author when
+  executable SQL exists. Column type, default, nullability, generated
+  expression, and identity changes are planned as structured `ALTER COLUMN`
+  changes with risk metadata; inline column constraint/reference mutations
+  still fail closed. Enum value removals are detected as manual-review
+  replacement changes and intentionally emit no automatic SQL. Renames (table,
+  column, constraint, index, enum/type, sequence, view, materialized view,
+  function, trigger, policy, role, schema) are planned as `ALTER ... RENAME TO`
+  with a reverse `RENAME TO old_name`; extension rename metadata is detected
+  as a manual-review replacement because PostgreSQL cannot rename extensions.
+  Mismatched `previousName` and rename-plus-alter combinations fail closed.
 - **Next tracks**: sandbox replay and drift check (Slice 6), auth/apply/runner
   expansion (Slice 7), then advanced PG objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.

@@ -40,6 +40,10 @@ func triggerKey(trigger pgschema.Trigger) string {
 	return referencedTableKey(trigger.Target) + "." + trigger.Name
 }
 
+func triggerPreviousKey(trigger pgschema.Trigger) string {
+	return referencedTableKey(trigger.Target) + "." + trigger.PreviousName
+}
+
 func viewKey(view pgschema.View) string {
 	return qualified(view.Schema, view.Name)
 }

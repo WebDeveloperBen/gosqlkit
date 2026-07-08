@@ -7,6 +7,7 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/plan"
+	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
 func TestSnapshotDiffAddsTableAndColumn(t *testing.T) {
@@ -423,7 +424,7 @@ func TestSnapshotDiffProducesAddColumnReverse(t *testing.T) {
 	}
 }
 
-func TestSnapshotDiffRejectsColumnModification(t *testing.T) {
+func TestSnapshotDiffPlansColumnTypeChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
@@ -441,9 +442,259 @@ func TestSnapshotDiffRejectsColumnModification(t *testing.T) {
 		}},
 	})
 
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != "alter" || change.Object.Kind != "column" || change.Object.Key != "public.users.email" {
+		t.Fatalf("change = %#v", change)
+	}
+	if len(change.Statements) != 1 || change.Statements[0].SQL != "ALTER TABLE users ALTER COLUMN email TYPE varchar(320);" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.RisksContainDestructive() || !change.RisksContainDataLoss() {
+		t.Fatalf("expected destructive data-loss risks, got %#v", change.Risks)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "ALTER TABLE users ALTER COLUMN email TYPE text;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffPlansColumnDefaultChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "status", Type: "text", Default: "'active'"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "status", Type: "text"}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Statements[0].SQL != "ALTER TABLE users ALTER COLUMN status DROP DEFAULT;" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.Reversible || change.ReverseStatements[0].SQL != "ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffPlansColumnNullabilityChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text", NotNull: true}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Statements[0].SQL != "ALTER TABLE users ALTER COLUMN email SET NOT NULL;" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.HasRisk(migrateplan.RiskRequiresBackfill) || !change.HasRisk(migrateplan.RiskLockHeavy) {
+		t.Fatalf("expected backfill and lock risks, got %#v", change.Risks)
+	}
+	if !change.Reversible || change.ReverseStatements[0].SQL != "ALTER TABLE users ALTER COLUMN email DROP NOT NULL;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffPlansGeneratedColumnChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "email", Type: "text"},
+				{Name: "search", Type: "tsvector", Generated: &ast.Generated{As: "to_tsvector('english', email)", Type: "stored"}},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "email", Type: "text"},
+				{Name: "search", Type: "tsvector", Generated: &ast.Generated{As: "to_tsvector('simple', email)", Type: "stored"}},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Statements[0].SQL != "ALTER TABLE users ALTER COLUMN search SET EXPRESSION AS (to_tsvector('simple', email));" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.HasRisk(migrateplan.RiskManualReview) || !change.HasRisk(migrateplan.RiskRequiresBackfill) {
+		t.Fatalf("expected manual-review and backfill risks, got %#v", change.Risks)
+	}
+	if !change.Reversible || change.ReverseStatements[0].SQL != "ALTER TABLE users ALTER COLUMN search SET EXPRESSION AS (to_tsvector('english', email));" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffPlansIdentityColumnChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "bigint", NotNull: true}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{{
+				Name:     "id",
+				Type:     "bigint",
+				NotNull:  true,
+				Identity: &ast.Identity{Type: "byDefault"},
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Statements[0].SQL != "ALTER TABLE users ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY;" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.HasRisk(migrateplan.RiskManualReview) || !change.HasRisk(migrateplan.RiskRequiresDDLReview) {
+		t.Fatalf("expected manual-review and DDL-review risks, got %#v", change.Risks)
+	}
+	if !change.Reversible || change.ReverseStatements[0].SQL != "ALTER TABLE users ALTER COLUMN id DROP IDENTITY IF EXISTS;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffPlansIdentityColumnModification(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{{
+				Name:     "id",
+				Type:     "bigint",
+				NotNull:  true,
+				Identity: &ast.Identity{Type: "always"},
+			}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{{
+				Name:     "id",
+				Type:     "bigint",
+				NotNull:  true,
+				Identity: &ast.Identity{Type: "byDefault", Increment: 10},
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if len(change.Statements) != 2 {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if change.Statements[0].SQL != "ALTER TABLE users ALTER COLUMN id DROP IDENTITY IF EXISTS;" {
+		t.Fatalf("drop identity SQL = %q", change.Statements[0].SQL)
+	}
+	if change.Statements[1].SQL != "ALTER TABLE users ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (INCREMENT 10);" {
+		t.Fatalf("add identity SQL = %q", change.Statements[1].SQL)
+	}
+	if len(change.ReverseStatements) != 2 || change.ReverseStatements[1].SQL != "ALTER TABLE users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY;" {
+		t.Fatalf("reverse = %#v", change.ReverseStatements)
+	}
+}
+
+func TestSnapshotDiffRejectsUnsupportedColumnModification(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{Name: "orgs", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+			{Name: "users", Columns: []ast.Column{{Name: "org_id", Type: "uuid"}}},
+		},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{Name: "orgs", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+			{Name: "users", Columns: []ast.Column{{
+				Name:       "org_id",
+				Type:       "uuid",
+				References: &ast.ForeignKey{Table: "orgs", Column: "id"},
+			}}},
+		},
+	})
+
 	_, err := plan.SnapshotDiff(previous, current)
-	if err == nil || !strings.Contains(err.Error(), "column modifications") {
-		t.Fatalf("expected column modification error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "inline constraint or reference changes") {
+		t.Fatalf("expected unsupported inline constraint/reference error, got %v", err)
 	}
 }
 
@@ -661,5 +912,346 @@ func TestSnapshotDiffEmitsDestructiveDropComment(t *testing.T) {
 		if !change.RisksContainDestructive() {
 			t.Fatalf("expected destructive risk on %s, got %#v", change.Object.Key, change.Risks)
 		}
+	}
+}
+
+func TestSnapshotDiffRejectsNewTableForeignKeyCycle(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{
+				Name: "accounts",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "user_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{{
+					Name:              "accounts_user_id_fkey",
+					Columns:           []string{"user_id"},
+					ReferencedTable:   "users",
+					ReferencedColumns: []string{"id"},
+				}},
+			},
+			{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "account_id", Type: "uuid"},
+				},
+				ForeignKeys: []ast.ForeignKeyConstraint{{
+					Name:              "users_account_id_fkey",
+					Columns:           []string{"account_id"},
+					ReferencedTable:   "accounts",
+					ReferencedColumns: []string{"id"},
+				}},
+			},
+		},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+		t.Fatalf("expected dependency cycle error, got %v", err)
+	}
+}
+
+func TestSnapshotDiffEmitsRenameTable(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "old_users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:         "users",
+			PreviousName: "old_users",
+			Columns:      []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != "rename" {
+		t.Fatalf("op = %q", change.Op)
+	}
+	if change.Statements[0].SQL != "ALTER TABLE old_users RENAME TO users;" {
+		t.Fatalf("sql = %q", change.Statements[0].SQL)
+	}
+	if change.ReverseStatements[0].SQL != "ALTER TABLE users RENAME TO old_users;" {
+		t.Fatalf("reverse = %q", change.ReverseStatements[0].SQL)
+	}
+}
+
+func TestSnapshotDiffEmitsRenameColumn(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "old_email", Type: "text"},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "email", PreviousName: "old_email", Type: "text"},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 || planned.Changes[0].Op != "rename" {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if planned.Changes[0].Statements[0].SQL != "ALTER TABLE users RENAME COLUMN old_email TO email;" {
+		t.Fatalf("sql = %q", planned.Changes[0].Statements[0].SQL)
+	}
+}
+
+func TestSnapshotDiffEmitsRenameConstraint(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+			UniqueConstraints: []ast.UniqueConstraint{{
+				Name:    "old_users_email_key",
+				Columns: []string{"email"},
+			}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+			UniqueConstraints: []ast.UniqueConstraint{{
+				Name:         "users_email_key",
+				PreviousName: "old_users_email_key",
+				Columns:      []string{"email"},
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 || planned.Changes[0].Op != "rename" {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if planned.Changes[0].Statements[0].SQL != "ALTER TABLE users RENAME CONSTRAINT old_users_email_key TO users_email_key;" {
+		t.Fatalf("sql = %q", planned.Changes[0].Statements[0].SQL)
+	}
+}
+
+func TestSnapshotDiffEmitsRenameIndex(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+			Indexes: []ast.Index{{
+				Name:    "old_users_email_idx",
+				Columns: []ast.IndexColumn{{Expression: "email"}},
+			}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+			Indexes: []ast.Index{{
+				Name:         "users_email_idx",
+				PreviousName: "old_users_email_idx",
+				Columns:      []ast.IndexColumn{{Expression: "email"}},
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 || planned.Changes[0].Op != "rename" {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	if planned.Changes[0].Statements[0].SQL != "ALTER INDEX old_users_email_idx RENAME TO users_email_idx;" {
+		t.Fatalf("sql = %q", planned.Changes[0].Statements[0].SQL)
+	}
+}
+
+func TestSnapshotDiffRejectsRenameColumnWithTypeChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "old_email", Type: "text"},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name: "users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "email", PreviousName: "old_email", Type: "varchar(320)"},
+			},
+		}},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil || !strings.Contains(err.Error(), "rename from public.users.old_email combined with other modifications requires semantic planning") {
+		t.Fatalf("expected rename+alter error, got %v", err)
+	}
+}
+
+func TestSnapshotDiffRejectsRenameMismatchedPreviousName(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:         "people",
+			PreviousName: "missing_table",
+			Columns:      []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil {
+		t.Fatal("expected error for non-matching previousName, got nil")
+	}
+}
+
+func TestSnapshotDiffRenamesBeforeDependentAlters(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:    "old_users",
+			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{{
+			Name:         "users",
+			PreviousName: "old_users",
+			Columns: []ast.Column{
+				{Name: "id", Type: "uuid"},
+				{Name: "email", Type: "text"},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	renameAt := strings.Index(got, "RENAME TO users")
+	addAt := strings.Index(got, "ADD COLUMN email")
+	if renameAt < 0 || addAt < 0 {
+		t.Fatalf("expected rename and add column in output:\n%s", got)
+	}
+	if renameAt > addAt {
+		t.Fatalf("rename must happen before add column:\n%s", got)
+	}
+}
+
+func TestSnapshotDiffReversibleDropsCarryReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{
+				Name:    "accounts",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}, {Name: "email", Type: "text"}},
+				Indexes: []ast.Index{{Name: "accounts_email_idx", Columns: []ast.IndexColumn{{Expression: "email"}}}},
+				UniqueConstraints: []ast.UniqueConstraint{
+					{Name: "accounts_email_key", Columns: []string{"email"}},
+				},
+			},
+			{Name: "old_users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []ast.Table{
+			{Name: "accounts", Columns: []ast.Column{{Name: "id", Type: "uuid"}, {Name: "email", Type: "text"}}},
+			{Name: "users", PreviousName: "old_users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range planned.Changes {
+		if len(change.ReverseStatements) == 0 {
+			t.Fatalf("change %q (%s) has no reverse statements", change.Summary, change.Op)
+		}
+	}
+
+	var down []string
+	for i := len(planned.Changes) - 1; i >= 0; i-- {
+		for _, rev := range planned.Changes[i].ReverseStatements {
+			down = append(down, rev.SQL)
+		}
+	}
+	joined := strings.Join(down, "\n")
+	if !strings.Contains(joined, "accounts_email_idx") {
+		t.Fatalf("down migration missing index recreation:\n%s", joined)
+	}
+	if !strings.Contains(joined, "ADD") || !strings.Contains(joined, "accounts_email_key") {
+		t.Fatalf("down migration missing unique constraint recreation:\n%s", joined)
 	}
 }

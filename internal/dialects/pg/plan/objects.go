@@ -229,7 +229,23 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 		key := qualified(item.Schema, item.Name)
 		if _, ok := prev[key]; !ok {
 			if item.PreviousName != "" {
-				return unsupported("extension " + key + " rename metadata requires manual review; PostgreSQL does not support ALTER EXTENSION ... RENAME TO; drop and recreate the extension manually")
+				oldKey := qualified(item.Schema, item.PreviousName)
+				if _, hasOld := prev[oldKey]; hasOld {
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationReplace,
+							migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+							"replace extension "+oldKey+" with "+key,
+						).WithRisks(
+							migrateplan.RiskDestructive,
+							migrateplan.RiskManualReview,
+							migrateplan.RiskRequiresDDLReview,
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("extension " + key + " previousName " + item.PreviousName + " does not match any extension in the previous snapshot")
 			}
 			stmt := "CREATE EXTENSION " + item.Name
 			if item.Schema != "" {
@@ -348,7 +364,21 @@ func (p planner) enums(previous, current []pgschema.Enum) error {
 
 func (p planner) enumValues(previous, current pgschema.Enum) error {
 	if len(current.Values) < len(previous.Values) {
-		return unsupportedDestructive("enum values were removed")
+		key := qualified(current.Schema, current.Name)
+		removed := removedEnumValues(previous.Values, current.Values)
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationReplace,
+				migrateplan.Ref(migrateplan.ObjectKindEnum, key),
+				"remove enum value(s) "+strings.Join(removed, ", ")+" from "+key,
+			).WithRisks(
+				migrateplan.RiskDestructive,
+				migrateplan.RiskDataLoss,
+				migrateplan.RiskManualReview,
+				migrateplan.RiskRequiresDDLReview,
+			),
+		)
+		return nil
 	}
 	for i, value := range previous.Values {
 		if current.Values[i] != value {
@@ -369,6 +399,20 @@ func (p planner) enumValues(previous, current pgschema.Enum) error {
 		)
 	}
 	return nil
+}
+
+func removedEnumValues(previous, current []string) []string {
+	currentValues := make(map[string]bool, len(current))
+	for _, value := range current {
+		currentValues[value] = true
+	}
+	removed := make([]string, 0)
+	for _, value := range previous {
+		if !currentValues[value] {
+			removed = append(removed, value)
+		}
+	}
+	return removed
 }
 
 func (p planner) compositeTypes(previous, current []pgschema.CompositeType) error {

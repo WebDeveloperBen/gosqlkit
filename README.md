@@ -140,8 +140,8 @@ sqlc generate
 - Deterministic SQL and snapshot JSON output with stable snapshot IDs
 - Snapshot metadata maps (schema, table, column, view, role, function, trigger, policy) with
   schema-qualified keys for future diffing
-- Rename annotations (previousName) on tables, columns, constraints,
-  and indexes
+- Rename annotations (previousName) across supported schema objects, including
+  trigger rename planning and manual-review extension replacement detection
 - Dialect registry with PostgreSQL as the first provider
 - CLI generation, snapshot, and stale-output checks
 - Empty goose-compatible migration files for manual SQL
@@ -152,6 +152,11 @@ sqlc generate
   snapshot lineage, and goose `Up` / `Down` annotations
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing
+- Structured column alteration planning for type, default, nullability,
+  generated expression, and identity changes, with risk metadata and reverse
+  SQL where practical
+- Enum value removal detection with manual-review risk metadata; automatic
+  SQL is intentionally withheld for PostgreSQL enum rebuilds
 - `sqlc` compatibility example
 
 ## Example Project

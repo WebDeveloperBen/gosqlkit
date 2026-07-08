@@ -142,7 +142,9 @@ func (p planner) table(previous, current ast.Table) error {
 			continue
 		}
 		if !reflect.DeepEqual(columnWithoutComment(old), columnWithoutComment(column)) {
-			return unsupported("column modifications require semantic planning")
+			if err := p.columnModifications(current, old, column); err != nil {
+				return err
+			}
 		}
 		delete(prevColumns, column.Name)
 	}
@@ -205,6 +207,97 @@ func (p planner) table(previous, current ast.Table) error {
 	withoutColumnsPrevious.Name = withoutColumnsCurrent.Name
 	if !reflect.DeepEqual(withoutColumnsPrevious, withoutColumnsCurrent) {
 		return unsupported("table constraint, index, RLS, or comment changes require semantic planning")
+	}
+	return nil
+}
+
+func (p planner) columnModifications(table ast.Table, previous, current ast.Column) error {
+	if err := ensureColumnModificationSupported(table, previous, current); err != nil {
+		return err
+	}
+	key := tableKey(table) + "." + current.Name
+	tableRef := migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(table))
+	columnRef := migrateplan.Ref(migrateplan.ObjectKindColumn, key)
+	tableName := renderTableName(table)
+
+	if previous.Type != current.Type {
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				columnRef,
+				"alter column type "+key,
+				migrateplan.SQL("ALTER TABLE "+tableName+" ALTER COLUMN "+current.Name+" TYPE "+current.Type+";"),
+			).WithDependencies(tableRef).WithRisks(
+				migrateplan.RiskDestructive,
+				migrateplan.RiskDataLoss,
+				migrateplan.RiskLockHeavy,
+				migrateplan.RiskRequiresDDLReview,
+			).WithReverse(
+				migrateplan.SQL("ALTER TABLE " + tableName + " ALTER COLUMN " + current.Name + " TYPE " + previous.Type + ";"),
+			),
+		)
+	}
+	if previous.Default != current.Default {
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				columnRef,
+				"alter column default "+key,
+				migrateplan.SQL(renderAlterColumnDefault(table, current)),
+			).WithDependencies(tableRef).WithRisks(
+				migrateplan.RiskRequiresDDLReview,
+			).WithReverse(
+				migrateplan.SQL(renderAlterColumnDefault(table, previous)),
+			),
+		)
+	}
+	if previous.NotNull != current.NotNull {
+		change := migrateplan.NewChange(
+			migrateplan.OperationAlter,
+			columnRef,
+			"alter column nullability "+key,
+			migrateplan.SQL(renderAlterColumnNullability(table, current)),
+		).WithDependencies(tableRef).WithReverse(
+			migrateplan.SQL(renderAlterColumnNullability(table, previous)),
+		)
+		if current.NotNull {
+			change = change.WithRisks(migrateplan.RiskLockHeavy, migrateplan.RiskRequiresBackfill)
+		} else {
+			change = change.WithRisks(migrateplan.RiskRequiresDDLReview)
+		}
+		p.addWith(change)
+	}
+	if !reflect.DeepEqual(previous.Generated, current.Generated) {
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				columnRef,
+				"alter generated column "+key,
+				renderAlterColumnGenerated(table, current)...,
+			).WithDependencies(tableRef).WithRisks(
+				migrateplan.RiskManualReview,
+				migrateplan.RiskLockHeavy,
+				migrateplan.RiskRequiresBackfill,
+				migrateplan.RiskRequiresDDLReview,
+			).WithReverse(
+				renderAlterColumnGenerated(table, previous)...,
+			),
+		)
+	}
+	if !reflect.DeepEqual(previous.Identity, current.Identity) {
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				columnRef,
+				"alter identity column "+key,
+				renderAlterColumnIdentity(table, previous, current)...,
+			).WithDependencies(tableRef).WithRisks(
+				migrateplan.RiskManualReview,
+				migrateplan.RiskRequiresDDLReview,
+			).WithReverse(
+				renderAlterColumnIdentity(table, current, previous)...,
+			),
+		)
 	}
 	return nil
 }
@@ -781,6 +874,29 @@ func ensureAddColumnSupported(table ast.Table, column ast.Column) error {
 	return nil
 }
 
+func ensureColumnModificationSupported(table ast.Table, previous, current ast.Column) error {
+	key := tableKey(table) + "." + current.Name
+	if current.PreviousName != "" {
+		return unsupported("column " + key + " rename metadata requires semantic planning")
+	}
+	old := previous
+	next := current
+	old.Type = next.Type
+	old.Default = next.Default
+	old.NotNull = next.NotNull
+	old.Generated = next.Generated
+	old.Identity = next.Identity
+	old.Comment = next.Comment
+	old.PreviousName = next.PreviousName
+	if !reflect.DeepEqual(old, next) {
+		return unsupported("column " + key + " modifications include inline constraint or reference changes that require semantic planning")
+	}
+	if previous.Generated == nil && current.Generated != nil {
+		return unsupported("column " + key + " generated-column additions require semantic planning")
+	}
+	return nil
+}
+
 func ensureRenameOnlyColumn(table ast.Table, column, oldColumn ast.Column) error {
 	key := tableKey(table) + "." + column.Name
 	oldKey := tableKey(table) + "." + oldColumn.Name
@@ -957,4 +1073,42 @@ func reverseAddColumn(table ast.Table, column ast.Column) string {
 		return ""
 	}
 	return "ALTER TABLE " + renderTableName(table) + " ADD COLUMN " + def + ";"
+}
+
+func renderAlterColumnDefault(table ast.Table, column ast.Column) string {
+	prefix := "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + column.Name
+	if column.Default == "" {
+		return prefix + " DROP DEFAULT;"
+	}
+	return prefix + " SET DEFAULT " + column.Default + ";"
+}
+
+func renderAlterColumnNullability(table ast.Table, column ast.Column) string {
+	action := "DROP NOT NULL"
+	if column.NotNull {
+		action = "SET NOT NULL"
+	}
+	return "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + column.Name + " " + action + ";"
+}
+
+func renderAlterColumnGenerated(table ast.Table, column ast.Column) []migrateplan.Statement {
+	prefix := "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + column.Name
+	if column.Generated == nil {
+		return []migrateplan.Statement{migrateplan.SQL(prefix + " DROP EXPRESSION IF EXISTS;")}
+	}
+	return []migrateplan.Statement{migrateplan.SQL(prefix + " SET EXPRESSION AS (" + column.Generated.As + ");")}
+}
+
+func renderAlterColumnIdentity(table ast.Table, previous, current ast.Column) []migrateplan.Statement {
+	prefix := "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + current.Name
+	if current.Identity == nil {
+		return []migrateplan.Statement{migrateplan.SQL(prefix + " DROP IDENTITY IF EXISTS;")}
+	}
+	if previous.Identity == nil {
+		return []migrateplan.Statement{migrateplan.SQL(prefix + " ADD " + renderIdentity(current.Identity) + ";")}
+	}
+	return []migrateplan.Statement{
+		migrateplan.SQL(prefix + " DROP IDENTITY IF EXISTS;"),
+		migrateplan.SQL(prefix + " ADD " + renderIdentity(current.Identity) + ";"),
+	}
 }
