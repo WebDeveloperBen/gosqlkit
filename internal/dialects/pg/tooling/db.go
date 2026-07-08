@@ -11,7 +11,7 @@ import (
 )
 
 type Executor interface {
-	Exec(context.Context, string) error
+	Exec(context.Context, string, ...any) error
 }
 
 type Queryer interface {
@@ -33,8 +33,8 @@ func Open(ctx context.Context, rawURL string) (*Conn, error) {
 	return &Conn{conn: conn}, nil
 }
 
-func (c *Conn) Exec(ctx context.Context, sql string) error {
-	_, err := c.conn.Exec(ctx, sql)
+func (c *Conn) Exec(ctx context.Context, sql string, args ...any) error {
+	_, err := c.conn.Exec(ctx, sql, args...)
 	return err
 }
 

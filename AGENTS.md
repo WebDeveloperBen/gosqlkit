@@ -573,7 +573,11 @@ update of this file:
   default helpers, custom-type escape hatch.
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
   for snapshot), `version`, `migrate create` (with `--empty`, `--no-down`,
-  `--allow-destructive`), `migrate plan` (with `--json`), `migrate check`.
+  `--allow-destructive`), `migrate plan` (with `--json`), `migrate check`
+  (with `--json` and optional `--sandbox-url` / `--sandbox-url-env`),
+  `migrate apply` (with `--url`, `--url-env`, and `--json`), and `drift check`
+  (with `--url`, `--url-env`, and `--json`). Database-backed commands default
+  to `DATABASE_URL` when `--url` is omitted.
   Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
   (SHA-256), metadata maps (schema/table/column/view/role/function/trigger/policy), and rename
   annotations (previousName on all objects).
@@ -605,9 +609,11 @@ update of this file:
   flags, identity-backed sequences, extension-owned objects, dependency hints,
   and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
   Testcontainers suite for generated schema apply, catalogue introspection,
-  drift detection, and sandbox replay.
-- **Next tracks**: auth/apply/runner expansion (Slice 7), then advanced PG
-  objects (partitioning, grants).
+  drift detection, sandbox replay, and `migrate apply` version tracking.
+  `migrate apply` records successful versions in the goose-compatible
+  `goose_db_version` table and skips already applied versions.
+- **Next tracks**: provider token auth, quiet mode, `golang-migrate` renderer,
+  then advanced PG objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

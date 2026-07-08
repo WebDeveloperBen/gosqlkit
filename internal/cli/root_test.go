@@ -154,6 +154,49 @@ migrations:
 	}
 }
 
+func TestRunMigrateCheckPrintsJSON(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gosqlkit.yaml"), []byte(`version: "1"
+schema: "schema"
+migrations:
+  dir: "db/migrations"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	migrationDir := filepath.Join(root, "db", "migrations")
+	if err := os.MkdirAll(migrationDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	content := `-- +gosqlkit Meta
+-- {
+--   "version": 1,
+--   "dialect": "postgresql",
+--   "createdAt": "2026-07-06T14:30:00Z",
+--   "changes": []
+-- }
+-- +goose Up
+-- +goose Down
+`
+	if err := os.WriteFile(filepath.Join(migrationDir, "20260706143000_add_users.sql"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code, err := run([]string{"--root", root, "migrate", "check", "--json"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run(migrate check --json) returned error: %v\nstderr=%s", err, stderr.String())
+	}
+	if code != 0 {
+		t.Fatalf("run(migrate check --json) returned code %d, want 0", code)
+	}
+	for _, want := range []string{`"dir":`, `"count": 1`} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("stdout missing %q\n%s", want, stdout.String())
+		}
+	}
+}
+
 func TestExitErrorWraps(t *testing.T) {
 	inner := errors.New("boom")
 	got := Exit(7, inner)

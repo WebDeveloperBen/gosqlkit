@@ -68,6 +68,40 @@ func TestDriftCheckWithConfigReportsProjectedSnapshotMismatch(t *testing.T) {
 	}
 }
 
+func TestDriftCheckWithConfigUsesDatabaseURLEnv(t *testing.T) {
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+	}
+	desiredSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var desiredDoc pgschema.Document
+	if err := json.Unmarshal([]byte(desiredSnapshot), &desiredDoc); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GOSQLKIT_DATABASE_URL", "postgres://localhost/app")
+	var gotURL string
+	_, err = DriftCheckWithConfig(config, DriftCheckOptions{
+		URLEnv: "GOSQLKIT_DATABASE_URL",
+		inspectPG: func(_ context.Context, databaseURL string) (pgschema.Schema, error) {
+			gotURL = databaseURL
+			return projectDriftDocument(desiredDoc), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotURL != "postgres://localhost/app" {
+		t.Fatalf("database URL = %q", gotURL)
+	}
+}
+
 func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 	cache := int64(10)
 	start := int64(1000)

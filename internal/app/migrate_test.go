@@ -421,6 +421,68 @@ func TestMigrateCheckWithConfigReplaysSandboxAndComparesTargetSnapshot(t *testin
 	}
 }
 
+func TestMigrateCheckWithConfigUsesSandboxURLEnv(t *testing.T) {
+	dir := t.TempDir()
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+		Migrations: MigrationSpec{
+			Dir:    dir,
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	currentSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSnapshotID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   currentSnapshotID,
+		TargetSnapshot: currentSnapshot,
+		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:          []string{"SELECT 1;"},
+		DownSQL:        nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, files[0].Name), []byte(files[0].Content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GOSQLKIT_SANDBOX_URL", "postgres://localhost/sandbox")
+	var gotURL string
+	var currentDoc pgschema.Document
+	if err := json.Unmarshal([]byte(currentSnapshot), &currentDoc); err != nil {
+		t.Fatal(err)
+	}
+	_, err = MigrateCheckWithConfig(config, MigrateCheckOptions{
+		SandboxURLEnv: "GOSQLKIT_SANDBOX_URL",
+		sandboxReplay: func(_ context.Context, sandboxURL, _ string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
+			gotURL = sandboxURL
+			return &SandboxReplayResult{Applied: len(migrations), LastFile: migrations[len(migrations)-1].Name}, nil
+		},
+		sandboxInspect: func(context.Context, string) (pgschema.Schema, error) {
+			return projectDriftDocument(currentDoc), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotURL != "postgres://localhost/sandbox" {
+		t.Fatalf("sandbox URL = %q", gotURL)
+	}
+}
+
 func TestMigrateCheckWithConfigRejectsSandboxReplayDrift(t *testing.T) {
 	dir := t.TempDir()
 	config := &Config{
@@ -741,6 +803,105 @@ func TestMigratePlanWithConfigReportsDestructive(t *testing.T) {
 	}
 	if len(result.Destructive) == 0 {
 		t.Fatalf("expected destructive changes, got %#v", result)
+	}
+}
+
+func TestMigrateApplyWithConfigUsesDatabaseURLEnv(t *testing.T) {
+	dir := t.TempDir()
+	config := &Config{
+		Dialect: "postgresql",
+		Migrations: MigrationSpec{
+			Dir:    dir,
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:      "add users",
+		Dialect:   "postgresql",
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:   []migrate.Change{{Op: "manual", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:     []string{"SELECT 1;"},
+		DownSQL:   []string{"SELECT 1;"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, files[0].Name), []byte(files[0].Content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GOSQLKIT_DATABASE_URL", "postgres://localhost/app")
+	var gotURL string
+	var gotRunner string
+	var gotMigrations int
+	result, err := MigrateApplyWithConfig(config, MigrateApplyOptions{
+		URLEnv: "GOSQLKIT_DATABASE_URL",
+		apply: func(_ context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
+			gotURL = databaseURL
+			gotRunner = runner
+			gotMigrations = len(migrations)
+			return &MigrateApplyResult{Applied: 1, LastFile: migrations[0].Name}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotURL != "postgres://localhost/app" || gotRunner != DefaultMigrationsRunner || gotMigrations != 1 {
+		t.Fatalf("apply url=%q runner=%q migrations=%d", gotURL, gotRunner, gotMigrations)
+	}
+	if result.Dir != dir || result.Count != 1 || result.Applied != 1 || result.LastFile == "" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestMigrateApplyWithConfigDefaultsToDatabaseURL(t *testing.T) {
+	config := &Config{
+		Dialect: "postgresql",
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	t.Setenv("DATABASE_URL", "postgres://localhost/app")
+	var gotURL string
+	result, err := MigrateApplyWithConfig(config, MigrateApplyOptions{
+		apply: func(_ context.Context, databaseURL, _ string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
+			gotURL = databaseURL
+			if len(migrations) != 0 {
+				t.Fatalf("migrations = %#v", migrations)
+			}
+			return &MigrateApplyResult{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotURL != "postgres://localhost/app" {
+		t.Fatalf("database URL = %q", gotURL)
+	}
+	if result.Count != 0 {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestMigrateApplyWithConfigRequiresDatabaseURL(t *testing.T) {
+	config := &Config{
+		Dialect: "postgresql",
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	t.Setenv("DATABASE_URL", "")
+
+	_, err := MigrateApplyWithConfig(config, MigrateApplyOptions{
+		apply: func(context.Context, string, string, []migrate.Migration) (*MigrateApplyResult, error) {
+			t.Fatal("apply should not run without a database URL")
+			return nil, errors.New("unexpected apply")
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "database URL is required") {
+		t.Fatalf("expected database URL error, got %v", err)
 	}
 }
 

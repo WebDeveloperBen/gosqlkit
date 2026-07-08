@@ -580,6 +580,127 @@ func TestPostgresRejectsGeneratedWithDefault(t *testing.T) {
 	}
 }
 
+func TestPostgresRejectsInvalidDefaultExpression(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "created_at", Type: "timestamptz", Default: "now(); drop table events"},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `table "events" column "created_at": default expression contains semicolon`) {
+		t.Fatalf("expected invalid default expression error, got %v", err)
+	}
+}
+
+func TestPostgresAllowsDefaultExpressionKeywordInsideLiteral(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "status", Type: "text", Default: "'select'"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected keyword inside literal to be allowed, got %v", err)
+	}
+}
+
+func TestPostgresRejectsInvalidGeneratedExpression(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "name", Type: "text"},
+					{Name: "search_name", Type: "text", Generated: &ast.Generated{As: "lower(name", Type: "stored"}},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `table "events" column "search_name": generated column expression has unbalanced parentheses`) {
+		t.Fatalf("expected invalid generated expression error, got %v", err)
+	}
+}
+
+func TestPostgresAllowsGeneratedExpressionParenthesisInsideLiteral(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "name", Type: "text"},
+					{Name: "display_name", Type: "text", Generated: &ast.Generated{As: "concat(name, ')')", Type: "stored"}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected parenthesis inside literal to be allowed, got %v", err)
+	}
+}
+
+func TestPostgresRejectsInvalidDomainExpression(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Domains: []pgschema.Domain{
+			{Name: "email", BaseType: "text", Check: "value ~ '^[^@]+@[^@]+$' -- comment"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `domain "email": check expression contains a line comment`) {
+		t.Fatalf("expected invalid domain check expression error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsInvalidIndexExpression(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "name", Type: "text"},
+				},
+				Indexes: []ast.Index{
+					{
+						Name: "events_name_expr_idx",
+						Columns: []ast.IndexColumn{
+							{Expression: "lower(name);", IsExpression: true},
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `index "events_name_expr_idx": index column expression contains semicolon`) {
+		t.Fatalf("expected invalid index expression error, got %v", err)
+	}
+}
+
+func TestPostgresAllowsSameConstraintNameOnDifferentTables(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []ast.Table{
+			{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				Checks:  []ast.Check{{Name: "id_not_empty", Expression: "id IS NOT NULL"}},
+			},
+			{
+				Name:    "accounts",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				Checks:  []ast.Check{{Name: "id_not_empty", Expression: "id IS NOT NULL"}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected duplicate constraint names on different tables to be allowed, got %v", err)
+	}
+}
+
 func TestPostgresRejectsExclusionWithoutOperator(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
 		Tables: []ast.Table{

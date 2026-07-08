@@ -14,7 +14,7 @@ type fakeExecutor struct {
 	statements []string
 }
 
-func (f *fakeExecutor) Exec(_ context.Context, sql string) error {
+func (f *fakeExecutor) Exec(_ context.Context, sql string, _ ...any) error {
 	f.statements = append(f.statements, sql)
 	return f.err
 }

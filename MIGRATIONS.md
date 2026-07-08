@@ -150,14 +150,15 @@ Apply it using goose:
 goose -dir db/migrations postgres "$DATABASE_URL" up
 ```
 
-Later, `gosqlkit` can provide a wrapper:
+Or apply the same goose-compatible files through `gosqlkit`:
 
 ```bash
 gosqlkit migrate apply --url "$DATABASE_URL"
 ```
 
-but the generated SQL should remain plain, reviewable, and usable without a
-custom runner.
+`migrate apply` records successful versions in the standard
+`goose_db_version` table and skips versions that are already applied. The
+generated SQL remains plain, reviewable, and usable without a custom runner.
 
 Longer term, the same migration plan should be renderable for other runners
 without changing the diff planner. For example, a future `golang-migrate`
@@ -444,9 +445,10 @@ gosqlkit migrate check
 gosqlkit migrate check --sandbox-url ...
 gosqlkit drift check --url "$DATABASE_URL"
 gosqlkit migrate apply --url "$DATABASE_URL"
+gosqlkit migrate apply --url-env DATABASE_URL
 ```
 
-`migrate apply` should be a later wrapper around the same migration files. It
+`migrate apply` is a convenience wrapper around the same migration files. It
 should not block users from applying with goose or another runner.
 
 Configuration should reserve space for runner selection:
@@ -733,9 +735,12 @@ Scope:
 - Support password, environment URL, custom token command, Azure Entra,
   AWS IAM, and GCP IAM token flows in the database tooling layer.
 - Add `gosqlkit migrate apply --url ...` as a wrapper around generated
-  migration files.
+  migration files. Landed for goose-compatible SQL using `goose_db_version`;
+  other runner state tables remain future work.
 - Add a `golang-migrate` renderer from the same structured plan.
-- Add machine-readable command output and quiet mode for CI.
+- Add machine-readable command output and quiet mode for CI. JSON output has
+  landed for drift/migrate status and apply commands; quiet mode remains
+  future work.
 
 Acceptance criteria:
 

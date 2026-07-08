@@ -429,8 +429,18 @@ func validateSchema(schema pgschema.Schema) error {
 		if strings.TrimSpace(domain.BaseType) == "" {
 			return fmt.Errorf("domain %q must have a base type", renderQualifiedName(domain.Schema, domain.Name))
 		}
+		if domain.Default != "" {
+			if err := validateExpression(domain.Default, "default expression"); err != nil {
+				return fmt.Errorf("domain %q: %w", renderQualifiedName(domain.Schema, domain.Name), err)
+			}
+		}
 		if domain.Check != "" && strings.TrimSpace(domain.Check) != domain.Check {
 			return fmt.Errorf("domain %q check expression must not have leading or trailing whitespace", renderQualifiedName(domain.Schema, domain.Name))
+		}
+		if domain.Check != "" {
+			if err := validateExpression(domain.Check, "check expression"); err != nil {
+				return fmt.Errorf("domain %q: %w", renderQualifiedName(domain.Schema, domain.Name), err)
+			}
 		}
 	}
 
@@ -1325,23 +1335,15 @@ func validateGenerated(column ast.Column) error {
 		strings.Contains(lower, "update") || strings.Contains(lower, "delete") {
 		return errors.New("generated columns cannot contain DML statements")
 	}
-	if strings.Count(column.Generated.As, "(") != strings.Count(column.Generated.As, ")") {
-		return errors.New("generated column expression has mismatched parentheses")
-	}
-	return nil
+	return validateExpression(column.Generated.As, "generated column expression")
 }
 
 func validateCheck(tableName string, check ast.Check) error {
 	if strings.TrimSpace(check.Expression) == "" {
 		return fmt.Errorf("table %q check constraint %q must have an expression", tableName, check.Name)
 	}
-	if strings.Count(check.Expression, "(") != strings.Count(check.Expression, ")") {
-		return fmt.Errorf("table %q check constraint %q has mismatched parentheses", tableName, check.Name)
-	}
-	lower := strings.ToLower(check.Expression)
-	if strings.Contains(lower, "select") || strings.Contains(lower, "insert") ||
-		strings.Contains(lower, "update") || strings.Contains(lower, "delete") {
-		return fmt.Errorf("table %q check constraint %q cannot contain DML statements", tableName, check.Name)
+	if err := validateExpression(check.Expression, "check expression"); err != nil {
+		return fmt.Errorf("table %q check constraint %q: %w", tableName, check.Name, err)
 	}
 	return nil
 }
@@ -1350,15 +1352,158 @@ func validateDefault(column ast.Column) error {
 	if column.Default == "" {
 		return nil
 	}
-	if strings.Count(column.Default, "(") != strings.Count(column.Default, ")") {
-		return errors.New("default value has mismatched parentheses")
+	return validateExpression(column.Default, "default expression")
+}
+
+func validateExpression(expression, kind string) error {
+	if strings.TrimSpace(expression) == "" {
+		return fmt.Errorf("%s must not be empty", kind)
 	}
-	lower := strings.ToLower(column.Default)
-	if strings.Contains(lower, "select") || strings.Contains(lower, "insert") ||
-		strings.Contains(lower, "update") || strings.Contains(lower, "delete") {
-		return errors.New("default value cannot contain DML statements")
+	depth := 0
+	for i := 0; i < len(expression); {
+		switch expression[i] {
+		case '\'':
+			next, ok := scanSingleQuoted(expression, i)
+			if !ok {
+				return fmt.Errorf("%s has an unterminated string literal", kind)
+			}
+			i = next
+		case '"':
+			next, ok := scanDoubleQuoted(expression, i)
+			if !ok {
+				return fmt.Errorf("%s has an unterminated quoted identifier", kind)
+			}
+			i = next
+		case '$':
+			next, matched, closed := scanDollarQuoted(expression, i)
+			if matched && !closed {
+				return fmt.Errorf("%s has an unterminated dollar-quoted string", kind)
+			}
+			if matched {
+				i = next
+				continue
+			}
+			i++
+		case ';':
+			return fmt.Errorf("%s contains semicolon; use one SQL expression without statement terminators", kind)
+		case '-':
+			if hasPrefixAt(expression, i, "--") {
+				return fmt.Errorf("%s contains a line comment; use one SQL expression without comments", kind)
+			}
+			i++
+		case '/':
+			if hasPrefixAt(expression, i, "/*") {
+				return fmt.Errorf("%s contains a block comment; use one SQL expression without comments", kind)
+			}
+			i++
+		case '*':
+			if hasPrefixAt(expression, i, "*/") {
+				return fmt.Errorf("%s contains a block comment terminator without an opening comment", kind)
+			}
+			i++
+		case '(':
+			depth++
+			i++
+		case ')':
+			if depth == 0 {
+				return fmt.Errorf("%s has an unmatched closing parenthesis", kind)
+			}
+			depth--
+			i++
+		default:
+			if isIdentifierStart(expression[i]) {
+				next := scanIdentifier(expression, i)
+				token := strings.ToLower(expression[i:next])
+				if isStatementKeyword(token) {
+					return fmt.Errorf("%s contains keyword %s; use one SQL expression without subqueries or DML/DDL statements", kind, strings.ToUpper(token))
+				}
+				i = next
+				continue
+			}
+			i++
+		}
+	}
+	if depth != 0 {
+		return fmt.Errorf("%s has unbalanced parentheses", kind)
 	}
 	return nil
+}
+
+func scanSingleQuoted(expression string, start int) (int, bool) {
+	for i := start + 1; i < len(expression); i++ {
+		if expression[i] != '\'' {
+			continue
+		}
+		if i+1 < len(expression) && expression[i+1] == '\'' {
+			i++
+			continue
+		}
+		return i + 1, true
+	}
+	return len(expression), false
+}
+
+func scanDoubleQuoted(expression string, start int) (int, bool) {
+	for i := start + 1; i < len(expression); i++ {
+		if expression[i] != '"' {
+			continue
+		}
+		if i+1 < len(expression) && expression[i+1] == '"' {
+			i++
+			continue
+		}
+		return i + 1, true
+	}
+	return len(expression), false
+}
+
+func scanDollarQuoted(expression string, start int) (int, bool, bool) {
+	end := start + 1
+	for end < len(expression) && isDollarTagChar(expression[end]) {
+		end++
+	}
+	if end >= len(expression) || expression[end] != '$' {
+		return start + 1, false, false
+	}
+	delimiter := expression[start : end+1]
+	closeAt := strings.Index(expression[end+1:], delimiter)
+	if closeAt == -1 {
+		return len(expression), true, false
+	}
+	return end + 1 + closeAt + len(delimiter), true, true
+}
+
+func hasPrefixAt(value string, offset int, prefix string) bool {
+	return offset+len(prefix) <= len(value) && value[offset:offset+len(prefix)] == prefix
+}
+
+func isIdentifierStart(value byte) bool {
+	return value == '_' || (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
+}
+
+func scanIdentifier(value string, start int) int {
+	i := start + 1
+	for i < len(value) && isIdentifierPart(value[i]) {
+		i++
+	}
+	return i
+}
+
+func isIdentifierPart(value byte) bool {
+	return isIdentifierStart(value) || (value >= '0' && value <= '9')
+}
+
+func isDollarTagChar(value byte) bool {
+	return isIdentifierPart(value)
+}
+
+func isStatementKeyword(value string) bool {
+	switch value {
+	case "select", "insert", "update", "delete", "merge", "create", "alter", "drop", "truncate", "grant", "revoke":
+		return true
+	default:
+		return false
+	}
 }
 
 func renderIndex(b *strings.Builder, tableName string, index ast.Index) error {
@@ -1483,6 +1628,9 @@ func validateExclusion(exclusion ast.ExclusionConstraint) error {
 		if strings.TrimSpace(element.Expression) == "" {
 			return fmt.Errorf("exclusion constraint %q has an empty element expression", exclusion.Name)
 		}
+		if err := validateExpression(element.Expression, "exclusion element expression"); err != nil {
+			return fmt.Errorf("exclusion constraint %q element %q: %w", exclusion.Name, element.Expression, err)
+		}
 		if strings.TrimSpace(element.Operator) == "" {
 			return fmt.Errorf("exclusion constraint %q element %q must have an operator", exclusion.Name, element.Expression)
 		}
@@ -1494,6 +1642,11 @@ func validateExclusion(exclusion ast.ExclusionConstraint) error {
 	}
 	if exclusion.Where != "" && strings.TrimSpace(exclusion.Where) != exclusion.Where {
 		return fmt.Errorf("exclusion constraint %q WHERE expression must not have leading or trailing whitespace", exclusion.Name)
+	}
+	if exclusion.Where != "" {
+		if err := validateExpression(exclusion.Where, "exclusion WHERE expression"); err != nil {
+			return fmt.Errorf("exclusion constraint %q: %w", exclusion.Name, err)
+		}
 	}
 	if err := validateInitially(exclusion.Initially); err != nil {
 		return fmt.Errorf("exclusion constraint %q: %w", exclusion.Name, err)
@@ -1774,6 +1927,9 @@ func validateFunctionArguments(function pgschema.Function) error {
 			if strings.TrimSpace(arg.Default) != arg.Default {
 				return fmt.Errorf("function %q argument %q default must not have leading or trailing whitespace", renderFunctionDisplayName(function), arg.Name)
 			}
+			if err := validateExpression(arg.Default, "argument default expression"); err != nil {
+				return fmt.Errorf("function %q argument %q: %w", renderFunctionDisplayName(function), arg.Name, err)
+			}
 			defaultSeen = true
 			continue
 		}
@@ -2031,6 +2187,16 @@ func validatePolicyExpressions(policy pgschema.Policy) error {
 			return fmt.Errorf("policy %q %s policies cannot have a WITH CHECK expression", policy.Name, strings.ToUpper(policy.Command))
 		}
 	}
+	if policy.Using != "" {
+		if err := validateExpression(policy.Using, "USING expression"); err != nil {
+			return fmt.Errorf("policy %q: %w", policy.Name, err)
+		}
+	}
+	if policy.WithCheck != "" {
+		if err := validateExpression(policy.WithCheck, "WITH CHECK expression"); err != nil {
+			return fmt.Errorf("policy %q: %w", policy.Name, err)
+		}
+	}
 	return nil
 }
 
@@ -2203,13 +2369,16 @@ func validateIndex(tableName string, index ast.Index, columnNames map[string]str
 			return fmt.Errorf("index %q has an empty column expression", index.Name)
 		}
 		if column.IsExpression {
-			continue
-		}
-		if err := validateIdentifier("index column", column.Expression); err != nil {
-			return fmt.Errorf("index %q: %w", index.Name, err)
-		}
-		if _, ok := columnNames[column.Expression]; !ok {
-			return fmt.Errorf("table %q index %q references unknown column %q", tableName, index.Name, column.Expression)
+			if err := validateExpression(column.Expression, "index column expression"); err != nil {
+				return fmt.Errorf("index %q: %w", index.Name, err)
+			}
+		} else {
+			if err := validateIdentifier("index column", column.Expression); err != nil {
+				return fmt.Errorf("index %q: %w", index.Name, err)
+			}
+			if _, ok := columnNames[column.Expression]; !ok {
+				return fmt.Errorf("table %q index %q references unknown column %q", tableName, index.Name, column.Expression)
+			}
 		}
 		if column.OpClass != "" {
 			if err := validateIdentifier("operator class", column.OpClass); err != nil {
@@ -2227,6 +2396,11 @@ func validateIndex(tableName string, index ast.Index, columnNames map[string]str
 	}
 	if strings.TrimSpace(index.Where) != index.Where {
 		return fmt.Errorf("index %q WHERE expression must not have leading or trailing whitespace", index.Name)
+	}
+	if index.Where != "" {
+		if err := validateExpression(index.Where, "index WHERE expression"); err != nil {
+			return fmt.Errorf("index %q: %w", index.Name, err)
+		}
 	}
 	return nil
 }

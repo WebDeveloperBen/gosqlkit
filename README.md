@@ -90,6 +90,7 @@ gosqlkit migrate create init_schema
 gosqlkit migrate check
 gosqlkit migrate check --sandbox-url "$DATABASE_URL"
 gosqlkit drift check --url "$DATABASE_URL"
+gosqlkit migrate apply --url "$DATABASE_URL"
 ```
 
 Create an empty migration for manual SQL:
@@ -168,6 +169,10 @@ sqlc generate
   types, domains, sequences, functions, tables, columns, table constraints,
   standalone indexes, comments, RLS flags, policies, triggers, views, and
   materialized views
+- `gosqlkit migrate apply --url ...` for goose-compatible migrations, with
+  applied versions tracked in `goose_db_version`
+- `DATABASE_URL` / `--url-env` support for database-backed commands, plus JSON
+  output for drift and migrate status/apply commands
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing
 - Structured column alteration planning for type, default, nullability,

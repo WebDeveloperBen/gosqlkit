@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -80,6 +81,17 @@ func NormaliseRunner(runner string) string {
 		return RunnerGoose
 	}
 	return strings.TrimSpace(strings.ToLower(runner))
+}
+
+func VersionID(name string) (int64, error) {
+	if err := validateMigrationFileName(name); err != nil {
+		return 0, err
+	}
+	version, err := strconv.ParseInt(name[:14], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("migration file %q has invalid version prefix: %w", name, err)
+	}
+	return version, nil
 }
 
 func PlanMetadata(plan Plan) (string, error) {

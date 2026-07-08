@@ -126,6 +126,59 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		}
 	})
 
+	t.Run("migrate apply records goose versions and skips already applied files", func(t *testing.T) {
+		dsn := newPostgresIntegrationDatabase(t, ctx)
+		config := &Config{
+			Dialect: "postgres",
+			Migrations: MigrationSpec{
+				Dir:    filepath.Join(t.TempDir(), "migrations"),
+				Runner: DefaultMigrationsRunner,
+			},
+		}
+		files, err := (goose.Renderer{}).Render(migrate.Plan{
+			Name:      "add applied users",
+			Dialect:   "postgresql",
+			CreatedAt: time.Date(2026, 7, 8, 12, 30, 0, 0, time.UTC),
+			Changes:   []migrate.Change{{Op: "manual", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+			UpSQL:     []string{"CREATE TABLE applied_users (id integer PRIMARY KEY);"},
+			DownSQL:   []string{"DROP TABLE applied_users;"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(config.Migrations.Dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(config.Migrations.Dir, files[0].Name), []byte(files[0].Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		first, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if first.Applied != 1 || first.Skipped != 0 || first.LastFile != files[0].Name {
+			t.Fatalf("first apply = %#v", first)
+		}
+
+		conn := openPostgres(t, ctx, dsn)
+		defer func() {
+			_ = conn.Close(context.Background())
+		}()
+		if err := conn.Exec(ctx, "INSERT INTO applied_users (id) VALUES (1);"); err != nil {
+			t.Fatal(err)
+		}
+		assertGooseVersionApplied(t, ctx, conn, 20260708123000)
+
+		second, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if second.Applied != 0 || second.Skipped != 1 || second.LastFile != "" {
+			t.Fatalf("second apply = %#v", second)
+		}
+	})
+
 	t.Run("extension owned objects are filtered", func(t *testing.T) {
 		dsn := newPostgresIntegrationDatabase(t, ctx)
 		conn := openPostgres(t, ctx, dsn)
@@ -469,6 +522,28 @@ func execStatements(t *testing.T, ctx context.Context, conn *pgtooling.Conn, sta
 		if err := conn.Exec(ctx, statement); err != nil {
 			t.Fatalf("%s: %v", statement, err)
 		}
+	}
+}
+
+func assertGooseVersionApplied(t *testing.T, ctx context.Context, conn *pgtooling.Conn, version int64) {
+	t.Helper()
+	rows, err := conn.Query(ctx, "SELECT count(*) FROM goose_db_version WHERE version_id = $1 AND is_applied;", version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("goose version query returned no rows")
+	}
+	var count int
+	if err := rows.Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("goose version %d applied rows = %d, want 1", version, count)
 	}
 }
 

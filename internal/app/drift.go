@@ -17,6 +17,7 @@ import (
 type DriftCheckOptions struct {
 	inspectPG driftInspectFunc
 	URL       string
+	URLEnv    string
 }
 
 type DriftCheckResult struct {
@@ -32,10 +33,11 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 	if config == nil {
 		return nil, errors.New("config is required")
 	}
-	if opts.URL == "" {
-		return nil, errors.New("database URL is required")
-	}
 	if _, err := snapshotPlanner(config.Dialect); err != nil {
+		return nil, err
+	}
+	databaseURL, err := resolveRequiredDatabaseURL(opts.URL, opts.URLEnv, "database")
+	if err != nil {
 		return nil, err
 	}
 
@@ -58,7 +60,7 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	databaseSchema, err := inspect(ctx, opts.URL)
+	databaseSchema, err := inspect(ctx, databaseURL)
 	if err != nil {
 		return nil, err
 	}

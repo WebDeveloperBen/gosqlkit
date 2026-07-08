@@ -38,6 +38,7 @@ type MigrateCheckOptions struct {
 	sandboxInspect driftInspectFunc
 	Dir            string
 	SandboxURL     string
+	SandboxURLEnv  string
 }
 
 type MigrateCheckResult struct {
@@ -54,6 +55,24 @@ type SandboxReplayResult struct {
 }
 
 type sandboxReplayFunc func(context.Context, string, string, []migrate.Migration) (*SandboxReplayResult, error)
+
+type MigrateApplyOptions struct {
+	apply  migrateApplyFunc
+	Dir    string
+	Runner string
+	URL    string
+	URLEnv string
+}
+
+type MigrateApplyResult struct {
+	Dir      string `json:"dir"`
+	LastFile string `json:"lastFile,omitempty"`
+	Count    int    `json:"count"`
+	Applied  int    `json:"applied"`
+	Skipped  int    `json:"skipped"`
+}
+
+type migrateApplyFunc func(context.Context, string, string, []migrate.Migration) (*MigrateApplyResult, error)
 
 type MigratePlanOptions struct {
 	Dir      string
@@ -278,15 +297,68 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 		return nil, err
 	}
 	result := &MigrateCheckResult{Dir: dir, Count: len(migrations)}
-	if opts.SandboxURL != "" {
+	sandboxURL, err := resolveOptionalDatabaseURL(opts.SandboxURL, opts.SandboxURLEnv, "sandbox")
+	if err != nil {
+		return nil, err
+	}
+	if sandboxURL != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		sandbox, err := migrateCheckSandbox(ctx, config, opts.SandboxURL, migrations, opts.sandboxReplay, opts.sandboxInspect)
+		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, migrations, opts.sandboxReplay, opts.sandboxInspect)
 		if err != nil {
 			return nil, err
 		}
 		result.Sandbox = sandbox
 	}
+	return result, nil
+}
+
+func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateApplyResult, error) {
+	if config == nil {
+		return nil, errors.New("config is required")
+	}
+	if _, err := snapshotPlanner(config.Dialect); err != nil {
+		return nil, err
+	}
+	databaseURL, err := resolveRequiredDatabaseURL(opts.URL, opts.URLEnv, "database")
+	if err != nil {
+		return nil, err
+	}
+
+	dir := opts.Dir
+	if dir == "" {
+		dir = config.MigrationsDir()
+	} else {
+		dir = config.ResolvePath(dir)
+	}
+	runner := opts.Runner
+	if runner == "" {
+		runner = config.Migrations.Runner
+	}
+
+	migrations, err := migrate.ScanDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateMigrationFiles(runner, migrations); err != nil {
+		return nil, err
+	}
+
+	apply := opts.apply
+	if apply == nil {
+		apply = applyPostgresMigrations
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	result, err := apply(ctx, databaseURL, runner, migrations)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = &MigrateApplyResult{}
+	}
+	result.Dir = dir
+	result.Count = len(migrations)
 	return result, nil
 }
 
@@ -484,6 +556,29 @@ func replayPostgresSandbox(ctx context.Context, sandboxURL, runner string, migra
 	return &SandboxReplayResult{
 		Applied:  replayed.Applied,
 		LastFile: replayed.LastFile,
+	}, nil
+}
+
+func applyPostgresMigrations(ctx context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
+	conn, err := pgtooling.Open(ctx, databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = conn.Close(ctx)
+	}()
+
+	applied, err := pgtooling.Apply(ctx, conn, pgtooling.ApplyOptions{
+		Runner:     runner,
+		Migrations: migrations,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &MigrateApplyResult{
+		LastFile: applied.LastFile,
+		Applied:  applied.Applied,
+		Skipped:  applied.Skipped,
 	}, nil
 }
 

@@ -348,15 +348,15 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 ### Slice 7: Auth, Apply, and Runner Expansion
 
 - `[ ]` Provider-neutral auth interface for tooling database connections.
-- `[ ]` Password and environment URL auth.
+- `[x]` Password and environment URL auth.
 - `[ ]` Custom token command auth.
 - `[ ]` Azure Entra token auth.
 - `[ ]` AWS IAM token auth.
 - `[ ]` GCP IAM token auth.
-- `[ ]` Credential and token redaction in diagnostics.
-- `[ ]` `gosqlkit migrate apply --url ...`.
+- `[x]` Credential and token redaction in diagnostics.
+- `[x]` `gosqlkit migrate apply --url ...`.
 - `[ ]` `golang-migrate` renderer from the structured plan.
-- `[ ]` Machine-readable JSON command output.
+- `[x]` Machine-readable JSON command output.
 - `[ ]` Quiet command output mode.
 
 ## Database Connectivity and Auth
@@ -364,7 +364,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 Database connectivity is only needed for future introspection, drift checks, and migration diff workflows. It must not become part of the runtime application database layer.
 
 - `[x]` Connect to PostgreSQL using a standard connection string.
-- `[ ]` Connect using environment-provided connection string, for example `DATABASE_URL`.
+- `[x]` Connect using environment-provided connection string, for example `DATABASE_URL`.
 - `[x]` Connect using password authentication.
 - `[x]` Connect using SSL/TLS options required by managed PostgreSQL providers.
 - `[ ]` Connect using token-as-password authentication.
@@ -383,7 +383,7 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[ ]` Support custom token command execution for other providers.
 - `[ ]` Support custom token-provider plugins/interfaces for providers not built in.
 - `[ ]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
-- `[~]` Redact credentials and tokens in diagnostics.
+- `[x]` Redact credentials and tokens in diagnostics.
 - `[ ]` Acquire short-lived tokens immediately before opening database connections.
 - `[ ]` Refresh tokens for long-running introspection or diff operations.
 - `[ ]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
@@ -447,14 +447,14 @@ Other provider requirement:
   writing any files (`--json` for machine-readable output).
 - `[~]` `gosqlkit migrate check`.
 - `[x]` `gosqlkit migrate check --sandbox-url ...`.
-- `[ ]` `gosqlkit migrate apply --url ...`.
+- `[x]` `gosqlkit migrate apply --url ...`.
 - `[x]` `gosqlkit drift check --url ...`.
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[~]` Goose-compatible migration file output.
 - `[ ]` CI command for committed schema drift.
 - `[ ]` CI command for database drift.
-- `[ ]` Machine-readable JSON output for commands.
+- `[x]` Machine-readable JSON output for commands.
 - `[ ]` Quiet output mode for scripts.
 - `[ ]` Shell completion.
 
@@ -469,13 +469,13 @@ Other provider requirement:
 - `[x]` Unknown local constraint column validation.
 - `[x]` Unknown index column validation.
 - `[x]` Duplicate schema object validation across schemas.
-- `[~]` Duplicate constraint validation scoped like PostgreSQL.
+- `[x]` Duplicate constraint validation scoped like PostgreSQL.
 - `[x]` Unknown referenced table validation.
 - `[x]` Unknown referenced column validation.
-- `[ ]` Invalid default expression validation where practical.
-- `[ ]` Invalid generated-column expression validation where practical.
+- `[x]` Invalid default expression validation where practical.
+- `[x]` Invalid generated-column expression validation where practical.
 - `[x]` Invalid RLS policy validation.
-- `[ ]` Validation diagnostics with actionable messages.
+- `[x]` Validation diagnostics with actionable messages.
 
 ## Testing Requirements
 
