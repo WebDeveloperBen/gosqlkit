@@ -59,8 +59,8 @@ Legend:
 - `[x]` Snapshot generation routes through the selected provider.
 - `[x]` PostgreSQL schema envelope separated from the shared schema core.
 - `[x]` PostgreSQL snapshots wrap shared table snapshots with PostgreSQL objects.
-- `[~]` Shared table/index core explicitly separated from all dialect-specific options.
-- `[ ]` Move PostgreSQL-only index options out of the shared index model.
+- `[x]` Shared table/index core explicitly separated from all dialect-specific options.
+- `[x]` Move PostgreSQL-only index options out of the shared index model.
 - `[ ]` First non-PostgreSQL provider proving the boundary.
 - `[ ]` Dialect capability checks in CLI commands where a command needs unsupported features.
 
