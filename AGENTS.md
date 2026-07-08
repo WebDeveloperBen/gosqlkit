@@ -370,6 +370,7 @@ task fmt:check        # fail if files need formatting
 task lint             # golangci-lint run ./...
 task vuln             # govulncheck ./...
 task sqlc:check       # run sqlc generate in a temp copy of examples/basic
+task integration      # opt-in Docker-backed PostgreSQL integration tests
 task verify:cli       # smoke-test the CLI (--help, version, generate, snapshot)
 task modernize        # apply Go modernization fixes
 task fix:fieldalignment  # reorder struct fields to reduce padding
@@ -377,6 +378,8 @@ task fix:fieldalignment  # reorder struct fields to reduce padding
 
 `task verify` runs: fmt:check -> build -> test -> generate:check ->
 snapshot:check -> sqlc:check -> verify:cli -> lint -> vuln.
+`task integration` is opt-in and not part of `task verify`; use it when Docker
+is available or in CI jobs that explicitly enable real PostgreSQL tests.
 
 **Before declaring any task done, run `task verify` and ensure it passes
 locally.** If `sqlc` or `golangci-lint` aren't installed, the relevant tasks
@@ -407,7 +410,8 @@ verify:cli) into a pre-commit hook. Run `task setup` once to install it.
 - **No new dependencies without thought**. Runtime dependencies are limited to
   CLI/config tooling plus the internal PostgreSQL tooling connection path
   (`pgx`) used by sandbox replay. The public schema DSL must not pull in a
-  database driver.
+  database driver. Testcontainers is allowed only from tests for Docker-backed
+  integration coverage.
 - **gosec**: existing `#nosec` directives have justifications. Don't strip
   them; don't add new suppressions without a comment.
 
@@ -594,7 +598,9 @@ update of this file:
   constraints, standalone indexes, policies, triggers, views, and materialized
   views. Drift projection normalises rename metadata, non-persistent index
   flags, identity-backed sequences, extension-owned objects, dependency hints,
-  and PostgreSQL defaults.
+  and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
+  Testcontainers suite for generated schema apply, catalogue introspection,
+  drift detection, and sandbox replay.
 - **Next tracks**: auth/apply/runner expansion (Slice 7), then advanced PG
   objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.

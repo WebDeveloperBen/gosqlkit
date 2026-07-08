@@ -4,3 +4,4 @@ tmp/
 # Local Pi runtime state
 .atl/
 reference_code/
+tmp/

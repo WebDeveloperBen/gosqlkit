@@ -31,3 +31,18 @@ func TestUpSQLRejectsMissingGooseUp(t *testing.T) {
 		t.Fatalf("expected missing up error, got %v", err)
 	}
 }
+
+func TestDownSQLExtractsGooseDownSection(t *testing.T) {
+	got, err := goose.DownSQL(`-- +goose Up
+CREATE TABLE users (id uuid);
+
+-- +goose Down
+DROP TABLE users;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "DROP TABLE users;" {
+		t.Fatalf("down SQL = %q", got)
+	}
+}

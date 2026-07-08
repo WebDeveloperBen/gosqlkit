@@ -40,8 +40,8 @@ func replayGoose(ctx context.Context, exec Executor, migrations []migrate.Migrat
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", migration.Path, err)
 		}
-		if sql != "" {
-			if err := exec.Exec(ctx, sql); err != nil {
+		for _, statement := range SplitSQLStatements(sql) {
+			if err := exec.Exec(ctx, statement); err != nil {
 				return nil, fmt.Errorf("%s: apply goose up: %w", migration.Path, err)
 			}
 		}

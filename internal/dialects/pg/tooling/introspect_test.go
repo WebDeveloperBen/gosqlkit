@@ -14,7 +14,7 @@ func TestParseIndexColumn(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := parseIndexColumn(tt.input, false)
+		got := parseIndexColumn(tt.input, false, 0)
 		gotKey := got.Expression + "|" + got.OpClass + "|" + got.Order + "/" + got.Nulls
 		if gotKey != tt.want {
 			t.Fatalf("parseIndexColumn(%q) = %q, want %q", tt.input, gotKey, tt.want)
@@ -23,9 +23,16 @@ func TestParseIndexColumn(t *testing.T) {
 }
 
 func TestParseIndexExpressionColumn(t *testing.T) {
-	got := parseIndexColumn("lower(email) DESC", true)
+	got := parseIndexColumn("lower(email) DESC", true, 0)
 	if got.Expression != "lower(email)" || got.Order != "DESC" || !got.IsExpression {
 		t.Fatalf("parseIndexColumn expression = %#v", got)
+	}
+}
+
+func TestParseIndexColumnOptionBits(t *testing.T) {
+	got := parseIndexColumn("created_at", false, 1)
+	if got.Order != "DESC" || got.Nulls != "LAST" {
+		t.Fatalf("parseIndexColumn options = %#v", got)
 	}
 }
 

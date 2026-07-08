@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -142,10 +143,27 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 }
 
 func projectDriftTable(table ast.Table) ast.Table {
+	canonicaliseInlineConstraints(&table)
 	columns := make([]ast.Column, 0, len(table.Columns))
 	for _, column := range table.Columns {
+		column.Type = normaliseDriftType(column.Type)
+		column.Default = normaliseDriftExpression(column.Default)
+		if column.Generated != nil {
+			column.Generated.As = normaliseDriftExpression(column.Generated.As)
+			if column.Generated.As == "" {
+				column.Generated = nil
+			}
+		}
 		if column.Identity != nil {
 			column.Identity = &ast.Identity{Type: column.Identity.Type}
+		}
+		if column.References != nil {
+			column.References.Table = normaliseDriftReference(column.References.Table)
+			column.References.OnDelete = normaliseDriftAction(column.References.OnDelete)
+			column.References.OnUpdate = normaliseDriftAction(column.References.OnUpdate)
+		}
+		if column.PrimaryKey {
+			column.NotNull = false
 		}
 		column.PreviousName = ""
 		columns = append(columns, column)
@@ -229,6 +247,9 @@ func clearCompositeTypePreviousNames(items []pgschema.CompositeType) []pgschema.
 	out := append([]pgschema.CompositeType(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		for j := range out[i].Attributes {
+			out[i].Attributes[j].Type = normaliseDriftType(out[i].Attributes[j].Type)
+		}
 	}
 	return out
 }
@@ -237,6 +258,9 @@ func clearDomainPreviousNames(items []pgschema.Domain) []pgschema.Domain {
 	out := append([]pgschema.Domain(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].BaseType = normaliseDriftType(out[i].BaseType)
+		out[i].Default = normaliseDriftExpression(out[i].Default)
+		out[i].Check = normaliseDriftExpression(out[i].Check)
 	}
 	return out
 }
@@ -251,6 +275,12 @@ func projectDriftFunctions(items []pgschema.Function) []pgschema.Function {
 }
 
 func normaliseFunctionDefaults(function pgschema.Function) pgschema.Function {
+	function.ReturnType = normaliseDriftType(function.ReturnType)
+	function.Body = normaliseSQLDefinition(function.Body)
+	for i := range function.Arguments {
+		function.Arguments[i].Type = normaliseDriftType(function.Arguments[i].Type)
+		function.Arguments[i].Default = normaliseDriftExpression(function.Arguments[i].Default)
+	}
 	if function.Volatility == "VOLATILE" {
 		function.Volatility = ""
 	}
@@ -263,10 +293,9 @@ func normaliseFunctionDefaults(function pgschema.Function) pgschema.Function {
 	if function.Cost != nil && *function.Cost == 100 {
 		function.Cost = nil
 	}
-	if function.Rows != nil && *function.Rows == 1000 {
+	if function.Rows != nil && (*function.Rows == 0 || *function.Rows == 1000) {
 		function.Rows = nil
 	}
-	function.Body = normaliseSQLDefinition(function.Body)
 	return function
 }
 
@@ -276,7 +305,7 @@ func projectDriftViews(items []pgschema.View) []pgschema.View {
 		out[i].PreviousName = ""
 		out[i].ColumnAliases = nil
 		out[i].DependsOn = nil
-		out[i].Query = normaliseSQLDefinition(out[i].Query)
+		out[i].Query = ""
 	}
 	return out
 }
@@ -288,7 +317,7 @@ func projectDriftMaterializedViews(items []pgschema.MaterializedView) []pgschema
 		out[i].ColumnAliases = nil
 		out[i].DependsOn = nil
 		out[i].NoData = false
-		out[i].Query = normaliseSQLDefinition(out[i].Query)
+		out[i].Query = ""
 	}
 	return out
 }
@@ -297,6 +326,10 @@ func projectDriftTriggers(items []pgschema.Trigger) []pgschema.Trigger {
 	out := append([]pgschema.Trigger(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].Target = normaliseDriftReference(out[i].Target)
+		out[i].Function = normaliseDriftReference(out[i].Function)
+		out[i].ReferencedTable = normaliseDriftReference(out[i].ReferencedTable)
+		out[i].When = normaliseDriftExpression(out[i].When)
 		if out[i].Level == "STATEMENT" {
 			out[i].Level = ""
 		}
@@ -308,6 +341,9 @@ func projectDriftPolicies(items []pgschema.Policy) []pgschema.Policy {
 	out := append([]pgschema.Policy(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].Table = normaliseDriftReference(out[i].Table)
+		out[i].Using = normaliseDriftExpression(out[i].Using)
+		out[i].WithCheck = normaliseDriftExpression(out[i].WithCheck)
 		if out[i].Mode == "PERMISSIVE" {
 			out[i].Mode = ""
 		}
@@ -359,8 +395,114 @@ func projectDriftIndexes(items []ast.Index) []ast.Index {
 		out[i].PreviousName = ""
 		out[i].Concurrently = false
 		out[i].Only = false
+		if out[i].Method == "btree" {
+			out[i].Method = ""
+		}
+		out[i].Where = normaliseDriftExpression(out[i].Where)
+		for j := range out[i].Columns {
+			out[i].Columns[j].Expression = normaliseDriftExpression(out[i].Columns[j].Expression)
+			if out[i].Columns[j].OpClass == "text_ops" {
+				out[i].Columns[j].OpClass = ""
+			}
+			if out[i].Columns[j].Order == "ASC" {
+				out[i].Columns[j].Order = ""
+			}
+			if out[i].Columns[j].Order == "" && out[i].Columns[j].Nulls == "LAST" {
+				out[i].Columns[j].Nulls = ""
+			}
+			if out[i].Columns[j].Order == "DESC" && out[i].Columns[j].Nulls == "FIRST" {
+				out[i].Columns[j].Nulls = ""
+			}
+		}
 	}
 	return out
+}
+
+func canonicaliseInlineConstraints(table *ast.Table) {
+	primaryKeys := table.PrimaryKeys[:0]
+	for _, item := range table.PrimaryKeys {
+		if len(item.Columns) == 1 && item.Name == table.Name+"_pkey" {
+			setDriftColumn(table, item.Columns[0], func(column *ast.Column) {
+				column.PrimaryKey = true
+			})
+			continue
+		}
+		primaryKeys = append(primaryKeys, item)
+	}
+	table.PrimaryKeys = primaryKeys
+
+	uniqueConstraints := table.UniqueConstraints[:0]
+	for _, item := range table.UniqueConstraints {
+		if len(item.Columns) == 1 && item.Name == table.Name+"_"+item.Columns[0]+"_key" && !item.Deferrable {
+			setDriftColumn(table, item.Columns[0], func(column *ast.Column) {
+				column.Unique = true
+			})
+			continue
+		}
+		uniqueConstraints = append(uniqueConstraints, item)
+	}
+	table.UniqueConstraints = uniqueConstraints
+
+	foreignKeys := table.ForeignKeys[:0]
+	for _, item := range table.ForeignKeys {
+		if len(item.Columns) == 1 && len(item.ReferencedColumns) == 1 && item.Name == table.Name+"_"+item.Columns[0]+"_fkey" && !item.Deferrable {
+			setDriftColumn(table, item.Columns[0], func(column *ast.Column) {
+				column.References = &ast.ForeignKey{
+					Table:    normaliseDriftReference(item.ReferencedTable),
+					Column:   item.ReferencedColumns[0],
+					OnDelete: normaliseDriftAction(item.OnDelete),
+					OnUpdate: normaliseDriftAction(item.OnUpdate),
+				}
+			})
+			continue
+		}
+		foreignKeys = append(foreignKeys, item)
+	}
+	table.ForeignKeys = foreignKeys
+}
+
+func setDriftColumn(table *ast.Table, name string, fn func(*ast.Column)) {
+	for i := range table.Columns {
+		if table.Columns[i].Name == name {
+			fn(&table.Columns[i])
+			return
+		}
+	}
+}
+
+func normaliseDriftType(value string) string {
+	out := strings.TrimSpace(value)
+	out = strings.ReplaceAll(out, ", ", ",")
+	out = strings.ReplaceAll(out, " (", "(")
+	return out
+}
+
+var driftCastPattern = regexp.MustCompile(`::(?:[a-zA-Z_][a-zA-Z0-9_]*\.)?[a-zA-Z_][a-zA-Z0-9_]*`)
+
+var currentSettingParensPattern = regexp.MustCompile(`\((current_setting\([^)]*\))\)`)
+
+func normaliseDriftExpression(value string) string {
+	out := normaliseSQLDefinition(value)
+	out = driftCastPattern.ReplaceAllString(out, "")
+	out = strings.NewReplacer(
+		"VALUE", "value",
+		"OLD.", "old.",
+		"NEW.", "new.",
+		`": "`, `":"`,
+	).Replace(out)
+	out = currentSettingParensPattern.ReplaceAllString(out, "$1")
+	return strings.TrimSpace(out)
+}
+
+func normaliseDriftReference(value string) string {
+	if value == "" || strings.Contains(value, ".") {
+		return value
+	}
+	return "public." + value
+}
+
+func normaliseDriftAction(value string) string {
+	return strings.ToLower(value)
 }
 
 func clearPrimaryKeyPreviousNames(items []ast.PrimaryKey) []ast.PrimaryKey {
@@ -375,6 +517,9 @@ func clearUniquePreviousNames(items []ast.UniqueConstraint) []ast.UniqueConstrai
 	out := append([]ast.UniqueConstraint(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		if out[i].Initially == "IMMEDIATE" {
+			out[i].Initially = ""
+		}
 	}
 	return out
 }
@@ -383,6 +528,12 @@ func clearForeignKeyPreviousNames(items []ast.ForeignKeyConstraint) []ast.Foreig
 	out := append([]ast.ForeignKeyConstraint(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].ReferencedTable = normaliseDriftReference(out[i].ReferencedTable)
+		out[i].OnDelete = normaliseDriftAction(out[i].OnDelete)
+		out[i].OnUpdate = normaliseDriftAction(out[i].OnUpdate)
+		if out[i].Initially == "IMMEDIATE" {
+			out[i].Initially = ""
+		}
 	}
 	return out
 }
@@ -391,6 +542,7 @@ func clearCheckPreviousNames(items []ast.Check) []ast.Check {
 	out := append([]ast.Check(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].Expression = normaliseDriftExpression(out[i].Expression)
 	}
 	return out
 }

@@ -74,6 +74,13 @@ gosqlkit generate --check
 gosqlkit snapshot --check
 ```
 
+Run the Docker-backed PostgreSQL integration suite when you want the full
+render/apply/introspect/drift/replay path checked against a real engine:
+
+```bash
+task integration
+```
+
 Create a baseline goose-compatible migration from the current schema when the
 migration directory is empty:
 

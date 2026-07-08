@@ -97,7 +97,11 @@ Useful files and search starting points:
 rtk sed -n '1,260p' /tmp/gosqlkit-atlas-ref/sql/schema/migrate.go
 rtk sed -n '1,360p' /tmp/gosqlkit-atlas-ref/sql/postgres/diff.go
 rtk sed -n '1,420p' /tmp/gosqlkit-atlas-ref/sql/postgres/migrate.go
+rtk sed -n '1490,1665p' /tmp/gosqlkit-atlas-ref/sql/postgres/inspect.go
+rtk sed -n '172,245p' /tmp/gosqlkit-atlas-ref/sql/sqltool/tool.go
 rtk rg -n "applyJsonDiff|JsonStatement|alter_table|rename_table|drop_table" /tmp/gosqlkit-drizzle-ref/drizzle-kit/src
+rtk sed -n '1388,1410p' /tmp/gosqlkit-drizzle-ref/drizzle-kit/src/serializer/pgSerializer.ts
+rtk sed -n '1538,1572p' /tmp/gosqlkit-drizzle-ref/drizzle-kit/src/serializer/pgSerializer.ts
 rtk sed -n '1,260p' /tmp/gosqlkit-drizzle-ref/drizzle-kit/src/jsonStatements.ts
 rtk sed -n '1,260p' /tmp/gosqlkit-drizzle-ref/drizzle-kit/src/jsonDiffer.js
 ```
@@ -111,6 +115,16 @@ Translate the ideas into `gosqlkit`'s own model:
   runner file layout only.
 - `internal/app/migrate.go` orchestrates config, previous metadata lookup,
   planner selection, file rendering, and write/check behaviour.
+
+For live PostgreSQL validation, follow the same shape Atlas and Drizzle use:
+read semantic catalogue fields instead of diffing rendered SQL text. In
+practice that means identity/generated-column flags, `pg_get_expr` predicates,
+`pg_get_indexdef` expressions, index option bits for direction and null
+ordering, opclasses, storage parameters, and extension-owned object filters.
+For migration replay, split goose `Up` SQL into executable statements after
+section extraction so non-transactional statements such as `CREATE INDEX
+CONCURRENTLY` are not forced into a single batch, while function bodies and
+quoted semicolons remain intact.
 
 ## Non-Goals
 
@@ -272,6 +286,12 @@ embedded temporary PostgreSQL process, or an explicitly configured dev URL. For
 SQLite, it may be an in-memory database. Other dialects can choose the
 smallest realistic engine setup that validates their DDL.
 
+PostgreSQL sandbox validation is now covered by an opt-in Testcontainers suite:
+`task integration` starts PostgreSQL, applies the generated example schema,
+introspects the live database, verifies no false drift, verifies intentional
+drift is detected, creates a baseline goose migration, replays it into a fresh
+database, and compares the replayed database to the embedded target snapshot.
+
 ## Internal Architecture
 
 Proposed package shape:
@@ -400,8 +420,11 @@ Instead, `gosqlkit migrate check` should validate:
   snapshot IDs.
 - No migration appears before the latest applied migration for a target
   database.
-- Replaying migrations in a sandbox reaches the expected final snapshot.
-- Manual edits do not break statement parsing or declared snapshot lineage.
+- `[x]` Replaying migrations in a sandbox reaches the expected final snapshot
+  when a PostgreSQL sandbox URL is provided.
+- `[x]` Manual edits do not break declared snapshot lineage; PostgreSQL replay
+  splits goose `Up` SQL into executable statements without breaking function
+  bodies, quoted strings, quoted identifiers, or comments.
 
 If later experience shows that projects need stronger directory integrity, we
 can add an optional hash file. It should not be the default UX.

@@ -30,6 +30,11 @@ tasks:
     cmds:
       - go test ./...
 
+  integration:
+    desc: Run Docker-backed integration tests against PostgreSQL
+    cmds:
+      - GOSQLKIT_INTEGRATION=1 go test ./... -count=1
+
   generate:
     desc: Regenerate the checked-in example schema SQL
     cmds:

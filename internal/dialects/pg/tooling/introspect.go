@@ -496,8 +496,8 @@ SELECT n.nspname,
        a.attnotnull,
        COALESCE(pg_get_expr(ad.adbin, ad.adrelid), ''),
        COALESCE(col_description(a.attrelid, a.attnum), ''),
-       a.attidentity,
-       a.attgenerated
+       CASE a.attidentity WHEN 'a' THEN 'a' WHEN 'd' THEN 'd' ELSE '' END,
+       CASE a.attgenerated WHEN 's' THEN 's' ELSE '' END
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -523,6 +523,8 @@ ORDER BY n.nspname, c.relname, a.attnum`)
 		if table == nil {
 			continue
 		}
+		identity = strings.TrimSpace(identity)
+		generated = strings.TrimSpace(generated)
 		column.Type = normaliseType(column.Type)
 		if generated != "" {
 			column.Generated = &ast.Generated{As: stripOuterParens(column.Default), Type: "stored"}
@@ -617,7 +619,8 @@ SELECT n.nspname,
        COALESCE(pg_get_expr(i.indpred, i.indrelid), ''),
        COALESCE(idx.reloptions, ARRAY[]::text[]),
        keydef.def,
-       keydef.is_expression
+       keydef.is_expression,
+       keydef.option
 FROM pg_index i
 JOIN pg_class idx ON idx.oid = i.indexrelid
 JOIN pg_class c ON c.oid = i.indrelid
@@ -626,7 +629,8 @@ JOIN pg_am am ON am.oid = idx.relam
 JOIN LATERAL (
   SELECT keys.ord,
          pg_get_indexdef(i.indexrelid, keys.ord::int, true) AS def,
-         keys.attnum = 0 AS is_expression
+         keys.attnum = 0 AS is_expression,
+         i.indoption[keys.ord::int - 1] AS option
   FROM unnest(i.indkey) WITH ORDINALITY AS keys(attnum, ord)
   WHERE keys.ord <= i.indnkeyatts
 ) keydef ON true
@@ -649,7 +653,8 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 		var schemaName, tableName, name, method, predicate, definition string
 		var reloptions []string
 		var unique, expression bool
-		if err := rows.Scan(&schemaName, &tableName, &name, &unique, &method, &predicate, &reloptions, &definition, &expression); err != nil {
+		var option int
+		if err := rows.Scan(&schemaName, &tableName, &name, &unique, &method, &predicate, &reloptions, &definition, &expression, &option); err != nil {
 			return fmt.Errorf("scan index: %w", err)
 		}
 		table := byKey[qualified(snapshotSchema(schemaName), tableName)]
@@ -670,7 +675,7 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 			currentTable = key
 			currentName = name
 		}
-		current.Columns = append(current.Columns, parseIndexColumn(definition, expression))
+		current.Columns = append(current.Columns, parseIndexColumn(definition, expression, option))
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("introspect indexes: %w", err)
@@ -1068,12 +1073,20 @@ func reloptionsMap(values []string) map[string]string {
 	return out
 }
 
-func parseIndexColumn(definition string, expression bool) ast.IndexColumn {
+func parseIndexColumn(definition string, expression bool, option int) ast.IndexColumn {
 	out := ast.IndexColumn{Expression: strings.TrimSpace(definition), IsExpression: expression}
 	out.Expression = consumeIndexSuffix(out.Expression, "NULLS FIRST", func() { out.Nulls = "FIRST" })
 	out.Expression = consumeIndexSuffix(out.Expression, "NULLS LAST", func() { out.Nulls = "LAST" })
 	out.Expression = consumeIndexSuffix(out.Expression, "ASC", func() { out.Order = "ASC" })
 	out.Expression = consumeIndexSuffix(out.Expression, "DESC", func() { out.Order = "DESC" })
+	if option&1 != 0 {
+		out.Order = "DESC"
+	}
+	if option&2 != 0 {
+		out.Nulls = "FIRST"
+	} else if out.Order == "DESC" && out.Nulls == "" {
+		out.Nulls = "LAST"
+	}
 	if !expression {
 		parts := strings.Fields(out.Expression)
 		if len(parts) > 1 {
