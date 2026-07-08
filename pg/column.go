@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 )
 
 type Column struct {
@@ -318,7 +319,7 @@ func (c *Column) OnUpdate(action ForeignKeyAction) *Column {
 	return c
 }
 
-func (c *Column) apply(table *ast.Table) {
+func (c *Column) apply(table *pgschema.Table) {
 	table.Columns = append(table.Columns, c.def)
 }
 

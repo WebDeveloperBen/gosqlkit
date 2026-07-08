@@ -130,7 +130,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 			b.WriteString("\n")
 		}
 
-		indexes := append([]ast.Index(nil), table.Indexes...)
+		indexes := append([]pgschema.Index(nil), table.Indexes...)
 		sort.SliceStable(indexes, func(i, j int) bool {
 			return indexes[i].Name < indexes[j].Name
 		})
@@ -212,23 +212,23 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	return b.String(), nil
 }
 
-func orderTables(input []ast.Table) ([]ast.Table, error) {
-	tables := append([]ast.Table(nil), input...)
+func orderTables(input []pgschema.Table) ([]pgschema.Table, error) {
+	tables := append([]pgschema.Table(nil), input...)
 	sort.SliceStable(tables, func(i, j int) bool {
 		return tableKey(tables[i]) < tableKey(tables[j])
 	})
 
-	byName := make(map[string]ast.Table, len(tables))
+	byName := make(map[string]pgschema.Table, len(tables))
 	for _, table := range tables {
 		byName[tableKey(table)] = table
 	}
 
 	visiting := map[string]bool{}
 	visited := map[string]bool{}
-	ordered := make([]ast.Table, 0, len(tables))
+	ordered := make([]pgschema.Table, 0, len(tables))
 
-	var visit func(table ast.Table) error
-	visit = func(table ast.Table) error {
+	var visit func(table pgschema.Table) error
+	visit = func(table pgschema.Table) error {
 		key := tableKey(table)
 		if visited[key] {
 			return nil
@@ -262,7 +262,7 @@ func orderTables(input []ast.Table) ([]ast.Table, error) {
 	return ordered, nil
 }
 
-func tableDependencies(table ast.Table) []string {
+func tableDependencies(table pgschema.Table) []string {
 	deps := map[string]struct{}{}
 	for _, column := range table.Columns {
 		if column.References != nil {
@@ -930,7 +930,7 @@ func renderTriggerEvents(trigger pgschema.Trigger) string {
 	return strings.Join(parts, " OR ")
 }
 
-func renderTableRLS(b *strings.Builder, table ast.Table) {
+func renderTableRLS(b *strings.Builder, table pgschema.Table) {
 	if table.RowLevelSecurity {
 		fmt.Fprintf(b, "ALTER TABLE %s ENABLE ROW LEVEL SECURITY;\n", renderTableName(table))
 	}
@@ -1079,7 +1079,7 @@ func renderDomain(b *strings.Builder, domain pgschema.Domain) error {
 	return nil
 }
 
-func renderTable(b *strings.Builder, table ast.Table) error {
+func renderTable(b *strings.Builder, table pgschema.Table) error {
 	if err := validateIdentifier("table", table.Name); err != nil {
 		return err
 	}
@@ -1154,7 +1154,7 @@ func renderTable(b *strings.Builder, table ast.Table) error {
 		lines = append(lines, fmt.Sprintf("    CONSTRAINT %s CHECK (%s)", check.Name, check.Expression))
 	}
 
-	exclusions := append([]ast.ExclusionConstraint(nil), table.Exclusions...)
+	exclusions := append([]pgschema.ExclusionConstraint(nil), table.Exclusions...)
 	sort.SliceStable(exclusions, func(i, j int) bool {
 		return exclusions[i].Name < exclusions[j].Name
 	})
@@ -1506,7 +1506,7 @@ func isStatementKeyword(value string) bool {
 	}
 }
 
-func renderIndex(b *strings.Builder, tableName string, index ast.Index) error {
+func renderIndex(b *strings.Builder, tableName string, index pgschema.Index) error {
 	if err := validateIdentifier("index", index.Name); err != nil {
 		return err
 	}
@@ -1554,7 +1554,7 @@ func renderIndex(b *strings.Builder, tableName string, index ast.Index) error {
 	return nil
 }
 
-func renderIndexColumn(column ast.IndexColumn) string {
+func renderIndexColumn(column pgschema.IndexColumn) string {
 	expression := column.Expression
 	if column.IsExpression {
 		expression = "(" + expression + ")"
@@ -1597,7 +1597,7 @@ func renderDeferrable(deferrable bool, initially string) string {
 	return out
 }
 
-func renderExclusionElement(element ast.ExclusionElement) string {
+func renderExclusionElement(element pgschema.ExclusionElement) string {
 	parts := []string{element.Expression}
 	if element.OpClass != "" {
 		parts = append(parts, element.OpClass)
@@ -1612,7 +1612,7 @@ func renderExclusionElement(element ast.ExclusionElement) string {
 	return strings.Join(parts, " ")
 }
 
-func validateExclusion(exclusion ast.ExclusionConstraint) error {
+func validateExclusion(exclusion pgschema.ExclusionConstraint) error {
 	if err := validateIdentifier("exclusion constraint", exclusion.Name); err != nil {
 		return err
 	}
@@ -1663,7 +1663,7 @@ func validateInitially(initially string) error {
 	}
 }
 
-func hasComments(table ast.Table) bool {
+func hasComments(table pgschema.Table) bool {
 	if table.Comment != "" {
 		return true
 	}
@@ -1675,11 +1675,11 @@ func hasComments(table ast.Table) bool {
 	return false
 }
 
-func hasRLS(table ast.Table) bool {
+func hasRLS(table pgschema.Table) bool {
 	return table.RowLevelSecurity || table.ForceRLS
 }
 
-func renderComments(b *strings.Builder, table ast.Table) error {
+func renderComments(b *strings.Builder, table pgschema.Table) error {
 	if table.Comment != "" {
 		fmt.Fprintf(b, "COMMENT ON TABLE %s IS %s;\n", renderTableName(table), quoteLiteral(table.Comment))
 	}
@@ -1695,7 +1695,7 @@ func renderComments(b *strings.Builder, table ast.Table) error {
 	return nil
 }
 
-func renderTableName(table ast.Table) string {
+func renderTableName(table pgschema.Table) string {
 	if table.Schema == "" {
 		return table.Name
 	}
@@ -1724,11 +1724,11 @@ func qualifiedName(schema, name string) string {
 	return schema + "." + name
 }
 
-func tableKey(table ast.Table) string {
+func tableKey(table pgschema.Table) string {
 	return tableSchema(table) + "." + table.Name
 }
 
-func tableSchema(table ast.Table) string {
+func tableSchema(table pgschema.Table) string {
 	schema := table.Schema
 	if schema == "" {
 		schema = "public"
@@ -1736,7 +1736,7 @@ func tableSchema(table ast.Table) string {
 	return schema
 }
 
-func indexKey(table ast.Table, index ast.Index) string {
+func indexKey(table pgschema.Table, index pgschema.Index) string {
 	return tableSchema(table) + "." + index.Name
 }
 
@@ -2315,7 +2315,7 @@ func addConstraintName(tableName string, names map[string]struct{}, name string)
 	return nil
 }
 
-func validateReferences(tables []ast.Table, tableColumns map[string]map[string]struct{}) error {
+func validateReferences(tables []pgschema.Table, tableColumns map[string]map[string]struct{}) error {
 	for _, table := range tables {
 		for _, column := range table.Columns {
 			if column.References == nil {
@@ -2352,7 +2352,7 @@ func validateReferences(tables []ast.Table, tableColumns map[string]map[string]s
 	return nil
 }
 
-func validateIndex(tableName string, index ast.Index, columnNames map[string]struct{}) error {
+func validateIndex(tableName string, index pgschema.Index, columnNames map[string]struct{}) error {
 	if err := validateIdentifier("index", index.Name); err != nil {
 		return err
 	}

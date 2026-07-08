@@ -453,7 +453,7 @@ ORDER BY n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)`)
 	return out, nil
 }
 
-func introspectTables(ctx context.Context, queryer Queryer) ([]ast.Table, error) {
+func introspectTables(ctx context.Context, queryer Queryer) ([]pgschema.Table, error) {
 	rows, err := queryer.Query(ctx, `
 SELECT n.nspname,
        c.relname,
@@ -471,9 +471,9 @@ ORDER BY n.nspname, c.relname`)
 	}
 	defer rows.Close()
 
-	var out []ast.Table
+	var out []pgschema.Table
 	for rows.Next() {
-		var table ast.Table
+		var table pgschema.Table
 		if err := rows.Scan(&table.Schema, &table.Name, &table.Comment, &table.RowLevelSecurity, &table.ForceRLS); err != nil {
 			return nil, fmt.Errorf("scan table: %w", err)
 		}
@@ -486,7 +486,7 @@ ORDER BY n.nspname, c.relname`)
 	return out, nil
 }
 
-func introspectColumns(ctx context.Context, queryer Queryer, tables []ast.Table) error {
+func introspectColumns(ctx context.Context, queryer Queryer, tables []pgschema.Table) error {
 	byKey := tablePointers(tables)
 	rows, err := queryer.Query(ctx, `
 SELECT n.nspname,
@@ -542,7 +542,7 @@ ORDER BY n.nspname, c.relname, a.attnum`)
 	return nil
 }
 
-func introspectConstraints(ctx context.Context, queryer Queryer, tables []ast.Table) error {
+func introspectConstraints(ctx context.Context, queryer Queryer, tables []pgschema.Table) error {
 	byKey := tablePointers(tables)
 	rows, err := queryer.Query(ctx, `
 SELECT n.nspname,
@@ -608,7 +608,7 @@ ORDER BY n.nspname, c.relname, con.conname`)
 	return nil
 }
 
-func introspectIndexes(ctx context.Context, queryer Queryer, tables []ast.Table) error {
+func introspectIndexes(ctx context.Context, queryer Queryer, tables []pgschema.Table) error {
 	byKey := tablePointers(tables)
 	rows, err := queryer.Query(ctx, `
 SELECT n.nspname,
@@ -648,7 +648,7 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 	defer rows.Close()
 
 	var currentTable, currentName string
-	var current *ast.Index
+	var current *pgschema.Index
 	for rows.Next() {
 		var schemaName, tableName, name, method, predicate, definition string
 		var reloptions []string
@@ -663,13 +663,15 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 		}
 		key := qualified(snapshotSchema(schemaName), tableName) + "." + name
 		if current == nil || currentTable != key || currentName != name {
-			table.Indexes = append(table.Indexes, ast.Index{
-				Name:    name,
+			table.Indexes = append(table.Indexes, pgschema.Index{
+				Index: ast.Index{
+					Name:   name,
+					Where:  stripOuterParens(predicate),
+					Unique: unique,
+				},
 				Method:  method,
-				Where:   stripOuterParens(predicate),
 				With:    reloptionsMap(reloptions),
-				Unique:  unique,
-				Columns: []ast.IndexColumn{},
+				Columns: []pgschema.IndexColumn{},
 			})
 			current = &table.Indexes[len(table.Indexes)-1]
 			currentTable = key
@@ -864,8 +866,8 @@ ORDER BY n.nspname, c.relname, t.tgname`)
 	return out, nil
 }
 
-func tablePointers(tables []ast.Table) map[string]*ast.Table {
-	out := make(map[string]*ast.Table, len(tables))
+func tablePointers(tables []pgschema.Table) map[string]*pgschema.Table {
+	out := make(map[string]*pgschema.Table, len(tables))
 	for i := range tables {
 		out[qualified(tables[i].Schema, tables[i].Name)] = &tables[i]
 	}
@@ -1073,8 +1075,8 @@ func reloptionsMap(values []string) map[string]string {
 	return out
 }
 
-func parseIndexColumn(definition string, expression bool, option int) ast.IndexColumn {
-	out := ast.IndexColumn{Expression: strings.TrimSpace(definition), IsExpression: expression}
+func parseIndexColumn(definition string, expression bool, option int) pgschema.IndexColumn {
+	out := pgschema.IndexColumn{IndexColumn: ast.IndexColumn{Expression: strings.TrimSpace(definition), IsExpression: expression}}
 	out.Expression = consumeIndexSuffix(out.Expression, "NULLS FIRST", func() { out.Nulls = "FIRST" })
 	out.Expression = consumeIndexSuffix(out.Expression, "NULLS LAST", func() { out.Nulls = "LAST" })
 	out.Expression = consumeIndexSuffix(out.Expression, "ASC", func() { out.Order = "ASC" })
@@ -1107,7 +1109,7 @@ func consumeIndexSuffix(value, suffix string, fn func()) string {
 	return strings.TrimSpace(strings.TrimSuffix(trimmed, suffix))
 }
 
-func addPrimaryKey(table *ast.Table, name string, columns []string) {
+func addPrimaryKey(table *pgschema.Table, name string, columns []string) {
 	if len(columns) == 1 && name == table.Name+"_pkey" {
 		setColumn(table, columns[0], func(column *ast.Column) { column.PrimaryKey = true })
 		return
@@ -1115,7 +1117,7 @@ func addPrimaryKey(table *ast.Table, name string, columns []string) {
 	table.PrimaryKeys = append(table.PrimaryKeys, ast.PrimaryKey{Name: name, Columns: columns})
 }
 
-func addUnique(table *ast.Table, name string, columns []string, deferrable, deferred bool) {
+func addUnique(table *pgschema.Table, name string, columns []string, deferrable, deferred bool) {
 	if len(columns) == 1 && name == table.Name+"_"+columns[0]+"_key" && !deferrable {
 		setColumn(table, columns[0], func(column *ast.Column) { column.Unique = true })
 		return
@@ -1127,7 +1129,7 @@ func addUnique(table *ast.Table, name string, columns []string, deferrable, defe
 	table.UniqueConstraints = append(table.UniqueConstraints, unique)
 }
 
-func addForeignKey(table *ast.Table, name string, columns []string, refSchema, refTable string, refColumns []string, onUpdate, onDelete string, deferrable, deferred bool) {
+func addForeignKey(table *pgschema.Table, name string, columns []string, refSchema, refTable string, refColumns []string, onUpdate, onDelete string, deferrable, deferred bool) {
 	referencedTable := renderReference(refSchema, refTable)
 	if len(columns) == 1 && len(refColumns) == 1 && name == table.Name+"_"+columns[0]+"_fkey" && !deferrable {
 		setColumn(table, columns[0], func(column *ast.Column) {
@@ -1155,7 +1157,7 @@ func addForeignKey(table *ast.Table, name string, columns []string, refSchema, r
 	table.ForeignKeys = append(table.ForeignKeys, foreignKey)
 }
 
-func setColumn(table *ast.Table, name string, fn func(*ast.Column)) {
+func setColumn(table *pgschema.Table, name string, fn func(*ast.Column)) {
 	for i := range table.Columns {
 		if table.Columns[i].Name == name {
 			fn(&table.Columns[i])

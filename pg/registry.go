@@ -3,7 +3,6 @@ package pg
 import (
 	"sync"
 
-	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/render"
 	"github.com/webdeveloperben/gosqlkit/kit"
@@ -18,7 +17,7 @@ var registry = struct {
 	compositeTypes    []pgschema.CompositeType
 	domains           []*pgschema.Domain
 	functions         []*pgschema.Function
-	tables            []*ast.Table
+	tables            []*pgschema.Table
 	views             []*pgschema.View
 	materializedViews []*pgschema.MaterializedView
 	triggers          []*pgschema.Trigger
@@ -89,7 +88,7 @@ func Schema() pgschema.Schema {
 		functions = append(functions, *function)
 	}
 
-	tables := make([]ast.Table, 0, len(registry.tables))
+	tables := make([]pgschema.Table, 0, len(registry.tables))
 
 	for _, table := range registry.tables {
 		tables = append(tables, *table)
@@ -173,7 +172,7 @@ func Reset() {
 	registry.policies = nil
 }
 
-func register(table *ast.Table) {
+func register(table *pgschema.Table) {
 	registry.Lock()
 	defer registry.Unlock()
 

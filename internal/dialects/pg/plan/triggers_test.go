@@ -20,9 +20,11 @@ func TestSnapshotDiffProducesTriggerDependenciesAndReverse(t *testing.T) {
 			ReturnType: "trigger",
 			Body:       "BEGIN RETURN NEW; END",
 		}},
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
@@ -34,9 +36,11 @@ func TestSnapshotDiffProducesTriggerDependenciesAndReverse(t *testing.T) {
 			ReturnType: "trigger",
 			Body:       "BEGIN RETURN NEW; END",
 		}},
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Triggers: []pgschema.Trigger{{
 			Name:      "users_touch_updated_at",
@@ -93,9 +97,11 @@ func TestSnapshotDiffEmitsRenameTrigger(t *testing.T) {
 			ReturnType: "trigger",
 			Body:       "BEGIN RETURN NEW; END",
 		}},
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Triggers: []pgschema.Trigger{{
 			Name:     "old_users_touch_updated_at",
@@ -115,9 +121,11 @@ func TestSnapshotDiffEmitsRenameTrigger(t *testing.T) {
 			ReturnType: "trigger",
 			Body:       "BEGIN RETURN NEW; END",
 		}},
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Triggers: []pgschema.Trigger{{
 			Name:         "users_touch_updated_at",
@@ -156,9 +164,11 @@ func TestSnapshotDiffRejectsRenameTriggerWithModification(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Triggers: []pgschema.Trigger{{
 			Name:     "old_users_touch_updated_at",
@@ -171,9 +181,11 @@ func TestSnapshotDiffRejectsRenameTriggerWithModification(t *testing.T) {
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Triggers: []pgschema.Trigger{{
 			Name:         "users_touch_updated_at",

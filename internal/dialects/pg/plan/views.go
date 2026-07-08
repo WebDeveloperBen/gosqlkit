@@ -3,12 +3,11 @@ package plan
 import (
 	"reflect"
 
-	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
-func (p planner) views(previous, current []pgschema.View, tables []ast.Table, materializedViews []pgschema.MaterializedView) error {
+func (p planner) views(previous, current []pgschema.View, tables []pgschema.Table, materializedViews []pgschema.MaterializedView) error {
 	prev := mapBy(previous, viewKey)
 	for _, view := range sortedBy(current, viewKey) {
 		key := viewKey(view)
@@ -108,7 +107,7 @@ func (p planner) views(previous, current []pgschema.View, tables []ast.Table, ma
 	return nil
 }
 
-func (p planner) materializedViews(previous, current []pgschema.MaterializedView, tables []ast.Table, views []pgschema.View) error {
+func (p planner) materializedViews(previous, current []pgschema.MaterializedView, tables []pgschema.Table, views []pgschema.View) error {
 	prev := mapBy(previous, materializedViewKey)
 	for _, view := range sortedBy(current, materializedViewKey) {
 		key := materializedViewKey(view)
@@ -260,7 +259,7 @@ func ensureRenameOnlyMaterializedView(view, old pgschema.MaterializedView) error
 	return nil
 }
 
-func dependencyRefs(dependsOn []string, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView, self migrateplan.ObjectRef) []migrateplan.ObjectRef {
+func dependencyRefs(dependsOn []string, tables []pgschema.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView, self migrateplan.ObjectRef) []migrateplan.ObjectRef {
 	refs := make([]migrateplan.ObjectRef, 0, len(dependsOn))
 	for _, dependency := range dependsOn {
 		ref := dependencyRef(dependency, tables, views, materializedViews)
@@ -271,7 +270,7 @@ func dependencyRefs(dependsOn []string, tables []ast.Table, views []pgschema.Vie
 	return uniqueRefs(refs)
 }
 
-func dependencyRef(dependency string, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.ObjectRef {
+func dependencyRef(dependency string, tables []pgschema.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.ObjectRef {
 	key := referencedTableKey(dependency)
 	for _, table := range tables {
 		if tableKey(table) == key {

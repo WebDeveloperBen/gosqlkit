@@ -131,7 +131,7 @@ func projectDriftDocument(doc pgschema.Document) pgschema.Schema {
 }
 
 func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
-	tables := make([]ast.Table, 0, len(schema.Tables))
+	tables := make([]pgschema.Table, 0, len(schema.Tables))
 	for _, table := range schema.Tables {
 		tables = append(tables, projectDriftTable(table))
 	}
@@ -152,7 +152,7 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 	}
 }
 
-func projectDriftTable(table ast.Table) ast.Table {
+func projectDriftTable(table pgschema.Table) pgschema.Table {
 	canonicaliseInlineConstraints(&table)
 	columns := make([]ast.Column, 0, len(table.Columns))
 	for _, column := range table.Columns {
@@ -399,8 +399,8 @@ func normaliseSequenceDefaults(sequence pgschema.Sequence) pgschema.Sequence {
 	return sequence
 }
 
-func projectDriftIndexes(items []ast.Index) []ast.Index {
-	out := append([]ast.Index(nil), items...)
+func projectDriftIndexes(items []pgschema.Index) []pgschema.Index {
+	out := append([]pgschema.Index(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
 		out[i].Concurrently = false
@@ -428,7 +428,7 @@ func projectDriftIndexes(items []ast.Index) []ast.Index {
 	return out
 }
 
-func canonicaliseInlineConstraints(table *ast.Table) {
+func canonicaliseInlineConstraints(table *pgschema.Table) {
 	primaryKeys := table.PrimaryKeys[:0]
 	for _, item := range table.PrimaryKeys {
 		if len(item.Columns) == 1 && item.Name == table.Name+"_pkey" {
@@ -471,7 +471,7 @@ func canonicaliseInlineConstraints(table *ast.Table) {
 	table.ForeignKeys = foreignKeys
 }
 
-func setDriftColumn(table *ast.Table, name string, fn func(*ast.Column)) {
+func setDriftColumn(table *pgschema.Table, name string, fn func(*ast.Column)) {
 	for i := range table.Columns {
 		if table.Columns[i].Name == name {
 			fn(&table.Columns[i])

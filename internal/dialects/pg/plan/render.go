@@ -339,7 +339,7 @@ func renderMaterializedView(view pgschema.MaterializedView) string {
 	return b.String()
 }
 
-func renderCreateTable(table ast.Table) (string, error) {
+func renderCreateTable(table pgschema.Table) (string, error) {
 	var b strings.Builder
 	b.WriteString("CREATE TABLE ")
 	b.WriteString(renderTableName(table))
@@ -365,7 +365,7 @@ func renderCreateTable(table ast.Table) (string, error) {
 	for _, check := range sortedBy(table.Checks, func(item ast.Check) string { return item.Name }) {
 		lines = append(lines, "    "+renderCheckConstraint(check))
 	}
-	for _, exclusion := range sortedBy(table.Exclusions, func(item ast.ExclusionConstraint) string { return item.Name }) {
+	for _, exclusion := range sortedBy(table.Exclusions, func(item pgschema.ExclusionConstraint) string { return item.Name }) {
 		lines = append(lines, "    "+renderExclusionConstraint(exclusion))
 	}
 	b.WriteString(strings.Join(lines, ",\n"))
@@ -436,7 +436,7 @@ func renderCheckConstraint(check ast.Check) string {
 	return fmt.Sprintf("CONSTRAINT %s CHECK (%s)", check.Name, check.Expression)
 }
 
-func renderExclusionConstraint(exclusion ast.ExclusionConstraint) string {
+func renderExclusionConstraint(exclusion pgschema.ExclusionConstraint) string {
 	method := exclusion.Method
 	if method == "" {
 		method = "gist"
@@ -452,7 +452,7 @@ func renderExclusionConstraint(exclusion ast.ExclusionConstraint) string {
 	return line + renderDeferrable(exclusion.Deferrable, exclusion.Initially)
 }
 
-func renderExclusionElement(element ast.ExclusionElement) string {
+func renderExclusionElement(element pgschema.ExclusionElement) string {
 	parts := []string{element.Expression}
 	if element.OpClass != "" {
 		parts = append(parts, element.OpClass)
@@ -499,7 +499,7 @@ func renderPolicy(policy pgschema.Policy) string {
 	return b.String()
 }
 
-func renderIndex(table ast.Table, index ast.Index) (string, error) {
+func renderIndex(table pgschema.Table, index pgschema.Index) (string, error) {
 	if strings.TrimSpace(index.Name) == "" {
 		return "", fmt.Errorf("index on table %s must have a name", tableKey(table))
 	}
@@ -546,7 +546,7 @@ func renderIndex(table ast.Table, index ast.Index) (string, error) {
 	return line.String(), nil
 }
 
-func renderIndexColumn(column ast.IndexColumn) string {
+func renderIndexColumn(column pgschema.IndexColumn) string {
 	expression := column.Expression
 	if column.IsExpression {
 		expression = "(" + expression + ")"
@@ -622,7 +622,7 @@ func renderDeferrable(deferrable bool, initially string) string {
 	return out
 }
 
-func renderTableName(table ast.Table) string {
+func renderTableName(table pgschema.Table) string {
 	return renderQualified(table.Schema, table.Name)
 }
 

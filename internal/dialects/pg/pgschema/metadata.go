@@ -1,7 +1,5 @@
 package pgschema
 
-import "github.com/webdeveloperben/gosqlkit/internal/ast"
-
 type SchemaMetadata struct {
 	Source string `json:"source,omitempty"`
 }
@@ -48,7 +46,7 @@ func buildSchemaMetadata(namespaces []Namespace) map[string]SchemaMetadata {
 	return m
 }
 
-func buildTableMetadata(tables []ast.Table) map[string]TableMetadata {
+func buildTableMetadata(tables []Table) map[string]TableMetadata {
 	if len(tables) == 0 {
 		return nil
 	}
@@ -60,7 +58,7 @@ func buildTableMetadata(tables []ast.Table) map[string]TableMetadata {
 	return m
 }
 
-func buildColumnMetadata(tables []ast.Table) map[string]ColumnMetadata {
+func buildColumnMetadata(tables []Table) map[string]ColumnMetadata {
 	total := 0
 	for _, t := range tables {
 		total += len(t.Columns)

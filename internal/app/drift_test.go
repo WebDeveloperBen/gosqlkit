@@ -139,18 +139,22 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 			StartWith:    &start,
 			Cache:        &cache,
 		}},
-		Tables: []ast.Table{{
-			Name:         "users",
-			PreviousName: "old_users",
-			Columns: []ast.Column{{
-				Name:         "email",
-				PreviousName: "old_email",
-				Type:         "text",
-			}},
-			Indexes: []ast.Index{{
-				Name:         "users_email_idx",
-				PreviousName: "old_users_email_idx",
-				Columns:      []ast.IndexColumn{{Expression: "email"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:         "users",
+				PreviousName: "old_users",
+				Columns: []ast.Column{{
+					Name:         "email",
+					PreviousName: "old_email",
+					Type:         "text",
+				}},
+			},
+			Indexes: []pgschema.Index{{
+				Index: ast.Index{
+					Name:         "users_email_idx",
+					PreviousName: "old_users_email_idx",
+				},
+				Columns:      []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "email"}}},
 				Concurrently: true,
 				Only:         true,
 			}},
@@ -207,13 +211,15 @@ func TestProjectDriftSchemaNormalisesPostgreSQLExpressionRewrites(t *testing.T) 
 			Default:  "'pending'::text",
 			Check:    "VALUE ~ '^[^@]+@[^@]+$'::text",
 		}},
-		Tables: []ast.Table{{
-			Name: "events",
-			Columns: []ast.Column{
-				{Name: "metadata", Type: "jsonb", Default: `'{"source": "api"}'::jsonb`},
-				{Name: "search_vector", Type: "text", Generated: &ast.Generated{As: "to_tsvector('english'::regconfig, description)", Type: "stored"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "metadata", Type: "jsonb", Default: `'{"source": "api"}'::jsonb`},
+					{Name: "search_vector", Type: "text", Generated: &ast.Generated{As: "to_tsvector('english'::regconfig, description)", Type: "stored"}},
+				},
+				Checks: []ast.Check{{Name: "events_metadata_source", Expression: "(metadata ->> 'source'::text) = 'api'::text"}},
 			},
-			Checks: []ast.Check{{Name: "events_metadata_source", Expression: "(metadata ->> 'source'::text) = 'api'::text"}},
 		}},
 		Policies: []pgschema.Policy{{
 			Name:    "events_read_self",
@@ -258,16 +264,20 @@ func TestProjectDriftSchemaNormalisesPostgreSQLExpressionRewrites(t *testing.T) 
 
 func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 	projected := projectDriftSchema(pgschema.Schema{
-		Tables: []ast.Table{{
-			Name: "users",
-			Indexes: []ast.Index{{
-				Name:   "users_email_idx",
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+			},
+			Indexes: []pgschema.Index{{
+				Index: ast.Index{
+					Name:  "users_email_idx",
+					Where: "email IS NOT NULL::boolean",
+				},
 				Method: "btree",
-				Where:  "email IS NOT NULL::boolean",
-				Columns: []ast.IndexColumn{
-					{Expression: "email", OpClass: "text_ops", Order: "ASC", Nulls: "LAST"},
-					{Expression: "created_at", Order: "DESC", Nulls: "FIRST"},
-					{Expression: "priority", Order: "DESC", Nulls: "LAST"},
+				Columns: []pgschema.IndexColumn{
+					{IndexColumn: ast.IndexColumn{Expression: "email", Order: "ASC"}, OpClass: "text_ops", Nulls: "LAST"},
+					{IndexColumn: ast.IndexColumn{Expression: "created_at", Order: "DESC"}, Nulls: "FIRST"},
+					{IndexColumn: ast.IndexColumn{Expression: "priority", Order: "DESC"}, Nulls: "LAST"},
 				},
 				Concurrently: true,
 				Only:         true,
@@ -292,28 +302,32 @@ func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 
 func TestProjectDriftSchemaCanonicalisesInlineConstraints(t *testing.T) {
 	projected := projectDriftSchema(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name:    "accounts",
-				Columns: []ast.Column{{Name: "id", Type: "integer"}},
+				Table: ast.Table{
+					Name:    "accounts",
+					Columns: []ast.Column{{Name: "id", Type: "integer"}},
+				},
 			},
 			{
-				Name: "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "integer", NotNull: true},
-					{Name: "email", Type: "text"},
-					{Name: "account_id", Type: "integer"},
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "integer", NotNull: true},
+						{Name: "email", Type: "text"},
+						{Name: "account_id", Type: "integer"},
+					},
+					PrimaryKeys:       []ast.PrimaryKey{{Name: "users_pkey", Columns: []string{"id"}}},
+					UniqueConstraints: []ast.UniqueConstraint{{Name: "users_email_key", Columns: []string{"email"}}},
+					ForeignKeys: []ast.ForeignKeyConstraint{{
+						Name:              "users_account_id_fkey",
+						Columns:           []string{"account_id"},
+						ReferencedTable:   "accounts",
+						ReferencedColumns: []string{"id"},
+						OnDelete:          "CASCADE",
+						OnUpdate:          "NO ACTION",
+					}},
 				},
-				PrimaryKeys:       []ast.PrimaryKey{{Name: "users_pkey", Columns: []string{"id"}}},
-				UniqueConstraints: []ast.UniqueConstraint{{Name: "users_email_key", Columns: []string{"email"}}},
-				ForeignKeys: []ast.ForeignKeyConstraint{{
-					Name:              "users_account_id_fkey",
-					Columns:           []string{"account_id"},
-					ReferencedTable:   "accounts",
-					ReferencedColumns: []string{"id"},
-					OnDelete:          "CASCADE",
-					OnUpdate:          "NO ACTION",
-				}},
 			},
 		},
 	})

@@ -624,22 +624,26 @@ func integrationUsersSchema(tableName, emailColumn string, extraColumns ...ast.C
 		{Name: emailColumn, Type: "text", NotNull: true},
 	}
 	columns = append(columns, extraColumns...)
-	return pgschema.Schema{Tables: []ast.Table{{
-		Name:    tableName,
-		Columns: columns,
+	return pgschema.Schema{Tables: []pgschema.Table{{
+		Table: ast.Table{
+			Name:    tableName,
+			Columns: columns,
+		},
 	}}}
 }
 
 func integrationRenamableTableSchema(tableName, previousName string) pgschema.Schema {
-	table := ast.Table{
-		Name: tableName,
-		Columns: []ast.Column{
-			{Name: "id", Type: "integer"},
-			{Name: "email", Type: "text", NotNull: true},
+	table := pgschema.Table{
+		Table: ast.Table{
+			Name: tableName,
+			Columns: []ast.Column{
+				{Name: "id", Type: "integer"},
+				{Name: "email", Type: "text", NotNull: true},
+			},
 		},
 	}
 	table.PreviousName = previousName
-	return pgschema.Schema{Tables: []ast.Table{table}}
+	return pgschema.Schema{Tables: []pgschema.Table{table}}
 }
 
 func integrationRenamedColumnSchema() pgschema.Schema {

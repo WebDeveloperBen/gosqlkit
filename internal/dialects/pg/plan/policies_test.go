@@ -12,19 +12,23 @@ func TestSnapshotDiffProducesPolicyDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:             "users",
-			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
-			RowLevelSecurity: true,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:             "users",
+				Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+				RowLevelSecurity: true,
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:             "users",
-			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
-			RowLevelSecurity: true,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:             "users",
+				Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+				RowLevelSecurity: true,
+			},
 		}},
 		Policies: []pgschema.Policy{{
 			Name:    "users_read_self",
@@ -57,10 +61,12 @@ func TestSnapshotDiffEmitsRenamePolicy(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:             "users",
-			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
-			RowLevelSecurity: true,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:             "users",
+				Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+				RowLevelSecurity: true,
+			},
 		}},
 		Policies: []pgschema.Policy{{
 			Name:    "old_users_read_self",
@@ -72,10 +78,12 @@ func TestSnapshotDiffEmitsRenamePolicy(t *testing.T) {
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:             "users",
-			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
-			RowLevelSecurity: true,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:             "users",
+				Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+				RowLevelSecurity: true,
+			},
 		}},
 		Policies: []pgschema.Policy{{
 			Name:         "users_read_self",

@@ -2,8 +2,6 @@ package pgschema
 
 import (
 	"encoding/json"
-
-	"github.com/webdeveloperben/gosqlkit/internal/ast"
 )
 
 const SnapshotVersion = 1
@@ -17,7 +15,7 @@ type Schema struct {
 	Domains           []Domain           `json:"domains,omitempty"`
 	Sequences         []Sequence         `json:"sequences,omitempty"`
 	Functions         []Function         `json:"functions,omitempty"`
-	Tables            []ast.Table        `json:"tables,omitempty"`
+	Tables            []Table            `json:"tables,omitempty"`
 	Views             []View             `json:"views,omitempty"`
 	MaterializedViews []MaterializedView `json:"materializedViews,omitempty"`
 	Triggers          []Trigger          `json:"triggers,omitempty"`
@@ -44,7 +42,7 @@ type Document struct {
 	Domains            []Domain                    `json:"domains,omitempty"`
 	Sequences          []Sequence                  `json:"sequences,omitempty"`
 	Functions          []Function                  `json:"functions,omitempty"`
-	Tables             []ast.Table                 `json:"tables,omitempty"`
+	Tables             []Table                     `json:"tables,omitempty"`
 	Views              []View                      `json:"views,omitempty"`
 	MaterializedViews  []MaterializedView          `json:"materializedViews,omitempty"`
 	Triggers           []Trigger                   `json:"triggers,omitempty"`

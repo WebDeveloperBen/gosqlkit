@@ -93,7 +93,6 @@ type Check struct {
 type ExclusionConstraint struct {
 	Name         string             `json:"name"`
 	PreviousName string             `json:"previousName,omitempty"`
-	Method       string             `json:"method,omitempty"`
 	Where        string             `json:"where,omitempty"`
 	Initially    string             `json:"initially,omitempty"`
 	Elements     []ExclusionElement `json:"elements,omitempty"`
@@ -103,27 +102,19 @@ type ExclusionConstraint struct {
 type ExclusionElement struct {
 	Expression string `json:"expression"`
 	Operator   string `json:"operator"`
-	OpClass    string `json:"opClass,omitempty"`
 	Order      string `json:"order,omitempty"`
-	Nulls      string `json:"nulls,omitempty"`
 }
 
 type Index struct {
-	With         map[string]string `json:"with,omitempty"`
-	Name         string            `json:"name"`
-	PreviousName string            `json:"previousName,omitempty"`
-	Method       string            `json:"method,omitempty"`
-	Where        string            `json:"where,omitempty"`
-	Columns      []IndexColumn     `json:"columns,omitempty"`
-	Unique       bool              `json:"unique,omitempty"`
-	Concurrently bool              `json:"concurrently,omitempty"`
-	Only         bool              `json:"only,omitempty"`
+	Name         string        `json:"name"`
+	PreviousName string        `json:"previousName,omitempty"`
+	Where        string        `json:"where,omitempty"`
+	Columns      []IndexColumn `json:"columns,omitempty"`
+	Unique       bool          `json:"unique,omitempty"`
 }
 
 type IndexColumn struct {
 	Expression   string `json:"expression"`
 	Order        string `json:"order,omitempty"`
-	Nulls        string `json:"nulls,omitempty"`
-	OpClass      string `json:"opClass,omitempty"`
 	IsExpression bool   `json:"isExpression,omitempty"`
 }

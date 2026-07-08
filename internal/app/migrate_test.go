@@ -912,7 +912,7 @@ func snapshotWithoutColumn(t *testing.T, snapshot, tableName, columnName string)
 	if err := json.Unmarshal([]byte(snapshot), &raw); err != nil {
 		t.Fatal(err)
 	}
-	var tables []ast.Table
+	var tables []pgschema.Table
 	if err := json.Unmarshal(raw["tables"], &tables); err != nil {
 		t.Fatal(err)
 	}
@@ -976,7 +976,7 @@ func snapshotWithExtraColumn(t *testing.T, snapshot, tableName, columnName, colu
 	if err := json.Unmarshal([]byte(snapshot), &raw); err != nil {
 		t.Fatal(err)
 	}
-	var tables []ast.Table
+	var tables []pgschema.Table
 	if err := json.Unmarshal(raw["tables"], &tables); err != nil {
 		t.Fatal(err)
 	}

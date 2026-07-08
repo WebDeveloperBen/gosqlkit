@@ -64,19 +64,23 @@ func TestSnapshotDiffProducesStructuredChangeMetadata(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text"},
+				},
 			},
 		}},
 	})

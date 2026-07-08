@@ -182,13 +182,15 @@ func TestSnapshotDiffProducesSimpleCreateReverses(t *testing.T) {
 			Name:   "invoice_status",
 			Values: []string{"draft"},
 		}},
-		Tables: []ast.Table{{
-			Schema: "billing",
-			Name:   "invoices",
-			Columns: []ast.Column{{
-				Name: "id",
-				Type: "uuid",
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Schema: "billing",
+				Name:   "invoices",
+				Columns: []ast.Column{{
+					Name: "id",
+					Type: "uuid",
+				}},
+			},
 		}},
 	})
 
@@ -264,9 +266,11 @@ func TestSnapshotDiffProducesSequenceOwnershipDependencyAndReverse(t *testing.T)
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "invoices",
-			Columns: []ast.Column{{Name: "number", Type: "bigint"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "invoices",
+				Columns: []ast.Column{{Name: "number", Type: "bigint"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
@@ -276,9 +280,11 @@ func TestSnapshotDiffProducesSequenceOwnershipDependencyAndReverse(t *testing.T)
 			Name:    "invoice_number_seq",
 			OwnedBy: "invoices.number",
 		}},
-		Tables: []ast.Table{{
-			Name:    "invoices",
-			Columns: []ast.Column{{Name: "number", Type: "bigint"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "invoices",
+				Columns: []ast.Column{{Name: "number", Type: "bigint"}},
+			},
 		}},
 	})
 
@@ -460,13 +466,15 @@ func TestSnapshotDiffOrdersFunctionsBeforeTables(t *testing.T) {
 			ReturnType: "bigint",
 			Body:       "SELECT 1",
 		}},
-		Tables: []ast.Table{{
-			Name: "invoices",
-			Columns: []ast.Column{{
-				Name:    "number",
-				Type:    "bigint",
-				Default: "new_invoice_number()",
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "invoices",
+				Columns: []ast.Column{{
+					Name:    "number",
+					Type:    "bigint",
+					Default: "new_invoice_number()",
+				}},
+			},
 		}},
 	})
 
@@ -728,20 +736,24 @@ func TestSnapshotDiffRejectsSchemaRenameWithContents(t *testing.T) {
 		Dialect:    "postgresql",
 		Version:    pgschema.SnapshotVersion,
 		Namespaces: []pgschema.Namespace{{Name: "old_billing"}},
-		Tables: []ast.Table{{
-			Schema:  "old_billing",
-			Name:    "accounts",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Schema:  "old_billing",
+				Name:    "accounts",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect:    "postgresql",
 		Version:    pgschema.SnapshotVersion,
 		Namespaces: []pgschema.Namespace{{Name: "billing", PreviousName: "old_billing"}},
-		Tables: []ast.Table{{
-			Schema:  "billing",
-			Name:    "accounts",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Schema:  "billing",
+				Name:    "accounts",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 
@@ -818,13 +830,13 @@ func TestSnapshotDiffRenamedSequenceKeepsOwnership(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect:   "postgresql",
 		Version:   pgschema.SnapshotVersion,
-		Tables:    []ast.Table{{Name: "orders", Columns: []ast.Column{{Name: "id", Type: "bigint"}}}},
+		Tables:    []pgschema.Table{{Table: ast.Table{Name: "orders", Columns: []ast.Column{{Name: "id", Type: "bigint"}}}}},
 		Sequences: []pgschema.Sequence{{Name: "old_seq", OwnedBy: owned}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect:   "postgresql",
 		Version:   pgschema.SnapshotVersion,
-		Tables:    []ast.Table{{Name: "orders", Columns: []ast.Column{{Name: "id", Type: "bigint"}}}},
+		Tables:    []pgschema.Table{{Table: ast.Table{Name: "orders", Columns: []ast.Column{{Name: "id", Type: "bigint"}}}}},
 		Sequences: []pgschema.Sequence{{Name: "new_seq", PreviousName: "old_seq", OwnedBy: owned}},
 	})
 

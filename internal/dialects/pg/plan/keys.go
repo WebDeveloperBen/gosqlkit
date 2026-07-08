@@ -4,7 +4,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
@@ -16,7 +15,7 @@ func qualified(schema, name string) string {
 	return schema + "." + name
 }
 
-func tableKey(table ast.Table) string {
+func tableKey(table pgschema.Table) string {
 	return qualified(table.Schema, table.Name)
 }
 

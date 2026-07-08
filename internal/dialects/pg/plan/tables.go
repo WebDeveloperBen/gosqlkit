@@ -4,10 +4,11 @@ import (
 	"reflect"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
-func (p planner) tables(previous, current []ast.Table) error {
+func (p planner) tables(previous, current []pgschema.Table) error {
 	prev := mapBy(previous, tableKey)
 	for _, table := range current {
 		key := tableKey(table)
@@ -54,13 +55,13 @@ func (p planner) tables(previous, current []ast.Table) error {
 					migrateplan.SQL("DROP TABLE " + renderTableName(table) + ";"),
 				),
 			)
-			if err := p.indexes(ast.Table{}, table); err != nil {
+			if err := p.indexes(pgschema.Table{}, table); err != nil {
 				return err
 			}
-			if err := p.comments(ast.Table{}, table); err != nil {
+			if err := p.comments(pgschema.Table{}, table); err != nil {
 				return err
 			}
-			if err := p.rls(ast.Table{}, table); err != nil {
+			if err := p.rls(pgschema.Table{}, table); err != nil {
 				return err
 			}
 			continue
@@ -90,7 +91,7 @@ func (p planner) tables(previous, current []ast.Table) error {
 	return nil
 }
 
-func (p planner) table(previous, current ast.Table) error {
+func (p planner) table(previous, current pgschema.Table) error {
 	prevColumns := mapBy(previous.Columns, func(column ast.Column) string { return column.Name })
 	for _, column := range current.Columns {
 		old, ok := prevColumns[column.Name]
@@ -211,7 +212,7 @@ func (p planner) table(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) columnModifications(table ast.Table, previous, current ast.Column) error {
+func (p planner) columnModifications(table pgschema.Table, previous, current ast.Column) error {
 	if err := ensureColumnModificationSupported(table, previous, current); err != nil {
 		return err
 	}
@@ -302,7 +303,7 @@ func (p planner) columnModifications(table ast.Table, previous, current ast.Colu
 	return nil
 }
 
-func (p planner) constraints(previous, current ast.Table) error {
+func (p planner) constraints(previous, current pgschema.Table) error {
 	if err := p.primaryKeys(previous, current); err != nil {
 		return err
 	}
@@ -321,7 +322,7 @@ func (p planner) constraints(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) primaryKeys(previous, current ast.Table) error {
+func (p planner) primaryKeys(previous, current pgschema.Table) error {
 	prev := mapBy(previous.PrimaryKeys, func(primaryKey ast.PrimaryKey) string { return primaryKey.Name })
 	for _, primaryKey := range sortedBy(current.PrimaryKeys, func(item ast.PrimaryKey) string { return item.Name }) {
 		old, ok := prev[primaryKey.Name]
@@ -369,7 +370,7 @@ func (p planner) primaryKeys(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) uniqueConstraints(previous, current ast.Table) error {
+func (p planner) uniqueConstraints(previous, current pgschema.Table) error {
 	prev := mapBy(previous.UniqueConstraints, func(unique ast.UniqueConstraint) string { return unique.Name })
 	for _, unique := range sortedBy(current.UniqueConstraints, func(item ast.UniqueConstraint) string { return item.Name }) {
 		old, ok := prev[unique.Name]
@@ -417,7 +418,7 @@ func (p planner) uniqueConstraints(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) foreignKeys(previous, current ast.Table) error {
+func (p planner) foreignKeys(previous, current pgschema.Table) error {
 	prev := mapBy(previous.ForeignKeys, func(foreignKey ast.ForeignKeyConstraint) string { return foreignKey.Name })
 	for _, foreignKey := range sortedBy(current.ForeignKeys, func(item ast.ForeignKeyConstraint) string { return item.Name }) {
 		old, ok := prev[foreignKey.Name]
@@ -471,7 +472,7 @@ func (p planner) foreignKeys(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) checks(previous, current ast.Table) error {
+func (p planner) checks(previous, current pgschema.Table) error {
 	prev := mapBy(previous.Checks, func(check ast.Check) string { return check.Name })
 	for _, check := range sortedBy(current.Checks, func(item ast.Check) string { return item.Name }) {
 		old, ok := prev[check.Name]
@@ -519,9 +520,9 @@ func (p planner) checks(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) exclusions(previous, current ast.Table) error {
-	prev := mapBy(previous.Exclusions, func(exclusion ast.ExclusionConstraint) string { return exclusion.Name })
-	for _, exclusion := range sortedBy(current.Exclusions, func(item ast.ExclusionConstraint) string { return item.Name }) {
+func (p planner) exclusions(previous, current pgschema.Table) error {
+	prev := mapBy(previous.Exclusions, func(exclusion pgschema.ExclusionConstraint) string { return exclusion.Name })
+	for _, exclusion := range sortedBy(current.Exclusions, func(item pgschema.ExclusionConstraint) string { return item.Name }) {
 		old, ok := prev[exclusion.Name]
 		if !ok {
 			if exclusion.PreviousName != "" {
@@ -567,7 +568,7 @@ func (p planner) exclusions(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) addConstraint(table ast.Table, name, summary, definition string, extraDependencies []migrateplan.ObjectRef) {
+func (p planner) addConstraint(table pgschema.Table, name, summary, definition string, extraDependencies []migrateplan.ObjectRef) {
 	tableRef := migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(table))
 	dependencies := append([]migrateplan.ObjectRef{tableRef}, extraDependencies...)
 	dependencies = uniqueRefs(dependencies)
@@ -583,7 +584,7 @@ func (p planner) addConstraint(table ast.Table, name, summary, definition string
 	)
 }
 
-func (p planner) addConstraintRename(table ast.Table, oldName, newName, kindLabel, key string) {
+func (p planner) addConstraintRename(table pgschema.Table, oldName, newName, kindLabel, key string) {
 	p.addWith(
 		migrateplan.NewChange(
 			migrateplan.OperationRename,
@@ -598,9 +599,9 @@ func (p planner) addConstraintRename(table ast.Table, oldName, newName, kindLabe
 	)
 }
 
-func (p planner) indexes(previous, current ast.Table) error {
-	prev := mapBy(previous.Indexes, func(index ast.Index) string { return index.Name })
-	for _, index := range sortedBy(current.Indexes, func(item ast.Index) string { return item.Name }) {
+func (p planner) indexes(previous, current pgschema.Table) error {
+	prev := mapBy(previous.Indexes, func(index pgschema.Index) string { return index.Name })
+	for _, index := range sortedBy(current.Indexes, func(item pgschema.Index) string { return item.Name }) {
 		old, ok := prev[index.Name]
 		if !ok {
 			if index.PreviousName != "" {
@@ -682,7 +683,7 @@ func (p planner) indexes(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) comments(previous, current ast.Table) error {
+func (p planner) comments(previous, current pgschema.Table) error {
 	table := tableKey(current)
 	if previous.Comment != current.Comment {
 		switch {
@@ -761,7 +762,7 @@ func (p planner) comments(previous, current ast.Table) error {
 	return nil
 }
 
-func (p planner) rls(previous, current ast.Table) error {
+func (p planner) rls(previous, current pgschema.Table) error {
 	table := tableKey(current)
 	if previous.RowLevelSecurity != current.RowLevelSecurity {
 		if !previous.RowLevelSecurity && current.RowLevelSecurity {
@@ -820,7 +821,7 @@ func (p planner) rls(previous, current ast.Table) error {
 	return nil
 }
 
-func ensureCreateTableSupported(table ast.Table) error {
+func ensureCreateTableSupported(table pgschema.Table) error {
 	key := tableKey(table)
 	if table.PreviousName != "" {
 		return unsupported("table " + key + " rename metadata requires semantic planning")
@@ -858,7 +859,7 @@ func ensureCreateTableSupported(table ast.Table) error {
 	return nil
 }
 
-func ensureAddIndexSupported(table ast.Table, index ast.Index) error {
+func ensureAddIndexSupported(table pgschema.Table, index pgschema.Index) error {
 	key := tableKey(table) + "." + index.Name
 	if index.PreviousName != "" {
 		return unsupported("index " + key + " rename metadata requires semantic planning")
@@ -866,7 +867,7 @@ func ensureAddIndexSupported(table ast.Table, index ast.Index) error {
 	return nil
 }
 
-func ensureAddColumnSupported(table ast.Table, column ast.Column) error {
+func ensureAddColumnSupported(table pgschema.Table, column ast.Column) error {
 	key := tableKey(table) + "." + column.Name
 	if column.PreviousName != "" {
 		return unsupported("column " + key + " rename metadata requires semantic planning")
@@ -874,7 +875,7 @@ func ensureAddColumnSupported(table ast.Table, column ast.Column) error {
 	return nil
 }
 
-func ensureColumnModificationSupported(table ast.Table, previous, current ast.Column) error {
+func ensureColumnModificationSupported(table pgschema.Table, previous, current ast.Column) error {
 	key := tableKey(table) + "." + current.Name
 	if current.PreviousName != "" {
 		return unsupported("column " + key + " rename metadata requires semantic planning")
@@ -897,7 +898,7 @@ func ensureColumnModificationSupported(table ast.Table, previous, current ast.Co
 	return nil
 }
 
-func ensureRenameOnlyColumn(table ast.Table, column, oldColumn ast.Column) error {
+func ensureRenameOnlyColumn(table pgschema.Table, column, oldColumn ast.Column) error {
 	key := tableKey(table) + "." + column.Name
 	oldKey := tableKey(table) + "." + oldColumn.Name
 	renamed := oldColumn
@@ -911,7 +912,7 @@ func ensureRenameOnlyColumn(table ast.Table, column, oldColumn ast.Column) error
 	return nil
 }
 
-func ensureRenameOnlyPrimaryKey(table ast.Table, primaryKey, oldPrimaryKey ast.PrimaryKey) error {
+func ensureRenameOnlyPrimaryKey(table pgschema.Table, primaryKey, oldPrimaryKey ast.PrimaryKey) error {
 	key := tableKey(table) + "." + primaryKey.Name
 	oldKey := tableKey(table) + "." + oldPrimaryKey.Name
 	renamed := oldPrimaryKey
@@ -925,7 +926,7 @@ func ensureRenameOnlyPrimaryKey(table ast.Table, primaryKey, oldPrimaryKey ast.P
 	return nil
 }
 
-func ensureRenameOnlyUniqueConstraint(table ast.Table, unique, oldUnique ast.UniqueConstraint) error {
+func ensureRenameOnlyUniqueConstraint(table pgschema.Table, unique, oldUnique ast.UniqueConstraint) error {
 	key := tableKey(table) + "." + unique.Name
 	oldKey := tableKey(table) + "." + oldUnique.Name
 	renamed := oldUnique
@@ -939,7 +940,7 @@ func ensureRenameOnlyUniqueConstraint(table ast.Table, unique, oldUnique ast.Uni
 	return nil
 }
 
-func ensureRenameOnlyForeignKey(table ast.Table, foreignKey, oldForeignKey ast.ForeignKeyConstraint) error {
+func ensureRenameOnlyForeignKey(table pgschema.Table, foreignKey, oldForeignKey ast.ForeignKeyConstraint) error {
 	key := tableKey(table) + "." + foreignKey.Name
 	oldKey := tableKey(table) + "." + oldForeignKey.Name
 	renamed := oldForeignKey
@@ -953,7 +954,7 @@ func ensureRenameOnlyForeignKey(table ast.Table, foreignKey, oldForeignKey ast.F
 	return nil
 }
 
-func ensureRenameOnlyCheck(table ast.Table, check, oldCheck ast.Check) error {
+func ensureRenameOnlyCheck(table pgschema.Table, check, oldCheck ast.Check) error {
 	key := tableKey(table) + "." + check.Name
 	oldKey := tableKey(table) + "." + oldCheck.Name
 	renamed := oldCheck
@@ -967,7 +968,7 @@ func ensureRenameOnlyCheck(table ast.Table, check, oldCheck ast.Check) error {
 	return nil
 }
 
-func ensureRenameOnlyExclusion(table ast.Table, exclusion, oldExclusion ast.ExclusionConstraint) error {
+func ensureRenameOnlyExclusion(table pgschema.Table, exclusion, oldExclusion pgschema.ExclusionConstraint) error {
 	key := tableKey(table) + "." + exclusion.Name
 	oldKey := tableKey(table) + "." + oldExclusion.Name
 	renamed := oldExclusion
@@ -981,7 +982,7 @@ func ensureRenameOnlyExclusion(table ast.Table, exclusion, oldExclusion ast.Excl
 	return nil
 }
 
-func ensureRenameOnlyIndex(table ast.Table, index, oldIndex ast.Index) error {
+func ensureRenameOnlyIndex(table pgschema.Table, index, oldIndex pgschema.Index) error {
 	key := tableKey(table) + "." + index.Name
 	oldKey := tableKey(table) + "." + oldIndex.Name
 	renamed := oldIndex
@@ -995,7 +996,7 @@ func ensureRenameOnlyIndex(table ast.Table, index, oldIndex ast.Index) error {
 	return nil
 }
 
-func columnDependencyRefs(table ast.Table, column ast.Column) []migrateplan.ObjectRef {
+func columnDependencyRefs(table pgschema.Table, column ast.Column) []migrateplan.ObjectRef {
 	refs := []migrateplan.ObjectRef{migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(table))}
 	if column.References != nil {
 		ref := migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(column.References.Table))
@@ -1006,7 +1007,7 @@ func columnDependencyRefs(table ast.Table, column ast.Column) []migrateplan.Obje
 	return uniqueRefs(refs)
 }
 
-func tableDependencyRefs(table ast.Table) []migrateplan.ObjectRef {
+func tableDependencyRefs(table pgschema.Table) []migrateplan.ObjectRef {
 	refs := make([]migrateplan.ObjectRef, 0, len(table.Columns)+len(table.ForeignKeys))
 	for _, column := range table.Columns {
 		if column.References == nil {
@@ -1031,15 +1032,15 @@ func columnWithoutComment(column ast.Column) ast.Column {
 	return column
 }
 
-func removedTables(prev map[string]ast.Table) []ast.Table {
-	out := make([]ast.Table, 0, len(prev))
+func removedTables(prev map[string]pgschema.Table) []pgschema.Table {
+	out := make([]pgschema.Table, 0, len(prev))
 	for _, table := range prev {
 		out = append(out, table)
 	}
 	return out
 }
 
-func sortedTables(tables []ast.Table) []ast.Table {
+func sortedTables(tables []pgschema.Table) []pgschema.Table {
 	return sortedBy(tables, tableKey)
 }
 
@@ -1059,7 +1060,7 @@ func removedNames[T any](prev map[string]T) []string {
 	return out
 }
 
-func reverseCreateTable(table ast.Table) string {
+func reverseCreateTable(table pgschema.Table) string {
 	stmt, err := renderCreateTable(table)
 	if err != nil {
 		return ""
@@ -1067,7 +1068,7 @@ func reverseCreateTable(table ast.Table) string {
 	return stmt
 }
 
-func reverseAddColumn(table ast.Table, column ast.Column) string {
+func reverseAddColumn(table pgschema.Table, column ast.Column) string {
 	def, err := renderColumn(column)
 	if err != nil {
 		return ""
@@ -1075,7 +1076,7 @@ func reverseAddColumn(table ast.Table, column ast.Column) string {
 	return "ALTER TABLE " + renderTableName(table) + " ADD COLUMN " + def + ";"
 }
 
-func renderAlterColumnDefault(table ast.Table, column ast.Column) string {
+func renderAlterColumnDefault(table pgschema.Table, column ast.Column) string {
 	prefix := "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + column.Name
 	if column.Default == "" {
 		return prefix + " DROP DEFAULT;"
@@ -1083,7 +1084,7 @@ func renderAlterColumnDefault(table ast.Table, column ast.Column) string {
 	return prefix + " SET DEFAULT " + column.Default + ";"
 }
 
-func renderAlterColumnNullability(table ast.Table, column ast.Column) string {
+func renderAlterColumnNullability(table pgschema.Table, column ast.Column) string {
 	action := "DROP NOT NULL"
 	if column.NotNull {
 		action = "SET NOT NULL"
@@ -1091,7 +1092,7 @@ func renderAlterColumnNullability(table ast.Table, column ast.Column) string {
 	return "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + column.Name + " " + action + ";"
 }
 
-func renderAlterColumnGenerated(table ast.Table, column ast.Column) []migrateplan.Statement {
+func renderAlterColumnGenerated(table pgschema.Table, column ast.Column) []migrateplan.Statement {
 	prefix := "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + column.Name
 	if column.Generated == nil {
 		return []migrateplan.Statement{migrateplan.SQL(prefix + " DROP EXPRESSION IF EXISTS;")}
@@ -1099,7 +1100,7 @@ func renderAlterColumnGenerated(table ast.Table, column ast.Column) []migratepla
 	return []migrateplan.Statement{migrateplan.SQL(prefix + " SET EXPRESSION AS (" + column.Generated.As + ");")}
 }
 
-func renderAlterColumnIdentity(table ast.Table, previous, current ast.Column) []migrateplan.Statement {
+func renderAlterColumnIdentity(table pgschema.Table, previous, current ast.Column) []migrateplan.Statement {
 	prefix := "ALTER TABLE " + renderTableName(table) + " ALTER COLUMN " + current.Name
 	if current.Identity == nil {
 		return []migrateplan.Statement{migrateplan.SQL(prefix + " DROP IDENTITY IF EXISTS;")}

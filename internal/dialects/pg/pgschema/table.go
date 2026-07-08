@@ -6,8 +6,14 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
 )
 
-func sortedTables(input []ast.Table) []ast.Table {
-	items := append([]ast.Table(nil), input...)
+type Table struct {
+	Indexes    []Index               `json:"indexes,omitempty"`
+	Exclusions []ExclusionConstraint `json:"exclusions,omitempty"`
+	ast.Table
+}
+
+func sortedTables(input []Table) []Table {
+	items := append([]Table(nil), input...)
 	sort.SliceStable(items, func(i, j int) bool {
 		return qualified(items[i].Schema, items[i].Name) < qualified(items[j].Schema, items[j].Name)
 	})
@@ -17,7 +23,7 @@ func sortedTables(input []ast.Table) []ast.Table {
 	return items
 }
 
-func sortedTable(table ast.Table) ast.Table {
+func sortedTable(table Table) Table {
 	sort.SliceStable(table.PrimaryKeys, func(i, j int) bool {
 		return table.PrimaryKeys[i].Name < table.PrimaryKeys[j].Name
 	})
@@ -36,5 +42,14 @@ func sortedTable(table ast.Table) ast.Table {
 	sort.SliceStable(table.Indexes, func(i, j int) bool {
 		return table.Indexes[i].Name < table.Indexes[j].Name
 	})
+	for i := range table.Indexes {
+		if table.Indexes[i].With != nil {
+			sorted := make(map[string]string, len(table.Indexes[i].With))
+			for k, v := range table.Indexes[i].With {
+				sorted[k] = v
+			}
+			table.Indexes[i].With = sorted
+		}
+	}
 	return table
 }

@@ -14,17 +14,21 @@ func TestSnapshotDiffProducesViewDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Views: []pgschema.View{{
 			Name:          "active_users",
@@ -105,9 +109,11 @@ func TestSnapshotDiffEmitsRenameView(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Views: []pgschema.View{{
 			Name:      "old_active_users",
@@ -118,9 +124,11 @@ func TestSnapshotDiffEmitsRenameView(t *testing.T) {
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		Views: []pgschema.View{{
 			Name:         "active_users",
@@ -156,17 +164,21 @@ func TestSnapshotDiffProducesMaterializedViewReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		MaterializedViews: []pgschema.MaterializedView{{
 			Name:      "user_counts",
@@ -202,9 +214,11 @@ func TestSnapshotDiffEmitsRenameMaterializedView(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		MaterializedViews: []pgschema.MaterializedView{{
 			Name:      "old_user_counts",
@@ -216,9 +230,11 @@ func TestSnapshotDiffEmitsRenameMaterializedView(t *testing.T) {
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 		MaterializedViews: []pgschema.MaterializedView{{
 			Name:         "user_counts",

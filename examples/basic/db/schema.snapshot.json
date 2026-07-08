@@ -157,7 +157,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "240f8bbcd1b03083e98cdd9590094553ef28208081e719e59e1c9bfce9743f37",
+  "snapshotId": "c97a22265e8b5bba4f39ff713e946ede23463149a47979ae9a989041439f102a",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -169,6 +169,22 @@
   },
   "tables": [
     {
+      "indexes": [
+        {
+          "with": {
+            "fillfactor": "90"
+          },
+          "method": "btree",
+          "columns": [
+            {
+              "opClass": "text_ops",
+              "expression": "description"
+            }
+          ],
+          "name": "invoice_lines_description_idx",
+          "concurrently": true
+        }
+      ],
       "schema": "billing",
       "name": "invoice_lines",
       "columns": [
@@ -220,25 +236,25 @@
           "name": "invoice_lines_amount_cents_positive",
           "expression": "amount_cents \u003e 0"
         }
-      ],
-      "indexes": [
-        {
-          "with": {
-            "fillfactor": "90"
-          },
-          "name": "invoice_lines_description_idx",
-          "method": "btree",
-          "columns": [
-            {
-              "expression": "description",
-              "opClass": "text_ops"
-            }
-          ],
-          "concurrently": true
-        }
       ]
     },
     {
+      "indexes": [
+        {
+          "columns": [
+            {
+              "expression": "user_id"
+            },
+            {
+              "nulls": "LAST",
+              "expression": "created_at",
+              "order": "DESC"
+            }
+          ],
+          "name": "invoices_user_id_created_at_idx",
+          "where": "status \u003c\u003e 'void'"
+        }
+      ],
       "schema": "billing",
       "name": "invoices",
       "columns": [
@@ -291,25 +307,21 @@
           "name": "invoices_amount_cents_positive",
           "expression": "amount_cents \u003e 0"
         }
-      ],
-      "indexes": [
-        {
-          "name": "invoices_user_id_created_at_idx",
-          "where": "status \u003c\u003e 'void'",
-          "columns": [
-            {
-              "expression": "user_id"
-            },
-            {
-              "expression": "created_at",
-              "order": "DESC",
-              "nulls": "LAST"
-            }
-          ]
-        }
       ]
     },
     {
+      "exclusions": [
+        {
+          "method": "gist",
+          "elements": [
+            {
+              "expression": "during",
+              "operator": "\u0026\u0026"
+            }
+          ],
+          "name": "bookings_no_overlap"
+        }
+      ],
       "name": "bookings",
       "columns": [
         {
@@ -333,21 +345,22 @@
           "type": "tstzrange",
           "notNull": true
         }
-      ],
-      "exclusions": [
-        {
-          "name": "bookings_no_overlap",
-          "method": "gist",
-          "elements": [
-            {
-              "expression": "during",
-              "operator": "\u0026\u0026"
-            }
-          ]
-        }
       ]
     },
     {
+      "indexes": [
+        {
+          "columns": [
+            {
+              "expression": "priority"
+            },
+            {
+              "expression": "created_at"
+            }
+          ],
+          "name": "events_priority_created_at_idx"
+        }
+      ],
       "name": "events",
       "columns": [
         {
@@ -399,19 +412,6 @@
           "type": "timestamptz",
           "default": "now()",
           "notNull": true
-        }
-      ],
-      "indexes": [
-        {
-          "name": "events_priority_created_at_idx",
-          "columns": [
-            {
-              "expression": "priority"
-            },
-            {
-              "expression": "created_at"
-            }
-          ]
         }
       ]
     },

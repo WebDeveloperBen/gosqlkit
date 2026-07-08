@@ -4,14 +4,15 @@ import (
 	"strings"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 )
 
 type Element interface {
-	apply(table *ast.Table)
+	apply(table *pgschema.Table)
 }
 
 type Definition struct {
-	def *ast.Table
+	def *pgschema.Table
 }
 
 type CheckDef struct {
@@ -19,11 +20,11 @@ type CheckDef struct {
 }
 
 type IndexDef struct {
-	def ast.Index
+	def pgschema.Index
 }
 
 type IndexColumnDef struct {
-	def ast.IndexColumn
+	def pgschema.IndexColumn
 }
 
 type PrimaryKeyDef struct {
@@ -39,11 +40,11 @@ type ForeignKeyDef struct {
 }
 
 type ExclusionDef struct {
-	def ast.ExclusionConstraint
+	def pgschema.ExclusionConstraint
 }
 
 type ExclusionElementDef struct {
-	def ast.ExclusionElement
+	def pgschema.ExclusionElement
 }
 
 func Table(name string, elements ...Element) *Definition {
@@ -55,7 +56,9 @@ func TableInSchema(schema, name string, elements ...Element) *Definition {
 }
 
 func table(schema, name string, elements ...Element) *Definition {
-	t := &ast.Table{Schema: schema, Name: name}
+	t := &pgschema.Table{}
+	t.Schema = schema
+	t.Name = name
 	for _, element := range elements {
 		element.apply(t)
 	}
@@ -74,13 +77,13 @@ func Check(name, expression string) *CheckDef {
 }
 
 func Index(name string, columns ...string) *IndexDef {
-	indexColumns := make([]ast.IndexColumn, 0, len(columns))
+	indexColumns := make([]pgschema.IndexColumn, 0, len(columns))
 	for _, column := range columns {
-		indexColumns = append(indexColumns, ast.IndexColumn{Expression: column})
+		indexColumns = append(indexColumns, pgschema.IndexColumn{IndexColumn: ast.IndexColumn{Expression: column}})
 	}
 	return &IndexDef{
-		def: ast.Index{
-			Name:    name,
+		def: pgschema.Index{
+			Index:   ast.Index{Name: name},
 			Columns: indexColumns,
 		},
 	}
@@ -102,15 +105,17 @@ func UniqueIndexOn(name string, columns ...*IndexColumnDef) *IndexDef {
 
 func IndexColumn(name string) *IndexColumnDef {
 	return &IndexColumnDef{
-		def: ast.IndexColumn{Expression: name},
+		def: pgschema.IndexColumn{IndexColumn: ast.IndexColumn{Expression: name}},
 	}
 }
 
 func IndexExpression(expression string) *IndexColumnDef {
 	return &IndexColumnDef{
-		def: ast.IndexColumn{
-			Expression:   expression,
-			IsExpression: true,
+		def: pgschema.IndexColumn{
+			IndexColumn: ast.IndexColumn{
+				Expression:   expression,
+				IsExpression: true,
+			},
 		},
 	}
 }
@@ -257,23 +262,22 @@ func (f *ForeignKeyDef) InitiallyImmediate() *ForeignKeyDef {
 }
 
 func Exclusion(name string, elements ...*ExclusionElementDef) *ExclusionDef {
-	exclusionElements := make([]ast.ExclusionElement, 0, len(elements))
+	exclusionElements := make([]pgschema.ExclusionElement, 0, len(elements))
 	for _, element := range elements {
 		exclusionElements = append(exclusionElements, element.def)
 	}
 	return &ExclusionDef{
-		def: ast.ExclusionConstraint{
-			Name:     name,
-			Elements: exclusionElements,
+		def: pgschema.ExclusionConstraint{
+			ExclusionConstraint: ast.ExclusionConstraint{Name: name},
+			Elements:            exclusionElements,
 		},
 	}
 }
 
 func ExcludeWith(expression, operator string) *ExclusionElementDef {
 	return &ExclusionElementDef{
-		def: ast.ExclusionElement{
-			Expression: expression,
-			Operator:   operator,
+		def: pgschema.ExclusionElement{
+			ExclusionElement: ast.ExclusionElement{Expression: expression, Operator: operator},
 		},
 	}
 }
@@ -343,18 +347,18 @@ func (d *Definition) ForceRLS() *Definition {
 	return d
 }
 
-func (c *CheckDef) apply(table *ast.Table) {
+func (c *CheckDef) apply(table *pgschema.Table) {
 	table.Checks = append(table.Checks, c.def)
 }
 
-func (i *IndexDef) apply(table *ast.Table) {
+func (i *IndexDef) apply(table *pgschema.Table) {
 	if i.def.Name == "" {
 		i.def.Name = autoIndexName(table.Name, i.def)
 	}
 	table.Indexes = append(table.Indexes, i.def)
 }
 
-func autoIndexName(tableName string, index ast.Index) string {
+func autoIndexName(tableName string, index pgschema.Index) string {
 	parts := make([]string, 0, len(index.Columns)+2)
 	parts = append(parts, tableName)
 	for _, column := range index.Columns {
@@ -368,31 +372,30 @@ func autoIndexName(tableName string, index ast.Index) string {
 }
 
 func indexOn(name string, unique bool, columns ...*IndexColumnDef) *IndexDef {
-	indexColumns := make([]ast.IndexColumn, 0, len(columns))
+	indexColumns := make([]pgschema.IndexColumn, 0, len(columns))
 	for _, column := range columns {
 		indexColumns = append(indexColumns, column.def)
 	}
 	return &IndexDef{
-		def: ast.Index{
-			Name:    name,
+		def: pgschema.Index{
+			Index:   ast.Index{Name: name, Unique: unique},
 			Columns: indexColumns,
-			Unique:  unique,
 		},
 	}
 }
 
-func (p *PrimaryKeyDef) apply(table *ast.Table) {
+func (p *PrimaryKeyDef) apply(table *pgschema.Table) {
 	table.PrimaryKeys = append(table.PrimaryKeys, p.def)
 }
 
-func (u *UniqueConstraintDef) apply(table *ast.Table) {
+func (u *UniqueConstraintDef) apply(table *pgschema.Table) {
 	table.UniqueConstraints = append(table.UniqueConstraints, u.def)
 }
 
-func (f *ForeignKeyDef) apply(table *ast.Table) {
+func (f *ForeignKeyDef) apply(table *pgschema.Table) {
 	table.ForeignKeys = append(table.ForeignKeys, f.def)
 }
 
-func (e *ExclusionDef) apply(table *ast.Table) {
+func (e *ExclusionDef) apply(table *pgschema.Table) {
 	table.Exclusions = append(table.Exclusions, e.def)
 }

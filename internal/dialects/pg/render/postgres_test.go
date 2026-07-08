@@ -120,144 +120,162 @@ func TestPostgresRender(t *testing.T) {
 				},
 			},
 		},
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name:             "users",
-				Comment:          "Application users.",
-				RowLevelSecurity: true,
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
-					{Name: "email", Type: "text", NotNull: true},
-					{Name: "display_name", Type: "text"},
-					{Name: "last_login_ip", Type: "inet"},
-					{Name: "tags", Type: "text[]"},
-					{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
-					{Name: "updated_at", Type: "timestamptz", NotNull: true, Default: "now()"},
-				},
-				UniqueConstraints: []ast.UniqueConstraint{
-					{Name: "users_email_unique", Columns: []string{"email"}},
+				Table: ast.Table{
+					Name:             "users",
+					Comment:          "Application users.",
+					RowLevelSecurity: true,
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
+						{Name: "email", Type: "text", NotNull: true},
+						{Name: "display_name", Type: "text"},
+						{Name: "last_login_ip", Type: "inet"},
+						{Name: "tags", Type: "text[]"},
+						{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
+						{Name: "updated_at", Type: "timestamptz", NotNull: true, Default: "now()"},
+					},
+					UniqueConstraints: []ast.UniqueConstraint{
+						{Name: "users_email_unique", Columns: []string{"email"}},
+					},
 				},
 			},
 			{
-				Schema: "billing",
-				Name:   "invoices",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
-					{Name: "user_id", Type: "uuid", NotNull: true},
-					{Name: "amount_cents", Type: "integer", NotNull: true},
-					{Name: "status", Type: "billing.invoice_status", NotNull: true, Default: "'draft'"},
-					{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
-				},
-				ForeignKeys: []ast.ForeignKeyConstraint{
-					{
-						Name:              "invoices_user_id_fkey",
-						Columns:           []string{"user_id"},
-						ReferencedTable:   "public.users",
-						ReferencedColumns: []string{"id"},
-						OnDelete:          "cascade",
-						Deferrable:        true,
-						Initially:         "DEFERRED",
+				Table: ast.Table{
+					Schema: "billing",
+					Name:   "invoices",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
+						{Name: "user_id", Type: "uuid", NotNull: true},
+						{Name: "amount_cents", Type: "integer", NotNull: true},
+						{Name: "status", Type: "billing.invoice_status", NotNull: true, Default: "'draft'"},
+						{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
 					},
-				},
-				Checks: []ast.Check{
-					{Name: "invoices_amount_cents_positive", Expression: "amount_cents > 0"},
-				},
-				Indexes: []ast.Index{
-					{
-						Name: "invoices_user_id_created_at_idx",
-						Columns: []ast.IndexColumn{
-							{Expression: "user_id"},
-							{Expression: "created_at", Order: "DESC", Nulls: "LAST"},
+					ForeignKeys: []ast.ForeignKeyConstraint{
+						{
+							Name:              "invoices_user_id_fkey",
+							Columns:           []string{"user_id"},
+							ReferencedTable:   "public.users",
+							ReferencedColumns: []string{"id"},
+							OnDelete:          "cascade",
+							Deferrable:        true,
+							Initially:         "DEFERRED",
 						},
-						Where: "status <> 'void'",
+					},
+					Checks: []ast.Check{
+						{Name: "invoices_amount_cents_positive", Expression: "amount_cents > 0"},
+					},
+				},
+				Indexes: []pgschema.Index{
+					{
+						Index: ast.Index{
+							Name:  "invoices_user_id_created_at_idx",
+							Where: "status <> 'void'",
+						},
+						Columns: []pgschema.IndexColumn{
+							{IndexColumn: ast.IndexColumn{Expression: "user_id"}},
+							{IndexColumn: ast.IndexColumn{Expression: "created_at", Order: "DESC"}, Nulls: "LAST"},
+						},
 					},
 				},
 			},
 			{
-				Schema: "billing",
-				Name:   "invoice_lines",
-				Columns: []ast.Column{
-					{Name: "invoice_id", Type: "uuid", NotNull: true},
-					{Name: "line_no", Type: "integer", NotNull: true},
-					{Name: "description", Type: "text", NotNull: true},
-					{Name: "amount_cents", Type: "integer", NotNull: true},
-				},
-				PrimaryKeys: []ast.PrimaryKey{
-					{Name: "invoice_lines_pkey", Columns: []string{"invoice_id", "line_no"}},
-				},
-				ForeignKeys: []ast.ForeignKeyConstraint{
-					{
-						Name:              "invoice_lines_invoice_id_fkey",
-						Columns:           []string{"invoice_id"},
-						ReferencedTable:   "billing.invoices",
-						ReferencedColumns: []string{"id"},
-						OnDelete:          "cascade",
+				Table: ast.Table{
+					Schema: "billing",
+					Name:   "invoice_lines",
+					Columns: []ast.Column{
+						{Name: "invoice_id", Type: "uuid", NotNull: true},
+						{Name: "line_no", Type: "integer", NotNull: true},
+						{Name: "description", Type: "text", NotNull: true},
+						{Name: "amount_cents", Type: "integer", NotNull: true},
+					},
+					PrimaryKeys: []ast.PrimaryKey{
+						{Name: "invoice_lines_pkey", Columns: []string{"invoice_id", "line_no"}},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{
+						{
+							Name:              "invoice_lines_invoice_id_fkey",
+							Columns:           []string{"invoice_id"},
+							ReferencedTable:   "billing.invoices",
+							ReferencedColumns: []string{"id"},
+							OnDelete:          "cascade",
+						},
+					},
+					Checks: []ast.Check{
+						{Name: "invoice_lines_amount_cents_positive", Expression: "amount_cents > 0"},
 					},
 				},
-				Checks: []ast.Check{
-					{Name: "invoice_lines_amount_cents_positive", Expression: "amount_cents > 0"},
-				},
-				Indexes: []ast.Index{
+				Indexes: []pgschema.Index{
 					{
-						Name:         "invoice_lines_description_idx",
+						Index: ast.Index{
+							Name: "invoice_lines_description_idx",
+						},
 						Method:       "btree",
 						Concurrently: true,
-						Columns: []ast.IndexColumn{
-							{Expression: "description", OpClass: "text_ops"},
+						Columns: []pgschema.IndexColumn{
+							{IndexColumn: ast.IndexColumn{Expression: "description"}, OpClass: "text_ops"},
 						},
 						With: map[string]string{"fillfactor": "90"},
 					},
 				},
 			},
 			{
-				Name: "bookings",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
-					{Name: "resource", Type: "text", NotNull: true},
-					{Name: "owner", Type: "text", NotNull: true},
-					{Name: "during", Type: "tstzrange", NotNull: true},
+				Table: ast.Table{
+					Name: "bookings",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid", PrimaryKey: true, Default: "gen_random_uuid()"},
+						{Name: "resource", Type: "text", NotNull: true},
+						{Name: "owner", Type: "text", NotNull: true},
+						{Name: "during", Type: "tstzrange", NotNull: true},
+					},
 				},
-				Exclusions: []ast.ExclusionConstraint{
+				Exclusions: []pgschema.ExclusionConstraint{
 					{
-						Name:   "bookings_no_overlap",
+						ExclusionConstraint: ast.ExclusionConstraint{
+							Name: "bookings_no_overlap",
+						},
 						Method: "gist",
-						Elements: []ast.ExclusionElement{
-							{Expression: "during", Operator: "&&"},
+						Elements: []pgschema.ExclusionElement{
+							{ExclusionElement: ast.ExclusionElement{Expression: "during", Operator: "&&"}},
 						},
 					},
 				},
 			},
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{
-						Name: "id",
-						Type: "integer",
-						Identity: &ast.Identity{
-							Name:      "events_id_seq",
-							Type:      "always",
-							Increment: 1,
-							Cache:     int64Ptr(20),
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{
+							Name: "id",
+							Type: "integer",
+							Identity: &ast.Identity{
+								Name:      "events_id_seq",
+								Type:      "always",
+								Increment: 1,
+								Cache:     int64Ptr(20),
+							},
 						},
+						{Name: "description", Type: "text", NotNull: true},
+						{
+							Name:      "search_vector",
+							Type:      "text",
+							Generated: &ast.Generated{As: "to_tsvector('english', description)", Type: "stored"},
+						},
+						{Name: "metadata", Type: "jsonb", Default: `'{"source":"api"}'::jsonb`},
+						{Name: "payload", Type: "bytea"},
+						{Name: "duration", Type: "interval day to second (6)", NotNull: true},
+						{Name: "priority", Type: "smallint", NotNull: true, Default: "0"},
+						{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
 					},
-					{Name: "description", Type: "text", NotNull: true},
-					{
-						Name:      "search_vector",
-						Type:      "text",
-						Generated: &ast.Generated{As: "to_tsvector('english', description)", Type: "stored"},
-					},
-					{Name: "metadata", Type: "jsonb", Default: `'{"source":"api"}'::jsonb`},
-					{Name: "payload", Type: "bytea"},
-					{Name: "duration", Type: "interval day to second (6)", NotNull: true},
-					{Name: "priority", Type: "smallint", NotNull: true, Default: "0"},
-					{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
 				},
-				Indexes: []ast.Index{
+				Indexes: []pgschema.Index{
 					{
-						Name: "events_priority_created_at_idx",
-						Columns: []ast.IndexColumn{
-							{Expression: "priority"},
-							{Expression: "created_at"},
+						Index: ast.Index{
+							Name: "events_priority_created_at_idx",
+						},
+						Columns: []pgschema.IndexColumn{
+							{IndexColumn: ast.IndexColumn{Expression: "priority"}},
+							{IndexColumn: ast.IndexColumn{Expression: "created_at"}},
 						},
 					},
 				},
@@ -356,14 +374,16 @@ func TestPostgresAllowsHyphenatedExtensionNames(t *testing.T) {
 
 func TestPostgresRejectsIndexWithUnknownColumn(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+					},
 				},
-				Indexes: []ast.Index{
-					{Name: "users_email_idx", Columns: []ast.IndexColumn{{Expression: "email"}}},
+				Indexes: []pgschema.Index{
+					{Index: ast.Index{Name: "users_email_idx"}, Columns: []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "email"}}}},
 				},
 			},
 		},
@@ -379,19 +399,23 @@ func TestPostgresAllowsSameTableNameInDifferentSchemas(t *testing.T) {
 			{Name: "tenant_a"},
 			{Name: "tenant_b"},
 		},
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Schema: "tenant_a",
-				Name:   "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
+				Table: ast.Table{
+					Schema: "tenant_a",
+					Name:   "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+					},
 				},
 			},
 			{
-				Schema: "tenant_b",
-				Name:   "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
+				Table: ast.Table{
+					Schema: "tenant_b",
+					Name:   "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+					},
 				},
 			},
 		},
@@ -406,18 +430,20 @@ func TestPostgresAllowsSameTableNameInDifferentSchemas(t *testing.T) {
 
 func TestPostgresRejectsForeignKeyToUnknownTable(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "invoices",
-				Columns: []ast.Column{
-					{Name: "user_id", Type: "uuid"},
-				},
-				ForeignKeys: []ast.ForeignKeyConstraint{
-					{
-						Name:              "invoices_user_id_fkey",
-						Columns:           []string{"user_id"},
-						ReferencedTable:   "users",
-						ReferencedColumns: []string{"id"},
+				Table: ast.Table{
+					Name: "invoices",
+					Columns: []ast.Column{
+						{Name: "user_id", Type: "uuid"},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{
+						{
+							Name:              "invoices_user_id_fkey",
+							Columns:           []string{"user_id"},
+							ReferencedTable:   "users",
+							ReferencedColumns: []string{"id"},
+						},
 					},
 				},
 			},
@@ -430,24 +456,28 @@ func TestPostgresRejectsForeignKeyToUnknownTable(t *testing.T) {
 
 func TestPostgresRejectsForeignKeyToUnknownColumn(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+					},
 				},
 			},
 			{
-				Name: "invoices",
-				Columns: []ast.Column{
-					{Name: "user_id", Type: "uuid"},
-				},
-				ForeignKeys: []ast.ForeignKeyConstraint{
-					{
-						Name:              "invoices_user_id_fkey",
-						Columns:           []string{"user_id"},
-						ReferencedTable:   "users",
-						ReferencedColumns: []string{"missing_id"},
+				Table: ast.Table{
+					Name: "invoices",
+					Columns: []ast.Column{
+						{Name: "user_id", Type: "uuid"},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{
+						{
+							Name:              "invoices_user_id_fkey",
+							Columns:           []string{"user_id"},
+							ReferencedTable:   "users",
+							ReferencedColumns: []string{"missing_id"},
+						},
 					},
 				},
 			},
@@ -460,14 +490,16 @@ func TestPostgresRejectsForeignKeyToUnknownColumn(t *testing.T) {
 
 func TestPostgresRejectsConstraintWithUnknownColumn(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "invoice_lines",
-				Columns: []ast.Column{
-					{Name: "invoice_id", Type: "uuid"},
-				},
-				PrimaryKeys: []ast.PrimaryKey{
-					{Name: "invoice_lines_pkey", Columns: []string{"invoice_id", "line_no"}},
+				Table: ast.Table{
+					Name: "invoice_lines",
+					Columns: []ast.Column{
+						{Name: "invoice_id", Type: "uuid"},
+					},
+					PrimaryKeys: []ast.PrimaryKey{
+						{Name: "invoice_lines_pkey", Columns: []string{"invoice_id", "line_no"}},
+					},
 				},
 			},
 		},
@@ -479,12 +511,14 @@ func TestPostgresRejectsConstraintWithUnknownColumn(t *testing.T) {
 
 func TestPostgresRejectsDuplicateColumns(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
-					{Name: "id", Type: "text"},
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+						{Name: "id", Type: "text"},
+					},
 				},
 			},
 		},
@@ -496,17 +530,19 @@ func TestPostgresRejectsDuplicateColumns(t *testing.T) {
 
 func TestPostgresRejectsUnsupportedForeignKeyAction(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "invoices",
-				Columns: []ast.Column{
-					{
-						Name: "user_id",
-						Type: "uuid",
-						References: &ast.ForeignKey{
-							Table:    "users",
-							Column:   "id",
-							OnDelete: "explode",
+				Table: ast.Table{
+					Name: "invoices",
+					Columns: []ast.Column{
+						{
+							Name: "user_id",
+							Type: "uuid",
+							References: &ast.ForeignKey{
+								Table:    "users",
+								Column:   "id",
+								OnDelete: "explode",
+							},
 						},
 					},
 				},
@@ -520,14 +556,16 @@ func TestPostgresRejectsUnsupportedForeignKeyAction(t *testing.T) {
 
 func TestPostgresRejectsIdentityOnNonIntegerType(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{
-						Name:     "id",
-						Type:     "text",
-						Identity: &ast.Identity{Type: "always"},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{
+							Name:     "id",
+							Type:     "text",
+							Identity: &ast.Identity{Type: "always"},
+						},
 					},
 				},
 			},
@@ -540,15 +578,17 @@ func TestPostgresRejectsIdentityOnNonIntegerType(t *testing.T) {
 
 func TestPostgresRejectsIdentityWithDefault(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{
-						Name:     "id",
-						Type:     "integer",
-						Default:  "1",
-						Identity: &ast.Identity{Type: "always"},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{
+							Name:     "id",
+							Type:     "integer",
+							Default:  "1",
+							Identity: &ast.Identity{Type: "always"},
+						},
 					},
 				},
 			},
@@ -561,15 +601,17 @@ func TestPostgresRejectsIdentityWithDefault(t *testing.T) {
 
 func TestPostgresRejectsGeneratedWithDefault(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{
-						Name:      "total",
-						Type:      "integer",
-						Default:   "0",
-						Generated: &ast.Generated{As: "a + b", Type: "stored"},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{
+							Name:      "total",
+							Type:      "integer",
+							Default:   "0",
+							Generated: &ast.Generated{As: "a + b", Type: "stored"},
+						},
 					},
 				},
 			},
@@ -582,11 +624,13 @@ func TestPostgresRejectsGeneratedWithDefault(t *testing.T) {
 
 func TestPostgresRejectsInvalidDefaultExpression(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{Name: "created_at", Type: "timestamptz", Default: "now(); drop table events"},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "created_at", Type: "timestamptz", Default: "now(); drop table events"},
+					},
 				},
 			},
 		},
@@ -598,11 +642,13 @@ func TestPostgresRejectsInvalidDefaultExpression(t *testing.T) {
 
 func TestPostgresAllowsDefaultExpressionKeywordInsideLiteral(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{Name: "status", Type: "text", Default: "'select'"},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "status", Type: "text", Default: "'select'"},
+					},
 				},
 			},
 		},
@@ -614,12 +660,14 @@ func TestPostgresAllowsDefaultExpressionKeywordInsideLiteral(t *testing.T) {
 
 func TestPostgresRejectsInvalidGeneratedExpression(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{Name: "name", Type: "text"},
-					{Name: "search_name", Type: "text", Generated: &ast.Generated{As: "lower(name", Type: "stored"}},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "name", Type: "text"},
+						{Name: "search_name", Type: "text", Generated: &ast.Generated{As: "lower(name", Type: "stored"}},
+					},
 				},
 			},
 		},
@@ -631,12 +679,14 @@ func TestPostgresRejectsInvalidGeneratedExpression(t *testing.T) {
 
 func TestPostgresAllowsGeneratedExpressionParenthesisInsideLiteral(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{Name: "name", Type: "text"},
-					{Name: "display_name", Type: "text", Generated: &ast.Generated{As: "concat(name, ')')", Type: "stored"}},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "name", Type: "text"},
+						{Name: "display_name", Type: "text", Generated: &ast.Generated{As: "concat(name, ')')", Type: "stored"}},
+					},
 				},
 			},
 		},
@@ -659,17 +709,19 @@ func TestPostgresRejectsInvalidDomainExpression(t *testing.T) {
 
 func TestPostgresRejectsInvalidIndexExpression(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "events",
-				Columns: []ast.Column{
-					{Name: "name", Type: "text"},
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "name", Type: "text"},
+					},
 				},
-				Indexes: []ast.Index{
+				Indexes: []pgschema.Index{
 					{
-						Name: "events_name_expr_idx",
-						Columns: []ast.IndexColumn{
-							{Expression: "lower(name);", IsExpression: true},
+						Index: ast.Index{Name: "events_name_expr_idx"},
+						Columns: []pgschema.IndexColumn{
+							{IndexColumn: ast.IndexColumn{Expression: "lower(name);", IsExpression: true}},
 						},
 					},
 				},
@@ -683,16 +735,20 @@ func TestPostgresRejectsInvalidIndexExpression(t *testing.T) {
 
 func TestPostgresAllowsSameConstraintNameOnDifferentTables(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name:    "users",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
-				Checks:  []ast.Check{{Name: "id_not_empty", Expression: "id IS NOT NULL"}},
+				Table: ast.Table{
+					Name:    "users",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+					Checks:  []ast.Check{{Name: "id_not_empty", Expression: "id IS NOT NULL"}},
+				},
 			},
 			{
-				Name:    "accounts",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
-				Checks:  []ast.Check{{Name: "id_not_empty", Expression: "id IS NOT NULL"}},
+				Table: ast.Table{
+					Name:    "accounts",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+					Checks:  []ast.Check{{Name: "id_not_empty", Expression: "id IS NOT NULL"}},
+				},
 			},
 		},
 	})
@@ -703,18 +759,22 @@ func TestPostgresAllowsSameConstraintNameOnDifferentTables(t *testing.T) {
 
 func TestPostgresRejectsExclusionWithoutOperator(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "bookings",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "bookings",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+					},
 				},
-				Exclusions: []ast.ExclusionConstraint{
+				Exclusions: []pgschema.ExclusionConstraint{
 					{
-						Name:   "bookings_no_overlap",
+						ExclusionConstraint: ast.ExclusionConstraint{
+							Name: "bookings_no_overlap",
+						},
 						Method: "gist",
-						Elements: []ast.ExclusionElement{
-							{Expression: "during"},
+						Elements: []pgschema.ExclusionElement{
+							{ExclusionElement: ast.ExclusionElement{Expression: "during"}},
 						},
 					},
 				},
@@ -821,8 +881,8 @@ func TestPostgresRejectsFunctionBodyDollarQuoteDelimiter(t *testing.T) {
 
 func TestPostgresRejectsDuplicateTriggerOnTarget(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
-			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 		Triggers: []pgschema.Trigger{
 			{Name: "users_touch", Target: "users", Function: "touch", Timing: "BEFORE", Events: []string{"UPDATE"}},
@@ -847,8 +907,8 @@ func TestPostgresRejectsTriggerUnknownTarget(t *testing.T) {
 
 func TestPostgresRejectsTriggerUnknownUpdateColumn(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
-			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 		Triggers: []pgschema.Trigger{
 			{Name: "users_touch", Target: "users", Function: "touch", Timing: "BEFORE", Events: []string{"UPDATE"}, Columns: []string{"email"}},
@@ -861,8 +921,8 @@ func TestPostgresRejectsTriggerUnknownUpdateColumn(t *testing.T) {
 
 func TestPostgresRejectsDuplicatePolicyOnTable(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
-			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 		Policies: []pgschema.Policy{
 			{Name: "users_read", Table: "users", Command: "SELECT", Using: "true"},
@@ -887,8 +947,8 @@ func TestPostgresRejectsPolicyUnknownTable(t *testing.T) {
 
 func TestPostgresRejectsInsertPolicyUsingExpression(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
-			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 		Policies: []pgschema.Policy{
 			{Name: "users_insert", Table: "users", Command: "INSERT", Using: "true"},
@@ -901,8 +961,8 @@ func TestPostgresRejectsInsertPolicyUsingExpression(t *testing.T) {
 
 func TestPostgresRejectsSelectPolicyWithCheckExpression(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
-		Tables: []ast.Table{
-			{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 		Policies: []pgschema.Policy{
 			{Name: "users_read", Table: "users", Command: "SELECT", WithCheck: "true"},

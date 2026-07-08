@@ -3,12 +3,11 @@ package plan
 import (
 	"reflect"
 
-	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
-func (p planner) triggers(previous, current []pgschema.Trigger, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) error {
+func (p planner) triggers(previous, current []pgschema.Trigger, tables []pgschema.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) error {
 	prev := mapBy(previous, triggerKey)
 	for _, trigger := range sortedBy(current, triggerKey) {
 		key := triggerKey(trigger)
@@ -119,7 +118,7 @@ func ensureRenameOnlyTrigger(trigger, old pgschema.Trigger) error {
 	return nil
 }
 
-func triggerCommentChange(trigger pgschema.Trigger, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.Change {
+func triggerCommentChange(trigger pgschema.Trigger, tables []pgschema.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.Change {
 	key := triggerKey(trigger)
 	return migrateplan.NewChange(
 		migrateplan.OperationAlter,
@@ -134,7 +133,7 @@ func triggerCommentChange(trigger pgschema.Trigger, tables []ast.Table, views []
 	)
 }
 
-func triggerTargetRef(trigger pgschema.Trigger, tables []ast.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.ObjectRef {
+func triggerTargetRef(trigger pgschema.Trigger, tables []pgschema.Table, views []pgschema.View, materializedViews []pgschema.MaterializedView) migrateplan.ObjectRef {
 	key := referencedTableKey(trigger.Target)
 	for _, table := range tables {
 		if tableKey(table) == key {

@@ -14,12 +14,14 @@ func TestSnapshotDiffAddsTableAndColumn(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{{
-				Name: "id",
-				Type: "uuid",
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{{
+					Name: "id",
+					Type: "uuid",
+				}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
@@ -28,21 +30,25 @@ func TestSnapshotDiffAddsTableAndColumn(t *testing.T) {
 		Namespaces: []pgschema.Namespace{{
 			Name: "billing",
 		}},
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
-					{Name: "email", Type: "text", NotNull: true},
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+						{Name: "email", Type: "text", NotNull: true},
+					},
 				},
 			},
 			{
-				Schema: "billing",
-				Name:   "invoices",
-				Columns: []ast.Column{{
-					Name: "id",
-					Type: "uuid",
-				}},
+				Table: ast.Table{
+					Schema: "billing",
+					Name:   "invoices",
+					Columns: []ast.Column{{
+						Name: "id",
+						Type: "uuid",
+					}},
+				},
 			},
 		},
 	})
@@ -71,23 +77,27 @@ func TestSnapshotDiffOrdersNewTablesByForeignKeyDependency(t *testing.T) {
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "invoices",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
-					{Name: "user_id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "invoices",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+						{Name: "user_id", Type: "uuid"},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{{
+						Name:              "invoices_user_id_fkey",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+					}},
 				},
-				ForeignKeys: []ast.ForeignKeyConstraint{{
-					Name:              "invoices_user_id_fkey",
-					Columns:           []string{"user_id"},
-					ReferencedTable:   "users",
-					ReferencedColumns: []string{"id"},
-				}},
 			},
 			{
-				Name:    "users",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				Table: ast.Table{
+					Name:    "users",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				},
 			},
 		},
 	})
@@ -118,24 +128,28 @@ func TestSnapshotDiffOrdersNewTablesByCreateChangeWhenParentHasComment(t *testin
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "invoices",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
-					{Name: "user_id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "invoices",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+						{Name: "user_id", Type: "uuid"},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{{
+						Name:              "invoices_user_id_fkey",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+					}},
 				},
-				ForeignKeys: []ast.ForeignKeyConstraint{{
-					Name:              "invoices_user_id_fkey",
-					Columns:           []string{"user_id"},
-					ReferencedTable:   "users",
-					ReferencedColumns: []string{"id"},
-				}},
 			},
 			{
-				Name:    "users",
-				Comment: "Application users",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				Table: ast.Table{
+					Name:    "users",
+					Comment: "Application users",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				},
 			},
 		},
 	})
@@ -157,20 +171,26 @@ func TestSnapshotDiffProducesIndexDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
-			Indexes: []ast.Index{{
-				Name:    "users_email_idx",
-				Columns: []ast.IndexColumn{{Expression: "email"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
+			Indexes: []pgschema.Index{{
+				Index: ast.Index{Name: "users_email_idx"},
+				Columns: []pgschema.IndexColumn{{
+					IndexColumn: ast.IndexColumn{Expression: "email"},
+				}},
 			}},
 		}},
 	})
@@ -198,23 +218,27 @@ func TestSnapshotDiffProducesCommentDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text"},
+				},
 			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Comment: "Application users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", Type: "text", Comment: "Login email"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Comment: "Application users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text", Comment: "Login email"},
+				},
 			},
 		}},
 	})
@@ -251,34 +275,42 @@ func TestSnapshotDiffProducesForeignKeyDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name:    "orgs",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				Table: ast.Table{
+					Name:    "orgs",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				},
 			},
 			{
-				Name:    "users",
-				Columns: []ast.Column{{Name: "org_id", Type: "uuid"}},
+				Table: ast.Table{
+					Name:    "users",
+					Columns: []ast.Column{{Name: "org_id", Type: "uuid"}},
+				},
 			},
 		},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name:    "orgs",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				Table: ast.Table{
+					Name:    "orgs",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+				},
 			},
 			{
-				Name:    "users",
-				Columns: []ast.Column{{Name: "org_id", Type: "uuid"}},
-				ForeignKeys: []ast.ForeignKeyConstraint{{
-					Name:              "users_org_id_fkey",
-					Columns:           []string{"org_id"},
-					ReferencedTable:   "orgs",
-					ReferencedColumns: []string{"id"},
-				}},
+				Table: ast.Table{
+					Name:    "users",
+					Columns: []ast.Column{{Name: "org_id", Type: "uuid"}},
+					ForeignKeys: []ast.ForeignKeyConstraint{{
+						Name:              "users_org_id_fkey",
+						Columns:           []string{"org_id"},
+						ReferencedTable:   "orgs",
+						ReferencedColumns: []string{"id"},
+					}},
+				},
 			},
 		},
 	})
@@ -312,20 +344,26 @@ func TestSnapshotDiffProducesExclusionConstraintReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "bookings",
-			Columns: []ast.Column{{Name: "slot", Type: "tsrange"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "bookings",
+				Columns: []ast.Column{{Name: "slot", Type: "tsrange"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "bookings",
-			Columns: []ast.Column{{Name: "slot", Type: "tsrange"}},
-			Exclusions: []ast.ExclusionConstraint{{
-				Name:     "bookings_slot_excl",
-				Elements: []ast.ExclusionElement{{Expression: "slot", Operator: "&&"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "bookings",
+				Columns: []ast.Column{{Name: "slot", Type: "tsrange"}},
+			},
+			Exclusions: []pgschema.ExclusionConstraint{{
+				ExclusionConstraint: ast.ExclusionConstraint{Name: "bookings_slot_excl"},
+				Elements: []pgschema.ExclusionElement{{
+					ExclusionElement: ast.ExclusionElement{Expression: "slot", Operator: "&&"},
+				}},
 			}},
 		}},
 	})
@@ -350,19 +388,23 @@ func TestSnapshotDiffProducesRLSReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:             "users",
-			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
-			RowLevelSecurity: true,
-			ForceRLS:         true,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:             "users",
+				Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+				RowLevelSecurity: true,
+				ForceRLS:         true,
+			},
 		}},
 	})
 
@@ -391,19 +433,23 @@ func TestSnapshotDiffProducesAddColumnReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text"},
+				},
 			},
 		}},
 	})
@@ -428,17 +474,21 @@ func TestSnapshotDiffPlansColumnTypeChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "varchar(320)"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "varchar(320)"}},
+			},
 		}},
 	})
 
@@ -468,17 +518,21 @@ func TestSnapshotDiffPlansColumnDefaultChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "status", Type: "text", Default: "'active'"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "status", Type: "text", Default: "'active'"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "status", Type: "text"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "status", Type: "text"}},
+			},
 		}},
 	})
 
@@ -502,17 +556,21 @@ func TestSnapshotDiffPlansColumnNullabilityChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text", NotNull: true}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text", NotNull: true}},
+			},
 		}},
 	})
 
@@ -539,22 +597,26 @@ func TestSnapshotDiffPlansGeneratedColumnChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "email", Type: "text"},
-				{Name: "search", Type: "tsvector", Generated: &ast.Generated{As: "to_tsvector('english', email)", Type: "stored"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "email", Type: "text"},
+					{Name: "search", Type: "tsvector", Generated: &ast.Generated{As: "to_tsvector('english', email)", Type: "stored"}},
+				},
 			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "email", Type: "text"},
-				{Name: "search", Type: "tsvector", Generated: &ast.Generated{As: "to_tsvector('simple', email)", Type: "stored"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "email", Type: "text"},
+					{Name: "search", Type: "tsvector", Generated: &ast.Generated{As: "to_tsvector('simple', email)", Type: "stored"}},
+				},
 			},
 		}},
 	})
@@ -582,22 +644,26 @@ func TestSnapshotDiffPlansIdentityColumnChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "bigint", NotNull: true}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "bigint", NotNull: true}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{{
-				Name:     "id",
-				Type:     "bigint",
-				NotNull:  true,
-				Identity: &ast.Identity{Type: "byDefault"},
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{{
+					Name:     "id",
+					Type:     "bigint",
+					NotNull:  true,
+					Identity: &ast.Identity{Type: "byDefault"},
+				}},
+			},
 		}},
 	})
 
@@ -624,27 +690,31 @@ func TestSnapshotDiffPlansIdentityColumnModification(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{{
-				Name:     "id",
-				Type:     "bigint",
-				NotNull:  true,
-				Identity: &ast.Identity{Type: "always"},
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{{
+					Name:     "id",
+					Type:     "bigint",
+					NotNull:  true,
+					Identity: &ast.Identity{Type: "always"},
+				}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{{
-				Name:     "id",
-				Type:     "bigint",
-				NotNull:  true,
-				Identity: &ast.Identity{Type: "byDefault", Increment: 10},
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{{
+					Name:     "id",
+					Type:     "bigint",
+					NotNull:  true,
+					Identity: &ast.Identity{Type: "byDefault", Increment: 10},
+				}},
+			},
 		}},
 	})
 
@@ -674,21 +744,26 @@ func TestSnapshotDiffRejectsUnsupportedColumnModification(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
-			{Name: "orgs", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
-			{Name: "users", Columns: []ast.Column{{Name: "org_id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "orgs", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "org_id", Type: "uuid"}}}},
 		},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
-			{Name: "orgs", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
-			{Name: "users", Columns: []ast.Column{{
-				Name:       "org_id",
-				Type:       "uuid",
-				References: &ast.ForeignKey{Table: "orgs", Column: "id"},
-			}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "orgs", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
+			{
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{{
+						Name:       "org_id",
+						Type:       "uuid",
+						References: &ast.ForeignKey{Table: "orgs", Column: "id"},
+					}},
+				},
+			},
 		},
 	})
 
@@ -702,30 +777,42 @@ func TestSnapshotDiffRejectsUnsupportedCreateTableDetails(t *testing.T) {
 	tests := []struct {
 		name    string
 		wantErr string
-		table   ast.Table
+		table   pgschema.Table
 	}{
 		{
 			name: "exclusion constraint rename metadata",
-			table: ast.Table{
-				Name:    "bookings",
-				Columns: []ast.Column{{Name: "slot", Type: "tsrange"}},
-				Exclusions: []ast.ExclusionConstraint{{
-					Name:         "bookings_slot_excl",
-					PreviousName: "old_bookings_slot_excl",
-					Elements:     []ast.ExclusionElement{{Expression: "slot", Operator: "&&"}},
+			table: pgschema.Table{
+				Table: ast.Table{
+					Name:    "bookings",
+					Columns: []ast.Column{{Name: "slot", Type: "tsrange"}},
+				},
+				Exclusions: []pgschema.ExclusionConstraint{{
+					ExclusionConstraint: ast.ExclusionConstraint{
+						Name:         "bookings_slot_excl",
+						PreviousName: "old_bookings_slot_excl",
+					},
+					Elements: []pgschema.ExclusionElement{{
+						ExclusionElement: ast.ExclusionElement{Expression: "slot", Operator: "&&"},
+					}},
 				}},
 			},
 			wantErr: "exclusion constraint public.bookings.bookings_slot_excl rename metadata requires semantic planning",
 		},
 		{
 			name: "index rename metadata on new table",
-			table: ast.Table{
-				Name:    "users",
-				Columns: []ast.Column{{Name: "email", Type: "text"}},
-				Indexes: []ast.Index{{
-					Name:         "users_email_idx",
-					PreviousName: "old_users_email_idx",
-					Columns:      []ast.IndexColumn{{Expression: "email"}},
+			table: pgschema.Table{
+				Table: ast.Table{
+					Name:    "users",
+					Columns: []ast.Column{{Name: "email", Type: "text"}},
+				},
+				Indexes: []pgschema.Index{{
+					Index: ast.Index{
+						Name:         "users_email_idx",
+						PreviousName: "old_users_email_idx",
+					},
+					Columns: []pgschema.IndexColumn{{
+						IndexColumn: ast.IndexColumn{Expression: "email"},
+					}},
 				}},
 			},
 			wantErr: "index public.users.users_email_idx previousName old_users_email_idx does not match any index in the previous snapshot",
@@ -741,7 +828,7 @@ func TestSnapshotDiffRejectsUnsupportedCreateTableDetails(t *testing.T) {
 			current := snapshot(t, pgschema.Document{
 				Dialect: "postgresql",
 				Version: pgschema.SnapshotVersion,
-				Tables:  []ast.Table{tt.table},
+				Tables:  []pgschema.Table{tt.table},
 			})
 
 			_, err := plan.SnapshotDiff(previous, current)
@@ -756,19 +843,23 @@ func TestSnapshotDiffRejectsAddColumnRenameMetadata(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", PreviousName: "old_email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", PreviousName: "old_email", Type: "text"},
+				},
 			},
 		}},
 	})
@@ -783,9 +874,11 @@ func TestSnapshotDiffEmitsDestructiveDropTable(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
@@ -816,20 +909,24 @@ func TestSnapshotDiffEmitsDestructiveDropColumn(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text"},
+				},
 			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 
@@ -852,18 +949,22 @@ func TestSnapshotDiffEmitsDestructiveDisableRLS(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:             "users",
-			Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
-			RowLevelSecurity: true,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:             "users",
+				Columns:          []ast.Column{{Name: "id", Type: "uuid"}},
+				RowLevelSecurity: true,
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 
@@ -883,18 +984,22 @@ func TestSnapshotDiffEmitsDestructiveDropComment(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Comment: "Application users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid", Comment: "Primary key"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Comment: "Application users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid", Comment: "Primary key"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 
@@ -923,32 +1028,36 @@ func TestSnapshotDiffRejectsNewTableForeignKeyCycle(t *testing.T) {
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name: "accounts",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
-					{Name: "user_id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "accounts",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+						{Name: "user_id", Type: "uuid"},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{{
+						Name:              "accounts_user_id_fkey",
+						Columns:           []string{"user_id"},
+						ReferencedTable:   "users",
+						ReferencedColumns: []string{"id"},
+					}},
 				},
-				ForeignKeys: []ast.ForeignKeyConstraint{{
-					Name:              "accounts_user_id_fkey",
-					Columns:           []string{"user_id"},
-					ReferencedTable:   "users",
-					ReferencedColumns: []string{"id"},
-				}},
 			},
 			{
-				Name: "users",
-				Columns: []ast.Column{
-					{Name: "id", Type: "uuid"},
-					{Name: "account_id", Type: "uuid"},
+				Table: ast.Table{
+					Name: "users",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid"},
+						{Name: "account_id", Type: "uuid"},
+					},
+					ForeignKeys: []ast.ForeignKeyConstraint{{
+						Name:              "users_account_id_fkey",
+						Columns:           []string{"account_id"},
+						ReferencedTable:   "accounts",
+						ReferencedColumns: []string{"id"},
+					}},
 				},
-				ForeignKeys: []ast.ForeignKeyConstraint{{
-					Name:              "users_account_id_fkey",
-					Columns:           []string{"account_id"},
-					ReferencedTable:   "accounts",
-					ReferencedColumns: []string{"id"},
-				}},
 			},
 		},
 	})
@@ -963,18 +1072,22 @@ func TestSnapshotDiffEmitsRenameTable(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "old_users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "old_users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:         "users",
-			PreviousName: "old_users",
-			Columns:      []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:         "users",
+				PreviousName: "old_users",
+				Columns:      []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 
@@ -1001,22 +1114,26 @@ func TestSnapshotDiffEmitsRenameColumn(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "old_email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "old_email", Type: "text"},
+				},
 			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", PreviousName: "old_email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", PreviousName: "old_email", Type: "text"},
+				},
 			},
 		}},
 	})
@@ -1037,26 +1154,30 @@ func TestSnapshotDiffEmitsRenameConstraint(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
-			UniqueConstraints: []ast.UniqueConstraint{{
-				Name:    "old_users_email_key",
-				Columns: []string{"email"},
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+				UniqueConstraints: []ast.UniqueConstraint{{
+					Name:    "old_users_email_key",
+					Columns: []string{"email"},
+				}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
-			UniqueConstraints: []ast.UniqueConstraint{{
-				Name:         "users_email_key",
-				PreviousName: "old_users_email_key",
-				Columns:      []string{"email"},
-			}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+				UniqueConstraints: []ast.UniqueConstraint{{
+					Name:         "users_email_key",
+					PreviousName: "old_users_email_key",
+					Columns:      []string{"email"},
+				}},
+			},
 		}},
 	})
 
@@ -1076,25 +1197,35 @@ func TestSnapshotDiffEmitsRenameIndex(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
-			Indexes: []ast.Index{{
-				Name:    "old_users_email_idx",
-				Columns: []ast.IndexColumn{{Expression: "email"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
+			Indexes: []pgschema.Index{{
+				Index: ast.Index{Name: "old_users_email_idx"},
+				Columns: []pgschema.IndexColumn{{
+					IndexColumn: ast.IndexColumn{Expression: "email"},
+				}},
 			}},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "email", Type: "text"}},
-			Indexes: []ast.Index{{
-				Name:         "users_email_idx",
-				PreviousName: "old_users_email_idx",
-				Columns:      []ast.IndexColumn{{Expression: "email"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
+			Indexes: []pgschema.Index{{
+				Index: ast.Index{
+					Name:         "users_email_idx",
+					PreviousName: "old_users_email_idx",
+				},
+				Columns: []pgschema.IndexColumn{{
+					IndexColumn: ast.IndexColumn{Expression: "email"},
+				}},
 			}},
 		}},
 	})
@@ -1115,22 +1246,26 @@ func TestSnapshotDiffRejectsRenameColumnWithTypeChange(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "old_email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "old_email", Type: "text"},
+				},
 			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name: "users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", PreviousName: "old_email", Type: "varchar(320)"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", PreviousName: "old_email", Type: "varchar(320)"},
+				},
 			},
 		}},
 	})
@@ -1145,18 +1280,22 @@ func TestSnapshotDiffRejectsRenameMismatchedPreviousName(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:         "people",
-			PreviousName: "missing_table",
-			Columns:      []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:         "people",
+				PreviousName: "missing_table",
+				Columns:      []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 
@@ -1170,20 +1309,24 @@ func TestSnapshotDiffRenamesBeforeDependentAlters(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:    "old_users",
-			Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "old_users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{{
-			Name:         "users",
-			PreviousName: "old_users",
-			Columns: []ast.Column{
-				{Name: "id", Type: "uuid"},
-				{Name: "email", Type: "text"},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:         "users",
+				PreviousName: "old_users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text"},
+				},
 			},
 		}},
 	})
@@ -1210,24 +1353,26 @@ func TestSnapshotDiffReversibleDropsCarryReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
+		Tables: []pgschema.Table{
 			{
-				Name:    "accounts",
-				Columns: []ast.Column{{Name: "id", Type: "uuid"}, {Name: "email", Type: "text"}},
-				Indexes: []ast.Index{{Name: "accounts_email_idx", Columns: []ast.IndexColumn{{Expression: "email"}}}},
-				UniqueConstraints: []ast.UniqueConstraint{
-					{Name: "accounts_email_key", Columns: []string{"email"}},
+				Table: ast.Table{
+					Name:    "accounts",
+					Columns: []ast.Column{{Name: "id", Type: "uuid"}, {Name: "email", Type: "text"}},
+					UniqueConstraints: []ast.UniqueConstraint{
+						{Name: "accounts_email_key", Columns: []string{"email"}},
+					},
 				},
+				Indexes: []pgschema.Index{{Index: ast.Index{Name: "accounts_email_idx"}, Columns: []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "email"}}}}},
 			},
-			{Name: "old_users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+			{Table: ast.Table{Name: "old_users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 	})
 	current := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
-		Tables: []ast.Table{
-			{Name: "accounts", Columns: []ast.Column{{Name: "id", Type: "uuid"}, {Name: "email", Type: "text"}}},
-			{Name: "users", PreviousName: "old_users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "accounts", Columns: []ast.Column{{Name: "id", Type: "uuid"}, {Name: "email", Type: "text"}}}},
+			{Table: ast.Table{Name: "users", PreviousName: "old_users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}},
 		},
 	})
 
