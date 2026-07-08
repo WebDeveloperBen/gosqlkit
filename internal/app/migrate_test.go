@@ -519,6 +519,35 @@ func TestMigrateCheckWithConfigRejectsSandboxWhenLatestSnapshotIsStale(t *testin
 	}
 }
 
+func TestMigrateCheckWithConfigRejectsSandboxWithoutTargetSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	config := &Config{
+		Dialect: "postgresql",
+		Migrations: MigrationSpec{
+			Dir:    dir,
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	if _, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:      "manual",
+		Empty:     true,
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := MigrateCheckWithConfig(config, MigrateCheckOptions{
+		SandboxURL: "postgres://localhost/app",
+		sandboxReplay: func(context.Context, string, string, []migrate.Migration) (*SandboxReplayResult, error) {
+			t.Fatal("sandbox replay should not run without target snapshot metadata")
+			return nil, errors.New("unexpected sandbox replay")
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "latest migration has no targetSnapshot metadata") {
+		t.Fatalf("expected missing target snapshot error, got %v", err)
+	}
+}
+
 func TestMigrateCreateWithConfigRejectsDestructiveChangesByDefault(t *testing.T) {
 	config := &Config{
 		Dialect: "postgres",

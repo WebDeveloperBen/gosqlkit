@@ -2,15 +2,34 @@ package goose
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+
+	"github.com/webdeveloperben/gosqlkit/internal/sqlsplit"
 )
 
 func UpSQL(content string) (string, error) {
-	return sectionSQL(content, "-- +goose Up", "-- +goose Down")
+	statements, err := UpStatements(content)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(statements, "\n"), nil
 }
 
 func DownSQL(content string) (string, error) {
-	return sectionSQL(content, "-- +goose Down", "")
+	statements, err := DownStatements(content)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(statements, "\n"), nil
+}
+
+func UpStatements(content string) ([]string, error) {
+	return sectionStatements(content, "-- +goose Up", "-- +goose Down")
+}
+
+func DownStatements(content string) ([]string, error) {
+	return sectionStatements(content, "-- +goose Down", "")
 }
 
 func sectionSQL(content, startMarker, endMarker string) (string, error) {
@@ -51,4 +70,57 @@ func sectionSQL(content, startMarker, endMarker string) (string, error) {
 		end = downLine
 	}
 	return strings.TrimSpace(strings.Join(lines[startLine+1:end], "\n")), nil
+}
+
+func sectionStatements(content, startMarker, endMarker string) ([]string, error) {
+	raw, err := sectionSQL(content, startMarker, endMarker)
+	if err != nil {
+		return nil, err
+	}
+
+	var statements []string
+	var normal strings.Builder
+	var block strings.Builder
+	inBlock := false
+
+	flushNormal := func() {
+		statements = append(statements, sqlsplit.Statements(normal.String())...)
+		normal.Reset()
+	}
+
+	for lineNumber, line := range strings.Split(raw, "\n") {
+		switch strings.TrimSpace(line) {
+		case "-- +goose StatementBegin":
+			if inBlock {
+				return nil, fmt.Errorf("nested goose statement begin at line %d", lineNumber+1)
+			}
+			flushNormal()
+			inBlock = true
+			continue
+		case "-- +goose StatementEnd":
+			if !inBlock {
+				return nil, fmt.Errorf("goose statement end without statement begin at line %d", lineNumber+1)
+			}
+			if statement := strings.TrimSpace(block.String()); statement != "" {
+				statements = append(statements, statement)
+			}
+			block.Reset()
+			inBlock = false
+			continue
+		}
+
+		if inBlock {
+			block.WriteString(line)
+			block.WriteByte('\n')
+			continue
+		}
+		normal.WriteString(line)
+		normal.WriteByte('\n')
+	}
+
+	if inBlock {
+		return nil, errors.New("goose statement begin without statement end")
+	}
+	flushNormal()
+	return statements, nil
 }

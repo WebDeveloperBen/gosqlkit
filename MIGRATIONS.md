@@ -291,6 +291,9 @@ PostgreSQL sandbox validation is now covered by an opt-in Testcontainers suite:
 introspects the live database, verifies no false drift, verifies intentional
 drift is detected, creates a baseline goose migration, replays it into a fresh
 database, and compares the replayed database to the embedded target snapshot.
+`task integration:postgres:matrix` repeats the PostgreSQL app integration
+suite against PostgreSQL 15, 16, and 17 images by default; set
+`GOSQLKIT_POSTGRES_IMAGES` to tune the CI matrix.
 
 ## Internal Architecture
 

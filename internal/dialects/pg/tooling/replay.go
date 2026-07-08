@@ -36,11 +36,11 @@ func Replay(ctx context.Context, exec Executor, opts ReplayOptions) (*ReplayResu
 func replayGoose(ctx context.Context, exec Executor, migrations []migrate.Migration) (*ReplayResult, error) {
 	result := &ReplayResult{}
 	for _, migration := range migrations {
-		sql, err := goose.UpSQL(migration.Content)
+		statements, err := goose.UpStatements(migration.Content)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", migration.Path, err)
 		}
-		for _, statement := range SplitSQLStatements(sql) {
+		for _, statement := range statements {
 			if err := exec.Exec(ctx, statement); err != nil {
 				return nil, fmt.Errorf("%s: apply goose up: %w", migration.Path, err)
 			}

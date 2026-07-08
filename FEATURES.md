@@ -504,12 +504,12 @@ Other provider requirement:
 - `[x]` Testcontainers replay tests for rename migrations.
 - `[x]` Testcontainers replay tests for destructive-change guardrails and allowed destructive SQL.
 - `[x]` Down SQL replay tests for reversible generated migrations.
-- `[ ]` Drift normalisation matrix tests for casts, default opclasses, index ordering/nulls, inline constraints, qualified references, and PostgreSQL expression rewrites.
-- `[ ]` Goose statement parser tests for `StatementBegin` / `StatementEnd`, tagged dollar quotes, quoted semicolons, comments, empty statements, and non-transactional statements.
-- `[ ]` Migration metadata tamper tests for broken JSON, missing target snapshots, stale IDs, and incoherent lineage.
-- `[ ]` PostgreSQL version matrix for Testcontainers integration, at least PostgreSQL 15, 16, and 17 where CI time allows.
-- `[ ]` Extension-owned object filtering tests.
-- `[ ]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
+- `[x]` Drift normalisation matrix tests for casts, default opclasses, index ordering/nulls, inline constraints, qualified references, and PostgreSQL expression rewrites.
+- `[x]` Goose statement parser tests for `StatementBegin` / `StatementEnd`, tagged dollar quotes, quoted semicolons, comments, empty statements, and non-transactional statements.
+- `[x]` Migration metadata tamper tests for broken JSON, missing target snapshots, stale IDs, and incoherent lineage.
+- `[x]` PostgreSQL version matrix for Testcontainers integration, at least PostgreSQL 15, 16, and 17 where CI time allows.
+- `[x]` Extension-owned object filtering tests.
+- `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
 - `[ ]` Testcontainers integration test per supported dialect.
 
 ## Recommended Build Order

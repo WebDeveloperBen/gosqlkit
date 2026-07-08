@@ -56,6 +56,63 @@ func TestParseMetadataRejectsTargetSnapshotIDMismatch(t *testing.T) {
 	}
 }
 
+func TestParseMetadataRejectsTamperedMetadata(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name: "broken json",
+			content: `-- +gosqlkit Meta
+-- {
+--   "version": 1,
+--   "dialect": "postgresql",
+--   "createdAt": "2026-07-06T14:30:00Z",
+--   "changes": []
+-- 
+
+-- +goose Up
+`,
+			want: "parse gosqlkit metadata",
+		},
+		{
+			name: "target snapshot missing snapshot id",
+			content: `-- +gosqlkit Meta
+-- {
+--   "version": 1,
+--   "dialect": "postgresql",
+--   "toSnapshotId": "def",
+--   "targetSnapshot": {
+--     "version": 1,
+--     "dialect": "postgresql"
+--   },
+--   "createdAt": "2026-07-06T14:30:00Z",
+--   "changes": []
+-- }
+
+-- +goose Up
+`,
+			want: "targetSnapshot missing snapshotId",
+		},
+		{
+			name: "missing metadata block",
+			content: `-- +goose Up
+SELECT 1;
+`,
+			want: "missing gosqlkit metadata block",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := migrate.ParseMetadata(tt.content)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected %q error, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
 func TestScanDirValidatesMetadataAndLineage(t *testing.T) {
 	dir := t.TempDir()
 	writeRenderedMigration(t, dir, migrate.Plan{

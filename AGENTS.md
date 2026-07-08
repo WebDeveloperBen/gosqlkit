@@ -371,6 +371,7 @@ task lint             # golangci-lint run ./...
 task vuln             # govulncheck ./...
 task sqlc:check       # run sqlc generate in a temp copy of examples/basic
 task integration      # opt-in Docker-backed PostgreSQL integration tests
+task integration:postgres:matrix  # opt-in PostgreSQL 15/16/17 integration matrix
 task verify:cli       # smoke-test the CLI (--help, version, generate, snapshot)
 task modernize        # apply Go modernization fixes
 task fix:fieldalignment  # reorder struct fields to reduce padding
@@ -380,6 +381,10 @@ task fix:fieldalignment  # reorder struct fields to reduce padding
 snapshot:check -> sqlc:check -> verify:cli -> lint -> vuln.
 `task integration` is opt-in and not part of `task verify`; use it when Docker
 is available or in CI jobs that explicitly enable real PostgreSQL tests.
+`task integration:postgres:matrix` runs the app integration suite against
+PostgreSQL 15, 16, and 17 by default. Override images with
+`GOSQLKIT_POSTGRES_IMAGES` or a single normal integration image with
+`GOSQLKIT_POSTGRES_IMAGE`.
 
 **Before declaring any task done, run `task verify` and ensure it passes
 locally.** If `sqlc` or `golangci-lint` aren't installed, the relevant tasks

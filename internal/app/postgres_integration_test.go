@@ -39,9 +39,10 @@ func TestMain(m *testing.M) {
 	}
 
 	ctx := context.Background()
-	env, err := setupPostgresIntegration(ctx)
+	image := postgresIntegrationImage()
+	env, err := setupPostgresIntegration(ctx, image)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to setup PostgreSQL integration container: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to setup PostgreSQL integration container %s: %v\n", image, err)
 		os.Exit(1)
 	}
 	integrationPostgresEnv = env
@@ -122,6 +123,28 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		}
 		if result.Sandbox.Applied != 1 || result.Sandbox.ToSnapshotID == "" || result.Sandbox.DatabaseSnapshotID == "" {
 			t.Fatalf("sandbox result = %#v", result.Sandbox)
+		}
+	})
+
+	t.Run("extension owned objects are filtered", func(t *testing.T) {
+		dsn := newPostgresIntegrationDatabase(t, ctx)
+		conn := openPostgres(t, ctx, dsn)
+		defer func() {
+			_ = conn.Close(context.Background())
+		}()
+
+		if err := conn.Exec(ctx, "CREATE EXTENSION pgcrypto;"); err != nil {
+			t.Fatal(err)
+		}
+		schema, err := pgtooling.Introspect(ctx, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(schema.Extensions) != 1 || schema.Extensions[0].Name != "pgcrypto" {
+			t.Fatalf("extensions = %#v", schema.Extensions)
+		}
+		if len(schema.Functions) != 0 || len(schema.CompositeTypes) != 0 || len(schema.Domains) != 0 || len(schema.Sequences) != 0 || len(schema.Tables) != 0 {
+			t.Fatalf("extension-owned objects leaked into schema: %#v", schema)
 		}
 	})
 }
@@ -235,11 +258,11 @@ func TestPostgresIntegrationDiffMigrationReplay(t *testing.T) {
 			assertDatabaseMatchesSnapshot(t, ctx, conn, currentSnapshot)
 
 			if tt.replayDown {
-				downSQL, err := goose.DownSQL(diffContent)
+				downStatements, err := goose.DownStatements(diffContent)
 				if err != nil {
 					t.Fatal(err)
 				}
-				execSQLStatements(t, ctx, conn, downSQL)
+				execStatements(t, ctx, conn, downStatements)
 				assertDatabaseMatchesSnapshot(t, ctx, conn, previousSnapshot)
 			}
 		})
@@ -268,10 +291,10 @@ func integrationConfig(t *testing.T) *Config {
 	}
 }
 
-func setupPostgresIntegration(ctx context.Context) (*postgresIntegrationEnv, error) {
+func setupPostgresIntegration(ctx context.Context, image string) (*postgresIntegrationEnv, error) {
 	container, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		image,
 		postgres.WithDatabase("postgres"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
@@ -290,6 +313,13 @@ func setupPostgresIntegration(ctx context.Context) (*postgresIntegrationEnv, err
 		return nil, err
 	}
 	return &postgresIntegrationEnv{container: container, adminDSN: dsn}, nil
+}
+
+func postgresIntegrationImage() string {
+	if image := strings.TrimSpace(os.Getenv("GOSQLKIT_POSTGRES_IMAGE")); image != "" {
+		return image
+	}
+	return "postgres:16-alpine"
 }
 
 func newPostgresIntegrationDatabase(t *testing.T, ctx context.Context) string {
@@ -427,6 +457,15 @@ func openPostgres(t *testing.T, ctx context.Context, dsn string) *pgtooling.Conn
 func execSQLStatements(t *testing.T, ctx context.Context, conn *pgtooling.Conn, sql string) {
 	t.Helper()
 	for _, statement := range pgtooling.SplitSQLStatements(sql) {
+		if err := conn.Exec(ctx, statement); err != nil {
+			t.Fatalf("%s: %v", statement, err)
+		}
+	}
+}
+
+func execStatements(t *testing.T, ctx context.Context, conn *pgtooling.Conn, statements []string) {
+	t.Helper()
+	for _, statement := range statements {
 		if err := conn.Exec(ctx, statement); err != nil {
 			t.Fatalf("%s: %v", statement, err)
 		}

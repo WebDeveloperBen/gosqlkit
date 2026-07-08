@@ -79,6 +79,7 @@ render/apply/introspect/drift/replay path checked against a real engine:
 
 ```bash
 task integration
+task integration:postgres:matrix
 ```
 
 Create a baseline goose-compatible migration from the current schema when the
