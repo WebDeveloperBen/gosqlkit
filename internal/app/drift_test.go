@@ -66,6 +66,9 @@ func TestDriftCheckWithConfigReportsProjectedSnapshotMismatch(t *testing.T) {
 	if result == nil || !result.Drift {
 		t.Fatalf("expected drift result, got %#v", result)
 	}
+	if len(result.Differences) == 0 {
+		t.Fatalf("expected drift differences, got %#v", result)
+	}
 }
 
 func TestDriftCheckWithConfigUsesDatabaseURLEnv(t *testing.T) {

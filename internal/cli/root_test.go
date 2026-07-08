@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/webdeveloperben/gosqlkit/internal/app"
 )
 
 func runWithRecover(t *testing.T, args []string) (code int, err error) {
@@ -238,6 +240,35 @@ func TestPrintHumanHonoursQuietAndJSON(t *testing.T) {
 				t.Fatalf("printHuman(%v, %v) = %v, want %v", tt.json, tt.quiet, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPrintDriftGroupsDifferences(t *testing.T) {
+	var stdout bytes.Buffer
+	err := printDrift(&stdout, &app.DriftCheckResult{
+		Drift: true,
+		Differences: []app.DriftDifference{
+			{Op: "extra", Object: app.DriftObjectRef{Kind: "column", Key: "public.users.legacy_email"}},
+			{Op: "missing", Object: app.DriftObjectRef{Kind: "index", Key: "public.users.users_email_idx"}},
+			{Op: "changed", Object: app.DriftObjectRef{Kind: "table", Key: "public.users"}, Fields: []string{"comment", "rowLevelSecurity"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := stdout.String()
+	for _, want := range []string{
+		"database schema drift detected",
+		"extra:",
+		"  column public.users.legacy_email",
+		"missing:",
+		"  index public.users.users_email_idx",
+		"changed:",
+		"  table public.users (comment, rowLevelSecurity)",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("drift output missing %q\n%s", want, output)
+		}
 	}
 }
 

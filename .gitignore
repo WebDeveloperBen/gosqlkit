@@ -1,6 +1,7 @@
 bin/
 .gocache/
 .golangci-cache/
+test-results.xml
 tmp/
 # Local Pi runtime state
 .atl/

@@ -624,6 +624,9 @@ update of this file:
   and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
   Testcontainers suite for generated schema apply, catalogue introspection,
   drift detection, sandbox replay, and `migrate apply` version tracking.
+  Drift check results include object-level diagnostics for missing, extra, and
+  changed schema objects, including table-nested columns, constraints, and
+  indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
 - **Next tracks**: Azure/AWS/GCP-specific token auth, `golang-migrate`

@@ -28,7 +28,7 @@ tasks:
   test:
     desc: Run all Go tests
     cmds:
-      - gotestsum -- ./...
+      - gotestsum --format testname --junitfile test-results.xml -- ./...
 
   integration:
     desc: Run Docker-backed integration tests against PostgreSQL

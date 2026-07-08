@@ -22,10 +22,11 @@ type DriftCheckOptions struct {
 }
 
 type DriftCheckResult struct {
-	DesiredSnapshotID  string `json:"desiredSnapshotId"`
-	DatabaseSnapshotID string `json:"databaseSnapshotId"`
-	Dialect            string `json:"dialect"`
-	Drift              bool   `json:"drift"`
+	DesiredSnapshotID  string            `json:"desiredSnapshotId"`
+	DatabaseSnapshotID string            `json:"databaseSnapshotId"`
+	Dialect            string            `json:"dialect"`
+	Differences        []DriftDifference `json:"differences,omitempty"`
+	Drift              bool              `json:"drift"`
 }
 
 type driftInspectFunc func(context.Context, string) (pgschema.Schema, error)
@@ -50,7 +51,8 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 	if err := json.Unmarshal([]byte(desiredSnapshot), &desiredDoc); err != nil {
 		return nil, fmt.Errorf("parse desired snapshot: %w", err)
 	}
-	desiredID, err := driftSnapshotID(projectDriftDocument(desiredDoc))
+	desiredProjection := projectDriftDocument(desiredDoc)
+	desiredID, err := driftSnapshotID(desiredProjection)
 	if err != nil {
 		return nil, fmt.Errorf("build desired drift snapshot: %w", err)
 	}
@@ -68,7 +70,8 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 	if err != nil {
 		return nil, err
 	}
-	databaseID, err := driftSnapshotID(projectDriftSchema(databaseSchema))
+	databaseProjection := projectDriftSchema(databaseSchema)
+	databaseID, err := driftSnapshotID(databaseProjection)
 	if err != nil {
 		return nil, fmt.Errorf("build database drift snapshot: %w", err)
 	}
@@ -78,6 +81,7 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 		DesiredSnapshotID:  desiredID,
 		DatabaseSnapshotID: databaseID,
 		Drift:              desiredID != databaseID,
+		Differences:        driftDifferences(desiredProjection, databaseProjection),
 	}
 	if result.Drift {
 		return result, fmt.Errorf("database schema drift detected: database snapshot %q does not match desired snapshot %q", databaseID, desiredID)

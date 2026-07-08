@@ -450,6 +450,8 @@ Other provider requirement:
 - `[x]` `gosqlkit migrate check --sandbox-url ...`.
 - `[x]` `gosqlkit migrate apply --url ...`.
 - `[x]` `gosqlkit drift check --url ...`.
+- `[x]` Object-level drift diagnostics for missing, extra, and changed schema
+  objects in human and JSON output.
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[~]` Goose-compatible migration file output.
@@ -512,6 +514,7 @@ Other provider requirement:
 - `[x]` PostgreSQL version matrix for Testcontainers integration, at least PostgreSQL 15, 16, and 17 where CI time allows.
 - `[x]` Extension-owned object filtering tests.
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
+- `[x]` Drift diagnostics tests for top-level objects and table-nested objects.
 - `[ ]` Testcontainers integration test per supported dialect.
 
 ## Recommended Build Order
