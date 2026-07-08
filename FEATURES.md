@@ -427,14 +427,14 @@ Other provider requirement:
 - `[x]` `gosqlkit generate --out`.
 - `[x]` `gosqlkit generate --check`.
 - `[x]` `gosqlkit version`.
-- `[ ]` `gosqlkit inspect` or equivalent database introspection.
-- `[ ]` `gosqlkit inspect --url ...`.
-- `[ ]` `gosqlkit inspect --auth password`.
+- `[x]` `gosqlkit inspect` database introspection to snapshot JSON.
+- `[x]` `gosqlkit inspect --url ...`.
+- `[x]` `gosqlkit inspect` using password/database URL auth.
 - `[ ]` `gosqlkit inspect --auth token`.
 - `[ ]` `gosqlkit inspect --auth azure-entra`.
 - `[ ]` `gosqlkit inspect --auth aws-iam`.
 - `[ ]` `gosqlkit inspect --auth gcp-iam`.
-- `[ ]` `gosqlkit inspect --auth custom-token-command`.
+- `[x]` `gosqlkit inspect --token-command ...`.
 - `[x]` `gosqlkit snapshot` for deterministic snapshot output.
 - `[x]` `gosqlkit snapshot --prev` for previous snapshot ID tracking.
 - `[x]` `gosqlkit snapshot --out`.

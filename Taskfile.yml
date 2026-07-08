@@ -28,7 +28,7 @@ tasks:
   test:
     desc: Run all Go tests
     cmds:
-      - gotestsum test ./...
+      - gotestsum -- ./...
 
   integration:
     desc: Run Docker-backed integration tests against PostgreSQL
@@ -174,6 +174,7 @@ tasks:
     deps: [build]
     cmds:
       - "{{.BIN}} --help"
+      - "{{.BIN}} inspect --help"
       - "{{.BIN}} version"
       - "cd examples/basic && {{.BIN}} generate --check"
       - "cd examples/basic && {{.BIN}} snapshot --check"

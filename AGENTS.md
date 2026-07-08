@@ -153,6 +153,11 @@ because that is the user-facing import path. It can't move to `internal/`.
   **never import CLI packages**.
 - A new CLI command becomes an `internal/app` function first, then a thin
   `internal/cli` adapter. See `generate.go` / `snapshot.go` for the shape.
+- CLI commands must stay dialect-neutral. They should read `gosqlkit.yaml`,
+  pass the configured dialect to `internal/app`, and let the app layer dispatch
+  to dialect-specific implementations. Do not import or name
+  `internal/dialects/<dialect>` packages from `internal/cli`, and do not bake
+  PostgreSQL/MySQL/etc. behaviour into CLI command structs or help text.
 
 ### Adding a new dialect
 
@@ -402,7 +407,7 @@ verify:cli) into a pre-commit hook. Run `task setup` once to install it.
 
 ## 8. Code conventions
 
-- **Go version**: see `go.mod` (currently 1.26.4). Don't lower it.
+- **Go version**: see `go.mod` (currently 1.26.5). Don't lower it.
 - **Formatting**: `gofumpt` (stricter than `gofmt`). Run `task fmt` before
   committing. `gofumpt` is the toolchain entry in `go.mod`.
 - **No code comments** unless explicitly requested. The codebase is
@@ -577,7 +582,8 @@ update of this file:
   types, domains, roles, functions, triggers, RLS policies, views, materialized views, comments, safe
   default helpers, custom-type escape hatch.
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
-  for snapshot), `version`, `migrate create` (with `--empty`, `--no-down`,
+  for snapshot), `inspect` (with `--url`, `--url-env`, `--token-command`,
+  `--out`, and `--drift-projection`), `version`, `migrate create` (with `--empty`, `--no-down`,
   `--allow-destructive`), `migrate plan` (with `--json` and `--quiet`),
   `migrate check` (with `--json`, `--quiet`, and optional `--sandbox-url` /
   `--sandbox-url-env`),

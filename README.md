@@ -89,10 +89,15 @@ migration directory is empty:
 gosqlkit migrate create init_schema
 gosqlkit migrate check
 gosqlkit migrate check --sandbox-url "$DATABASE_URL"
+gosqlkit inspect --url "$DATABASE_URL"
+gosqlkit inspect --url "$DATABASE_URL" --drift-projection
 gosqlkit drift check --url "$DATABASE_URL"
 gosqlkit migrate apply --url "$DATABASE_URL"
 gosqlkit migrate apply --token-command "az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv"
 ```
+
+`inspect` reads `gosqlkit.yaml` for the configured dialect, then emits the
+database snapshot shape for that dialect.
 
 Create an empty migration for manual SQL:
 
@@ -169,6 +174,8 @@ sqlc generate
 - Optional sandbox replay for committed goose migrations with
   `gosqlkit migrate check --sandbox-url ...`, including replayed database
   introspection against the embedded target snapshot
+- PostgreSQL database inspection with `gosqlkit inspect --url ...`, emitting
+  deterministic snapshot JSON or the normalised drift-projection shape
 - PostgreSQL drift checking with `gosqlkit drift check --url ...` across the
   PostgreSQL snapshot model: namespaces, extensions, roles, enums, composite
   types, domains, sequences, functions, tables, columns, table constraints,

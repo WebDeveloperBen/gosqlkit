@@ -84,6 +84,22 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		}
 		assertExampleSchemaIntrospected(t, schema)
 
+		var inspectOutput strings.Builder
+		inspectResult, err := InspectWithConfig(config, InspectOptions{
+			URL:    dsn,
+			Stdout: &inspectOutput,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var inspected pgschema.Document
+		if err := json.Unmarshal([]byte(inspectOutput.String()), &inspected); err != nil {
+			t.Fatalf("parse inspect output: %v\n%s", err, inspectOutput.String())
+		}
+		if inspectResult == nil || inspectResult.SnapshotID == "" || len(inspected.Tables) == 0 {
+			t.Fatalf("inspect result = %#v, document = %#v", inspectResult, inspected)
+		}
+
 		result, err := DriftCheckWithConfig(config, DriftCheckOptions{URL: dsn})
 		if err != nil {
 			t.Logf("desired drift projection:\n%s", desiredDriftProjection(t, config))

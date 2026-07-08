@@ -16,6 +16,7 @@ type CLI struct {
 	GlobalFlags
 	Drift    DriftCmd    `cmd:"" help:"Check database schema drift."`
 	Generate GenerateCmd `cmd:"" help:"Generate deterministic SQL from a Go schema package."`
+	Inspect  InspectCmd  `cmd:"" help:"Inspect a database and emit snapshot JSON."`
 	Migrate  MigrateCmd  `cmd:"" help:"Create and check schema migrations."`
 	Snapshot SnapshotCmd `cmd:"" help:"Generate deterministic schema snapshot JSON from a Go schema package."`
 }

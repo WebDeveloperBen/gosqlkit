@@ -65,6 +65,29 @@ func TestRunGenerateCheckRequiresOut(t *testing.T) {
 	}
 }
 
+func TestRunInspectRequiresURL(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gosqlkit.yaml"), []byte(`version: "1"
+dialect: postgres
+schema: "schema"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	code, err := run([]string{"--root", root, "inspect"}, nil, &stderr)
+	if code != 1 {
+		t.Fatalf("run(inspect) returned code %d, want 1", code)
+	}
+	if err == nil || !strings.Contains(err.Error(), "database URL is required") {
+		t.Fatalf("expected database URL error, got %v", err)
+	}
+	if !strings.Contains(stderr.String(), "gosqlkit: error:") {
+		t.Fatalf("expected error output, got %q", stderr.String())
+	}
+}
+
 func TestRunMigrateCreateReportsMissingSchemaPackage(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "gosqlkit.yaml"), []byte(`version: "1"
