@@ -181,7 +181,7 @@ sqlc generate
   types, domains, sequences, functions, tables, columns, table constraints,
   standalone indexes, comments, RLS flags, policies, triggers, views, and
   materialized views, with object-level diagnostics for missing, extra, and
-  changed objects in human and JSON output
+  changed objects in a styled terminal table and JSON output
 - `gosqlkit migrate apply --url ...` for goose-compatible migrations, with
   applied versions tracked in `goose_db_version`
 - `DATABASE_URL` / `--url-env` support for database-backed commands, plus JSON

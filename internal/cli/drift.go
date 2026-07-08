@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/webdeveloperben/gosqlkit/internal/app"
 )
 
@@ -65,7 +67,11 @@ func printDrift(w io.Writer, result *app.DriftCheckResult) error {
 	if result == nil || !result.Drift {
 		return nil
 	}
-	if _, err := fmt.Fprintln(w, "database schema drift detected"); err != nil {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("9")).
+		Render("database schema drift detected")
+	if _, err := fmt.Fprintln(w, title); err != nil {
 		return err
 	}
 	if len(result.Differences) == 0 {
@@ -73,10 +79,29 @@ func printDrift(w io.Writer, result *app.DriftCheckResult) error {
 		return err
 	}
 
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(w, driftDifferenceTable(result.Differences))
+	return err
+}
+
+func driftDifferenceTable(differences []app.DriftDifference) string {
 	groups := map[string][]app.DriftDifference{}
-	for _, diff := range result.Differences {
+	for _, diff := range differences {
 		groups[diff.Op] = append(groups[diff.Op], diff)
 	}
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("8"))).
+		Headers("Status", "Kind", "Object", "Fields").
+		StyleFunc(func(row, _ int) lipgloss.Style {
+			style := lipgloss.NewStyle().Padding(0, 1)
+			if row == table.HeaderRow {
+				return style.Bold(true).Foreground(lipgloss.Color("12"))
+			}
+			return style
+		})
 	for _, op := range []string{"missing", "extra", "changed"} {
 		items := groups[op]
 		if len(items) == 0 {
@@ -88,18 +113,13 @@ func printDrift(w io.Writer, result *app.DriftCheckResult) error {
 			}
 			return items[i].Object.Kind < items[j].Object.Kind
 		})
-		if _, err := fmt.Fprintf(w, "\n%s:\n", op); err != nil {
-			return err
-		}
 		for _, item := range items {
-			line := fmt.Sprintf("  %s %s", item.Object.Kind, item.Object.Key)
+			fields := ""
 			if len(item.Fields) > 0 {
-				line += " (" + strings.Join(item.Fields, ", ") + ")"
+				fields = strings.Join(item.Fields, ", ")
 			}
-			if _, err := fmt.Fprintln(w, line); err != nil {
-				return err
-			}
+			t.Row(op, item.Object.Kind, item.Object.Key, fields)
 		}
 	}
-	return nil
+	return t.String()
 }

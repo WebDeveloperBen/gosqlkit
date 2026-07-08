@@ -158,6 +158,9 @@ because that is the user-facing import path. It can't move to `internal/`.
   to dialect-specific implementations. Do not import or name
   `internal/dialects/<dialect>` packages from `internal/cli`, and do not bake
   PostgreSQL/MySQL/etc. behaviour into CLI command structs or help text.
+- Human CLI output should use the Charm stack already promoted in this module
+  (`charm.land/lipgloss/v2`, including `table`) for tables, summaries, and
+  future interactive choices. Keep JSON/quiet output plain and script-safe.
 
 ### Adding a new dialect
 

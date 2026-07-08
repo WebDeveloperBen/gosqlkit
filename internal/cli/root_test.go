@@ -259,12 +259,20 @@ func TestPrintDriftGroupsDifferences(t *testing.T) {
 	output := stdout.String()
 	for _, want := range []string{
 		"database schema drift detected",
-		"extra:",
-		"  column public.users.legacy_email",
-		"missing:",
-		"  index public.users.users_email_idx",
-		"changed:",
-		"  table public.users (comment, rowLevelSecurity)",
+		"Status",
+		"Kind",
+		"Object",
+		"Fields",
+		"extra",
+		"column",
+		"public.users.legacy_email",
+		"missing",
+		"index",
+		"public.users.users_email_idx",
+		"changed",
+		"table",
+		"public.users",
+		"comment, rowLevelSecurity",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("drift output missing %q\n%s", want, output)
