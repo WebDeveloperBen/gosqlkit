@@ -306,15 +306,15 @@ func (c *Column) References(table, column string) *Column {
 	return c
 }
 
-func (c *Column) OnDelete(action string) *Column {
+func (c *Column) OnDelete(action ForeignKeyAction) *Column {
 	c.ensureForeignKey()
-	c.def.References.OnDelete = action
+	c.def.References.OnDelete = string(action)
 	return c
 }
 
-func (c *Column) OnUpdate(action string) *Column {
+func (c *Column) OnUpdate(action ForeignKeyAction) *Column {
 	c.ensureForeignKey()
-	c.def.References.OnUpdate = action
+	c.def.References.OnUpdate = string(action)
 	return c
 }
 

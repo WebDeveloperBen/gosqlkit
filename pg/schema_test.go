@@ -120,6 +120,46 @@ func TestFunctionDSLRegistersOptions(t *testing.T) {
 	}
 }
 
+func TestFunctionBuilderDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.SQLFunctionInSchema("billing", "normalise_email").
+		Returns(pg.TextType()).
+		Args(pg.FunctionArg("email", pg.TextType())).
+		Body(pg.Select(pg.Lower(pg.Trim(pg.Col("email"))))).
+		Immutable().
+		Strict()
+
+	pg.PLpgSQLFunction("touch_user").
+		Returns(pg.TriggerType()).
+		Body(pg.Block(
+			pg.Assign("NEW.updated_at", pg.Call("now")),
+			pg.Return(pg.Col("NEW")),
+		))
+
+	schema := pg.Schema()
+	if len(schema.Functions) != 2 {
+		t.Fatalf("functions len = %d, want 2", len(schema.Functions))
+	}
+
+	sqlFunction := schema.Functions[0]
+	if sqlFunction.Schema != "billing" || sqlFunction.Name != "normalise_email" ||
+		sqlFunction.Language != "sql" || sqlFunction.ReturnType != "text" ||
+		sqlFunction.Body != "SELECT lower(trim(email))" {
+		t.Fatalf("unexpected SQL function %#v", sqlFunction)
+	}
+	if len(sqlFunction.Arguments) != 1 || sqlFunction.Arguments[0].Type != "text" {
+		t.Fatalf("unexpected SQL function args %#v", sqlFunction.Arguments)
+	}
+
+	triggerFunction := schema.Functions[1]
+	if triggerFunction.Language != "plpgsql" || triggerFunction.ReturnType != "trigger" ||
+		triggerFunction.Body != "BEGIN\n    NEW.updated_at = now();\n    RETURN NEW;\nEND" {
+		t.Fatalf("unexpected PLpgSQL function %#v", triggerFunction)
+	}
+}
+
 func TestTriggerDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)
@@ -158,6 +198,63 @@ func TestTriggerDSLRegistersOptions(t *testing.T) {
 	}
 	if len(trigger.Arguments) != 1 || trigger.Arguments[0] != "updated_at" {
 		t.Fatalf("unexpected trigger arguments %#v", trigger.Arguments)
+	}
+}
+
+func TestViewBuilderDSLRegistersQueries(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.View("active_users").
+		As(pg.Select(
+			pg.Col("id"),
+			pg.Col("email"),
+			pg.Col("display_name"),
+		).From("users").Where(pg.IsNotNull(pg.Col("last_login_ip"))))
+
+	pg.MaterializedView("booking_counts").
+		As(pg.Select(
+			pg.Col("owner"),
+			pg.CountAll().As("booking_count"),
+		).From("bookings").GroupBy(pg.Col("owner")))
+
+	schema := pg.Schema()
+	if len(schema.Views) != 1 || schema.Views[0].Query != "SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL" {
+		t.Fatalf("unexpected view %#v", schema.Views)
+	}
+	if len(schema.MaterializedViews) != 1 || schema.MaterializedViews[0].Query != "SELECT owner, COUNT(*) AS booking_count FROM bookings GROUP BY owner" {
+		t.Fatalf("unexpected materialized view %#v", schema.MaterializedViews)
+	}
+}
+
+func TestTypedPostgresOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Table(
+		"invoices",
+		pg.UUID("user_id").References("users", "id").OnDelete(pg.Cascade).OnUpdate(pg.SetNull),
+		pg.ForeignKey("invoices_user_id_fkey", "user_id").
+			References("users", "id").
+			OnDelete(pg.Restrict).
+			OnUpdate(pg.NoAction),
+		pg.IndexOn("invoices_user_id_idx", pg.IndexColumn("user_id")).Using(pg.BTree),
+	)
+	pg.View("checked_users", "SELECT id FROM users").CheckOption(pg.LocalCheckOption)
+
+	schema := pg.Schema()
+	table := schema.Tables[0]
+	if table.Columns[0].References.OnDelete != "cascade" || table.Columns[0].References.OnUpdate != "set null" {
+		t.Fatalf("unexpected column FK actions %#v", table.Columns[0].References)
+	}
+	if table.ForeignKeys[0].OnDelete != "restrict" || table.ForeignKeys[0].OnUpdate != "no action" {
+		t.Fatalf("unexpected table FK actions %#v", table.ForeignKeys[0])
+	}
+	if table.Indexes[0].Method != "btree" {
+		t.Fatalf("unexpected index method %#v", table.Indexes[0])
+	}
+	if schema.Views[0].CheckOption != "LOCAL" {
+		t.Fatalf("unexpected view check option %#v", schema.Views[0])
 	}
 }
 

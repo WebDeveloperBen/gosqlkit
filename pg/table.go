@@ -115,8 +115,8 @@ func IndexExpression(expression string) *IndexColumnDef {
 	}
 }
 
-func (i *IndexDef) Using(method string) *IndexDef {
-	i.def.Method = method
+func (i *IndexDef) Using(method IndexMethod) *IndexDef {
+	i.def.Method = string(method)
 	return i
 }
 
@@ -226,13 +226,13 @@ func (f *ForeignKeyDef) References(table string, columns ...string) *ForeignKeyD
 	return f
 }
 
-func (f *ForeignKeyDef) OnDelete(action string) *ForeignKeyDef {
-	f.def.OnDelete = action
+func (f *ForeignKeyDef) OnDelete(action ForeignKeyAction) *ForeignKeyDef {
+	f.def.OnDelete = string(action)
 	return f
 }
 
-func (f *ForeignKeyDef) OnUpdate(action string) *ForeignKeyDef {
-	f.def.OnUpdate = action
+func (f *ForeignKeyDef) OnUpdate(action ForeignKeyAction) *ForeignKeyDef {
+	f.def.OnUpdate = string(action)
 	return f
 }
 
@@ -303,8 +303,8 @@ func (e *ExclusionElementDef) NullsLast() *ExclusionElementDef {
 	return e
 }
 
-func (e *ExclusionDef) Using(method string) *ExclusionDef {
-	e.def.Method = method
+func (e *ExclusionDef) Using(method IndexMethod) *ExclusionDef {
+	e.def.Method = string(method)
 	return e
 }
 

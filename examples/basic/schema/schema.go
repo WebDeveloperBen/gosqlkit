@@ -21,23 +21,25 @@ var OrderNumberSeq = pg.SequenceInSchema("billing", "order_number_seq", pg.Seque
 	Cache:     new(int64(1)),
 })
 
-var NormaliseEmail = pg.Function("normalise_email", "text", "SELECT lower(trim(email))").
-	Args(pg.FunctionArg("email", "text")).
+var NormaliseEmail = pg.SQLFunction("normalise_email").
+	Returns(pg.TextType()).
+	Args(pg.FunctionArg("email", pg.TextType())).
+	Body(pg.Select(pg.Lower(pg.Trim(pg.Col("email"))))).
 	Immutable().
 	Strict()
 
-var SetUpdatedAt = pg.Function(
-	"set_updated_at",
-	"trigger",
-	"BEGIN\n    NEW.updated_at = now();\n    RETURN NEW;\nEND",
-).
-	Language("plpgsql").
+var SetUpdatedAt = pg.PLpgSQLFunction("set_updated_at").
+	Returns(pg.TriggerType()).
+	Body(pg.Block(
+		pg.Assign("NEW.updated_at", pg.Call("now")),
+		pg.Return(pg.Col("NEW")),
+	)).
 	Volatile()
 
 var Money = pg.CompositeTypeInSchema(
 	"billing", "money",
-	pg.CompositeAttribute("amount", "numeric(10, 2)"),
-	pg.CompositeAttribute("currency", "char(3)"),
+	pg.CompositeField(pg.Numeric("amount", 10, 2)),
+	pg.CompositeField(pg.Char("currency", 3)),
 )
 
 var Email = pg.Domain("email", "text").
@@ -88,7 +90,7 @@ var Invoices = pg.TableInSchema(
 	pg.Check("invoices_amount_cents_positive", "amount_cents > 0"),
 	pg.ForeignKey("invoices_user_id_fkey", "user_id").
 		References("public.users", "id").
-		OnDelete("cascade").
+		OnDelete(pg.Cascade).
 		InitiallyDeferred(),
 	pg.IndexOn(
 		"invoices_user_id_created_at_idx",
@@ -106,12 +108,12 @@ var InvoiceLines = pg.TableInSchema(
 	pg.PrimaryKey("invoice_lines_pkey", "invoice_id", "line_no"),
 	pg.ForeignKey("invoice_lines_invoice_id_fkey", "invoice_id").
 		References("billing.invoices", "id").
-		OnDelete("cascade"),
+		OnDelete(pg.Cascade),
 	pg.Check("invoice_lines_amount_cents_positive", "amount_cents > 0"),
 	pg.IndexOn(
 		"invoice_lines_description_idx",
 		pg.IndexColumn("description").OpClass("text_ops"),
-	).Using("btree").Concurrently().With("fillfactor", "90"),
+	).Using(pg.BTree).Concurrently().With("fillfactor", "90"),
 )
 
 var Events = pg.Table(
@@ -144,22 +146,32 @@ var Bookings = pg.Table(
 	pg.Exclusion(
 		"bookings_no_overlap",
 		pg.ExcludeWith("during", "&&"),
-	).Using("gist"),
+	).Using(pg.GiST),
 )
 
-var ActiveUsers = pg.View("active_users", "SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL").
+var ActiveUsers = pg.View("active_users").
+	As(pg.Select(
+		pg.Col("id"),
+		pg.Col("email"),
+		pg.Col("display_name"),
+	).From("users").Where(pg.IsNotNull(pg.Col("last_login_ip")))).
 	Comment("Users who have logged in at least once.")
 
 var UserInvoiceSummary = pg.ViewInSchema(
 	"billing", "user_invoice_summary",
-	"SELECT user_id, COUNT(*) AS invoice_count, SUM(amount_cents) AS total_cents FROM billing.invoices GROUP BY user_id",
-).
+).As(pg.Select(
+	pg.Col("user_id"),
+	pg.CountAll().As("invoice_count"),
+	pg.Sum(pg.Col("amount_cents")).As("total_cents"),
+).From("billing.invoices").GroupBy(pg.Col("user_id"))).
 	Columns("user_id", "invoice_count", "total_cents").
 	DependsOn("billing.invoices")
 
-var CachedBookings = pg.MaterializedView(
-	"cached_bookings",
-	"SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource",
-).
+var CachedBookings = pg.MaterializedView("cached_bookings").
+	As(pg.Select(
+		pg.Col("owner"),
+		pg.Col("resource"),
+		pg.CountAll().As("booking_count"),
+	).From("bookings").GroupBy(pg.Col("owner"), pg.Col("resource"))).
 	Comment("Pre-aggregated booking counts.").
 	DependsOn("bookings")

@@ -229,9 +229,15 @@ func CompositeTypeInSchema(schema, name string, attributes ...*CompositeAttribut
 	return &CompositeTypeDef{def: typ}
 }
 
-func CompositeAttribute(name, typ string) *CompositeAttributeDef {
+func CompositeAttribute(name string, typ any) *CompositeAttributeDef {
 	return &CompositeAttributeDef{
-		def: pgschema.CompositeAttribute{Name: name, Type: typ},
+		def: pgschema.CompositeAttribute{Name: name, Type: typeSQL(typ)},
+	}
+}
+
+func CompositeField(column *Column) *CompositeAttributeDef {
+	return &CompositeAttributeDef{
+		def: pgschema.CompositeAttribute{Name: column.def.Name, Type: column.def.Type},
 	}
 }
 
@@ -274,32 +280,63 @@ func (d *DomainDef) TypeName() string {
 	return strings.Join([]string{d.def.Schema, d.def.Name}, ".")
 }
 
-func Function(name, returnType, body string) *FunctionDef {
-	return FunctionInSchema("", name, returnType, body)
+func Function(name string, returnTypeAndBody ...string) *FunctionDef {
+	return FunctionInSchema("", name, returnTypeAndBody...)
 }
 
-func FunctionInSchema(schema, name, returnType, body string) *FunctionDef {
+func FunctionInSchema(schema, name string, returnTypeAndBody ...string) *FunctionDef {
+	if len(returnTypeAndBody) != 0 && len(returnTypeAndBody) != 2 {
+		panic("function expects either name only or name, return type, body")
+	}
 	function := &pgschema.Function{
-		Schema:     schema,
-		Name:       name,
-		Language:   "sql",
-		ReturnType: returnType,
-		Body:       body,
+		Schema:   schema,
+		Name:     name,
+		Language: "sql",
+	}
+	if len(returnTypeAndBody) == 2 {
+		function.ReturnType = returnTypeAndBody[0]
+		function.Body = returnTypeAndBody[1]
 	}
 	registerFunction(function)
 	return &FunctionDef{def: function}
 }
 
-func FunctionArg(name, typ string) *FunctionArgumentDef {
+func SQLFunction(name string) *FunctionDef {
+	return Function(name).Language("sql")
+}
+
+func SQLFunctionInSchema(schema, name string) *FunctionDef {
+	return FunctionInSchema(schema, name).Language("sql")
+}
+
+func PLpgSQLFunction(name string) *FunctionDef {
+	return Function(name).Language("plpgsql")
+}
+
+func PLpgSQLFunctionInSchema(schema, name string) *FunctionDef {
+	return FunctionInSchema(schema, name).Language("plpgsql")
+}
+
+func FunctionArg(name string, typ any) *FunctionArgumentDef {
 	return &FunctionArgumentDef{
-		def: pgschema.FunctionArgument{Name: name, Type: typ},
+		def: pgschema.FunctionArgument{Name: name, Type: typeSQL(typ)},
 	}
 }
 
-func FunctionArgType(typ string) *FunctionArgumentDef {
+func FunctionArgType(typ any) *FunctionArgumentDef {
 	return &FunctionArgumentDef{
-		def: pgschema.FunctionArgument{Type: typ},
+		def: pgschema.FunctionArgument{Type: typeSQL(typ)},
 	}
+}
+
+func (f *FunctionDef) Returns(returnType any) *FunctionDef {
+	f.def.ReturnType = typeSQL(returnType)
+	return f
+}
+
+func (f *FunctionDef) Body(body any) *FunctionDef {
+	f.def.Body = expressionSQL(body)
+	return f
 }
 
 func (f *FunctionDef) Args(args ...*FunctionArgumentDef) *FunctionDef {
@@ -581,14 +618,25 @@ type ViewDef struct {
 	def *pgschema.View
 }
 
-func View(name, query string) *ViewDef {
-	return ViewInSchema("", name, query)
+func View(name string, query ...string) *ViewDef {
+	return ViewInSchema("", name, query...)
 }
 
-func ViewInSchema(schema, name, query string) *ViewDef {
-	view := &pgschema.View{Schema: schema, Name: name, Query: query}
+func ViewInSchema(schema, name string, query ...string) *ViewDef {
+	if len(query) > 1 {
+		panic("view expects either no query or a single query")
+	}
+	view := &pgschema.View{Schema: schema, Name: name}
+	if len(query) == 1 {
+		view.Query = query[0]
+	}
 	registerView(view)
 	return &ViewDef{def: view}
+}
+
+func (v *ViewDef) As(query any) *ViewDef {
+	v.def.Query = expressionSQL(query)
+	return v
 }
 
 func (v *ViewDef) Comment(text string) *ViewDef {
@@ -596,8 +644,8 @@ func (v *ViewDef) Comment(text string) *ViewDef {
 	return v
 }
 
-func (v *ViewDef) CheckOption(option string) *ViewDef {
-	v.def.CheckOption = option
+func (v *ViewDef) CheckOption(option ViewCheckOption) *ViewDef {
+	v.def.CheckOption = string(option)
 	return v
 }
 
@@ -632,14 +680,25 @@ type MaterializedViewDef struct {
 	def *pgschema.MaterializedView
 }
 
-func MaterializedView(name, query string) *MaterializedViewDef {
-	return MaterializedViewInSchema("", name, query)
+func MaterializedView(name string, query ...string) *MaterializedViewDef {
+	return MaterializedViewInSchema("", name, query...)
 }
 
-func MaterializedViewInSchema(schema, name, query string) *MaterializedViewDef {
-	mv := &pgschema.MaterializedView{Schema: schema, Name: name, Query: query}
+func MaterializedViewInSchema(schema, name string, query ...string) *MaterializedViewDef {
+	if len(query) > 1 {
+		panic("materialized view expects either no query or a single query")
+	}
+	mv := &pgschema.MaterializedView{Schema: schema, Name: name}
+	if len(query) == 1 {
+		mv.Query = query[0]
+	}
 	registerMaterializedView(mv)
 	return &MaterializedViewDef{def: mv}
+}
+
+func (m *MaterializedViewDef) As(query any) *MaterializedViewDef {
+	m.def.Query = expressionSQL(query)
+	return m
 }
 
 func (m *MaterializedViewDef) Comment(text string) *MaterializedViewDef {

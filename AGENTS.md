@@ -56,7 +56,12 @@ schema-management surface looks like — **not** as an implementation blueprint.
 - The breadth of PostgreSQL schema objects: tables, columns, enums, schemas,
   sequences, composite types, domains, views, materialized views, roles,
   policies, RLS, functions, triggers.
+- Builder-first declarations for common schema SQL surfaces. Raw SQL strings
+  remain escape hatches, but finite PostgreSQL options should be modelled as
+  typed Go values and common view/function/type declarations should have
+  fluent builders.
 - **Structured** modelling of things that are easy to stringly-type:
+  - Foreign key actions, index access methods, and view check options.
   - Identity columns with sequence options (`GENERATED {ALWAYS | BY DEFAULT}
     AS IDENTITY (...)`).
   - Generated stored columns (`GENERATED ALWAYS AS (...) STORED`).

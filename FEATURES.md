@@ -202,6 +202,7 @@ Missing common PostgreSQL types:
 - `[x]` Materialized views.
 - `[x]` View column metadata.
 - `[x]` View definition SQL.
+- `[x]` View and materialized-view definition builders for schema authoring.
 - `[x]` View check options.
 - `[x]` View security options.
 - `[x]` Materialized view storage options.
@@ -466,6 +467,7 @@ Other provider requirement:
 - `[x]` Duplicate index validation.
 - `[x]` Duplicate check validation.
 - `[x]` Foreign key action validation.
+- `[x]` Strongly typed PostgreSQL option builders for foreign key actions, index methods, and view check options.
 - `[x]` Unknown local constraint column validation.
 - `[x]` Unknown index column validation.
 - `[x]` Duplicate schema object validation across schemas.

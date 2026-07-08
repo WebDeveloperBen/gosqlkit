@@ -144,8 +144,12 @@ sqlc generate
   (with deferrable), check constraints, exclusion constraints
 - Advanced indexes (methods, opclass, order, nulls, partial predicates,
   `CONCURRENTLY`, `ONLY`, `WITH (...)`, named auto-generation)
+- Strongly typed option helpers for finite PostgreSQL choices such as foreign
+  key actions, index methods, and view check options
 - PostgreSQL schemas/namespaces, extensions, enums, sequences, composite
   types, domains, roles, functions, triggers, and RLS policies
+- Builder-style function bodies, composite fields, views, and materialized
+  views, while keeping raw SQL escape hatches
 - Views with column aliases, check options, and security options
 - Materialized views with storage parameters and `WITH NO DATA`
 - Schema-qualified rendering
