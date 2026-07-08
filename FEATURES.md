@@ -452,6 +452,19 @@ Other provider requirement:
 - `[x]` `gosqlkit drift check --url ...`.
 - `[x]` Object-level drift diagnostics for missing, extra, and changed schema
   objects in human and JSON output.
+- `[x]` Styled terminal tables for human drift diagnostics using
+  `charm.land/lipgloss/v2`.
+- `[ ]` Styled terminal tables for migration plan summaries.
+- `[ ]` Interactive ambiguity prompts for migration authoring when stdout/stdin
+  are TTYs.
+- `[ ]` Non-interactive fail-closed ambiguity diagnostics with exact schema
+  annotations to accept rename intent.
+- `[ ]` Interactive rename-candidate selection for tables, columns,
+  constraints, indexes, schema objects, views, triggers, policies, roles, and
+  functions.
+- `[ ]` `--interactive` / `--no-interactive` controls for prompt behaviour.
+- `[ ]` Script-safe prompt bypass for CI, keeping `--json` and `--quiet`
+  non-interactive.
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[~]` Goose-compatible migration file output.
@@ -515,6 +528,9 @@ Other provider requirement:
 - `[x]` Extension-owned object filtering tests.
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
 - `[x]` Drift diagnostics tests for top-level objects and table-nested objects.
+- `[x]` CLI table-rendering tests for drift diagnostics.
+- `[ ]` CLI prompt tests for interactive migration ambiguity decisions.
+- `[ ]` Non-TTY tests proving ambiguous migrations fail closed without prompts.
 - `[ ]` Testcontainers integration test per supported dialect.
 
 ## Recommended Build Order
@@ -529,7 +545,9 @@ Other provider requirement:
 8. Add database introspection and drift checks.
 9. Add the cross-dialect migration IR and dialect planner boundary.
 10. Add goose-compatible migration file generation and destructive-change guardrails.
-11. Expand into partitioning, grants, and other advanced PostgreSQL features.
+11. Add styled CLI summaries and interactive ambiguity resolution for migration
+    authoring.
+12. Expand into partitioning, grants, and other advanced PostgreSQL features.
 
 ## Drizzle Reference Notes
 
