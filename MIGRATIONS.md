@@ -530,6 +530,24 @@ Current implementation status:
   and reverse SQL. Extension rename metadata is detected as a structured
   manual-review replacement with no automatic SQL because PostgreSQL supports
   extension update/schema/member alteration but not extension renaming.
+- Sandbox replay is implemented for PostgreSQL tooling commands. `gosqlkit
+  migrate check --sandbox-url ...` validates migration metadata, extracts
+  goose `Up` sections, applies committed migrations to the supplied
+  disposable PostgreSQL database, checks that the latest embedded target
+  snapshot ID matches the current generated schema snapshot, introspects the
+  replayed database, and compares the projected replay snapshot to the
+  embedded migration target snapshot.
+- PostgreSQL drift checking is implemented with `gosqlkit drift check --url ...`.
+  The introspection pass maps PostgreSQL catalog objects into the same
+  snapshot-compatible model used by generated schemas: namespaces,
+  extensions, roles, enums, composite types, domains, standalone sequences,
+  functions, tables, columns, comments, RLS flags, primary keys, unique
+  constraints, foreign keys, checks, standalone indexes, policies, triggers,
+  views, and materialized views. The comparison projects both desired and
+  database state through the same normalisation layer for authoring-only
+  rename metadata, dependency hints, non-persistent index flags such as
+  `CONCURRENTLY`, identity-backed sequences, extension-owned objects, and
+  PostgreSQL defaults.
 
 ## Next Migration Engine Slices
 

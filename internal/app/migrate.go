@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -8,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	pgplan "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/plan"
+	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
@@ -30,13 +34,26 @@ type MigrateCreateResult struct {
 }
 
 type MigrateCheckOptions struct {
-	Dir string
+	sandboxReplay  sandboxReplayFunc
+	sandboxInspect driftInspectFunc
+	Dir            string
+	SandboxURL     string
 }
 
 type MigrateCheckResult struct {
-	Dir   string `json:"dir"`
-	Count int    `json:"count"`
+	Sandbox *SandboxReplayResult `json:"sandbox,omitempty"`
+	Dir     string               `json:"dir"`
+	Count   int                  `json:"count"`
 }
+
+type SandboxReplayResult struct {
+	LastFile           string `json:"lastFile,omitempty"`
+	ToSnapshotID       string `json:"toSnapshotId,omitempty"`
+	DatabaseSnapshotID string `json:"databaseSnapshotId,omitempty"`
+	Applied            int    `json:"applied"`
+}
+
+type sandboxReplayFunc func(context.Context, string, string, []migrate.Migration) (*SandboxReplayResult, error)
 
 type MigratePlanOptions struct {
 	Dir      string
@@ -260,7 +277,17 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 	if err := validateMigrationFiles(config.Migrations.Runner, migrations); err != nil {
 		return nil, err
 	}
-	return &MigrateCheckResult{Dir: dir, Count: len(migrations)}, nil
+	result := &MigrateCheckResult{Dir: dir, Count: len(migrations)}
+	if opts.SandboxURL != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		sandbox, err := migrateCheckSandbox(ctx, config, opts.SandboxURL, migrations, opts.sandboxReplay, opts.sandboxInspect)
+		if err != nil {
+			return nil, err
+		}
+		result.Sandbox = sandbox
+	}
+	return result, nil
 }
 
 func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePlanResult, error) {
@@ -378,6 +405,86 @@ func validateMigrationFiles(runner string, migrations []migrate.Migration) error
 		return fmt.Errorf("unsupported migration runner %q; supported values: %s",
 			strings.TrimSpace(strings.ToLower(runner)), migrate.RunnerGoose)
 	}
+}
+
+func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string, migrations []migrate.Migration, replay sandboxReplayFunc, inspect driftInspectFunc) (*SandboxReplayResult, error) {
+	if len(migrations) == 0 {
+		return nil, errors.New("no migrations to replay")
+	}
+	if _, err := snapshotPlanner(config.Dialect); err != nil {
+		return nil, err
+	}
+	latest := migrations[len(migrations)-1]
+	if len(latest.Metadata.TargetSnapshot) == 0 {
+		return nil, errors.New("latest migration has no targetSnapshot metadata; cannot compare replay target")
+	}
+	currentSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		return nil, err
+	}
+	currentSnapshotID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		return nil, err
+	}
+	if latest.Metadata.ToSnapshotID != currentSnapshotID {
+		return nil, fmt.Errorf("latest migration target snapshot %q does not match current schema snapshot %q",
+			latest.Metadata.ToSnapshotID, currentSnapshotID)
+	}
+
+	if replay == nil {
+		replay = replayPostgresSandbox
+	}
+	result, err := replay(ctx, sandboxURL, config.Migrations.Runner, migrations)
+	if err != nil {
+		return nil, err
+	}
+	result.ToSnapshotID = latest.Metadata.ToSnapshotID
+	if inspect == nil {
+		inspect = inspectPostgres
+	}
+	var target pgschema.Document
+	if err := json.Unmarshal(latest.Metadata.TargetSnapshot, &target); err != nil {
+		return nil, fmt.Errorf("parse latest target snapshot: %w", err)
+	}
+	targetID, err := driftSnapshotID(projectDriftDocument(target))
+	if err != nil {
+		return nil, fmt.Errorf("build latest target drift snapshot: %w", err)
+	}
+	sandboxSchema, err := inspect(ctx, sandboxURL)
+	if err != nil {
+		return nil, err
+	}
+	databaseID, err := driftSnapshotID(projectDriftSchema(sandboxSchema))
+	if err != nil {
+		return nil, fmt.Errorf("build sandbox drift snapshot: %w", err)
+	}
+	result.DatabaseSnapshotID = databaseID
+	if databaseID != targetID {
+		return nil, fmt.Errorf("sandbox replay drift detected: database snapshot %q does not match migration target snapshot %q", databaseID, targetID)
+	}
+	return result, nil
+}
+
+func replayPostgresSandbox(ctx context.Context, sandboxURL, runner string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
+	conn, err := pgtooling.Open(ctx, sandboxURL)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = conn.Close(ctx)
+	}()
+
+	replayed, err := pgtooling.Replay(ctx, conn, pgtooling.ReplayOptions{
+		Runner:     runner,
+		Migrations: migrations,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &SandboxReplayResult{
+		Applied:  replayed.Applied,
+		LastFile: replayed.LastFile,
+	}, nil
 }
 
 func snapshotPlanner(value string) (migrateplan.SnapshotPlanner, error) {

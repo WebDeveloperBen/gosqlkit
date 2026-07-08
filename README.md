@@ -80,6 +80,8 @@ migration directory is empty:
 ```bash
 gosqlkit migrate create init_schema
 gosqlkit migrate check
+gosqlkit migrate check --sandbox-url "$DATABASE_URL"
+gosqlkit drift check --url "$DATABASE_URL"
 ```
 
 Create an empty migration for manual SQL:
@@ -150,6 +152,14 @@ sqlc generate
 - Conservative additive PostgreSQL diff migrations from embedded snapshots
 - Migration directory checks for timestamped SQL files, embedded metadata,
   snapshot lineage, and goose `Up` / `Down` annotations
+- Optional sandbox replay for committed goose migrations with
+  `gosqlkit migrate check --sandbox-url ...`, including replayed database
+  introspection against the embedded target snapshot
+- PostgreSQL drift checking with `gosqlkit drift check --url ...` across the
+  PostgreSQL snapshot model: namespaces, extensions, roles, enums, composite
+  types, domains, sequences, functions, tables, columns, table constraints,
+  standalone indexes, comments, RLS flags, policies, triggers, views, and
+  materialized views
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing
 - Structured column alteration planning for type, default, nullability,

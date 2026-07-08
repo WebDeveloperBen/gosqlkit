@@ -58,8 +58,9 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 }
 
 type MigrateCheckCmd struct {
-	Config string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	Dir    string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
+	Config     string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	Dir        string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
+	SandboxURL string `help:"PostgreSQL URL for replaying migrations into a disposable sandbox database."`
 }
 
 func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
@@ -81,7 +82,8 @@ func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
 	}
 
 	if _, err := app.MigrateCheckWithConfig(config, app.MigrateCheckOptions{
-		Dir: c.Dir,
+		Dir:        c.Dir,
+		SandboxURL: c.SandboxURL,
 	}); err != nil {
 		return Exit(1, err)
 	}

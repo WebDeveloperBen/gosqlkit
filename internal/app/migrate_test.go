@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -344,6 +346,176 @@ func TestMigrateCheckWithConfigValidatesGooseAnnotations(t *testing.T) {
 	_, err := MigrateCheckWithConfig(config, MigrateCheckOptions{})
 	if err == nil || !strings.Contains(err.Error(), "missing goose up annotation") {
 		t.Fatalf("expected goose annotation error, got %v", err)
+	}
+}
+
+func TestMigrateCheckWithConfigReplaysSandboxAndComparesTargetSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+		Migrations: MigrationSpec{
+			Dir:    dir,
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	currentSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSnapshotID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   currentSnapshotID,
+		TargetSnapshot: currentSnapshot,
+		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:          []string{"SELECT 1;"},
+		DownSQL:        nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, files[0].Name), []byte(files[0].Content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotURL string
+	var gotMigrations int
+	var currentDoc pgschema.Document
+	if err := json.Unmarshal([]byte(currentSnapshot), &currentDoc); err != nil {
+		t.Fatal(err)
+	}
+	result, err := MigrateCheckWithConfig(config, MigrateCheckOptions{
+		SandboxURL: "postgres://localhost/app",
+		sandboxReplay: func(_ context.Context, sandboxURL, runner string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
+			gotURL = sandboxURL
+			gotMigrations = len(migrations)
+			if runner != DefaultMigrationsRunner {
+				t.Fatalf("runner = %q", runner)
+			}
+			return &SandboxReplayResult{Applied: len(migrations), LastFile: migrations[len(migrations)-1].Name}, nil
+		},
+		sandboxInspect: func(context.Context, string) (pgschema.Schema, error) {
+			return projectDriftDocument(currentDoc), nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotURL != "postgres://localhost/app" || gotMigrations != 1 {
+		t.Fatalf("sandbox replay url=%q migrations=%d", gotURL, gotMigrations)
+	}
+	if result.Sandbox == nil || result.Sandbox.Applied != 1 || result.Sandbox.ToSnapshotID != currentSnapshotID {
+		t.Fatalf("sandbox result = %#v", result.Sandbox)
+	}
+	if result.Sandbox.DatabaseSnapshotID == "" {
+		t.Fatalf("sandbox result missing database snapshot ID: %#v", result.Sandbox)
+	}
+}
+
+func TestMigrateCheckWithConfigRejectsSandboxReplayDrift(t *testing.T) {
+	dir := t.TempDir()
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+		Migrations: MigrationSpec{
+			Dir:    dir,
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	currentSnapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSnapshotID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   currentSnapshotID,
+		TargetSnapshot: currentSnapshot,
+		CreatedAt:      time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:          []string{"SELECT 1;"},
+		DownSQL:        nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, files[0].Name), []byte(files[0].Content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = MigrateCheckWithConfig(config, MigrateCheckOptions{
+		SandboxURL: "postgres://localhost/app",
+		sandboxReplay: func(_ context.Context, _ string, _ string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
+			return &SandboxReplayResult{Applied: len(migrations), LastFile: migrations[len(migrations)-1].Name}, nil
+		},
+		sandboxInspect: func(context.Context, string) (pgschema.Schema, error) {
+			return pgschema.Schema{}, nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "sandbox replay drift detected") {
+		t.Fatalf("expected sandbox replay drift error, got %v", err)
+	}
+}
+
+func TestMigrateCheckWithConfigRejectsSandboxWhenLatestSnapshotIsStale(t *testing.T) {
+	dir := t.TempDir()
+	config := &Config{
+		Dialect: "postgres",
+		rootDir: mustModuleDir(t),
+		Schema: SchemaSpec{
+			paths: []string{"./examples/basic/schema"},
+		},
+		Migrations: MigrationSpec{
+			Dir:    dir,
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:         "baseline",
+		Dialect:      "postgresql",
+		ToSnapshotID: "stale",
+		TargetSnapshot: `{
+  "version": 1,
+  "dialect": "postgresql",
+  "snapshotId": "stale"
+}`,
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:   []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpSQL:     []string{"SELECT 1;"},
+		DownSQL:   nil,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, files[0].Name), []byte(files[0].Content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = MigrateCheckWithConfig(config, MigrateCheckOptions{
+		SandboxURL: "postgres://localhost/app",
+		sandboxReplay: func(context.Context, string, string, []migrate.Migration) (*SandboxReplayResult, error) {
+			t.Fatal("sandbox replay should not run when metadata is stale")
+			return nil, errors.New("unexpected sandbox replay")
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not match current schema snapshot") {
+		t.Fatalf("expected stale snapshot error, got %v", err)
 	}
 }
 

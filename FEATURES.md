@@ -236,9 +236,9 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Embedded target snapshots in generated migration metadata.
 - `[ ]` Squashed/normalised representation for diffing.
 - `[x]` Deterministic serialisation to JSON.
-- `[ ]` Diff input from current database introspection.
+- `[~]` Diff input from current database introspection.
 - `[~]` Diff input from generated desired snapshot.
-- `[ ]` Drift check from database to generated schema.
+- `[~]` Drift check from database to generated schema.
 - `[x]` Rename annotations for tables.
 - `[x]` Rename annotations for columns.
 - `[x]` Rename annotations for indexes and constraints.
@@ -331,13 +331,19 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 ### Slice 6: Sandbox Replay and Drift Check
 
-- `[ ]` PostgreSQL database connection plumbing for tooling commands.
-- `[ ]` PostgreSQL introspection to snapshot-compatible model.
-- `[ ]` Sandbox replay of committed migrations.
-- `[ ]` Replay result comparison against the latest embedded target snapshot.
-- `[ ]` `gosqlkit migrate check --sandbox-url ...`.
-- `[ ]` `gosqlkit drift check --url ...`.
-- `[ ]` Deterministic introspection output.
+- `[x]` PostgreSQL database connection plumbing for tooling commands.
+- `[x]` PostgreSQL introspection to snapshot-compatible model for namespaces,
+  extensions, roles, enums, composite types, domains, sequences, functions,
+  tables, columns, comments, RLS flags, table constraints, standalone indexes,
+  policies, triggers, views, and materialized views.
+- `[x]` Sandbox replay of committed migrations.
+- `[x]` Replay result comparison against the latest embedded target snapshot.
+- `[x]` `gosqlkit migrate check --sandbox-url ...`.
+- `[x]` `gosqlkit drift check --url ...`.
+- `[x]` Deterministic introspection output with drift projection normalising
+  rename metadata, PostgreSQL defaults, extension-owned objects,
+  non-persistent index authoring flags, identity-backed sequences, and
+  authoring-only dependency hints.
 
 ### Slice 7: Auth, Apply, and Runner Expansion
 
@@ -357,10 +363,10 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 Database connectivity is only needed for future introspection, drift checks, and migration diff workflows. It must not become part of the runtime application database layer.
 
-- `[ ]` Connect to PostgreSQL using a standard connection string.
+- `[x]` Connect to PostgreSQL using a standard connection string.
 - `[ ]` Connect using environment-provided connection string, for example `DATABASE_URL`.
-- `[ ]` Connect using password authentication.
-- `[ ]` Connect using SSL/TLS options required by managed PostgreSQL providers.
+- `[x]` Connect using password authentication.
+- `[x]` Connect using SSL/TLS options required by managed PostgreSQL providers.
 - `[ ]` Connect using token-as-password authentication.
 - `[ ]` Support token providers through a refreshable token callback.
 - `[ ]` Support OAuth2 access-token providers.
@@ -377,7 +383,7 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[ ]` Support custom token command execution for other providers.
 - `[ ]` Support custom token-provider plugins/interfaces for providers not built in.
 - `[ ]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
-- `[ ]` Redact credentials and tokens in diagnostics.
+- `[~]` Redact credentials and tokens in diagnostics.
 - `[ ]` Acquire short-lived tokens immediately before opening database connections.
 - `[ ]` Refresh tokens for long-running introspection or diff operations.
 - `[ ]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
@@ -440,8 +446,9 @@ Other provider requirement:
 - `[x]` `gosqlkit migrate plan` to print the structured migration plan without
   writing any files (`--json` for machine-readable output).
 - `[~]` `gosqlkit migrate check`.
+- `[x]` `gosqlkit migrate check --sandbox-url ...`.
 - `[ ]` `gosqlkit migrate apply --url ...`.
-- `[ ]` `gosqlkit drift check --url ...`.
+- `[x]` `gosqlkit drift check --url ...`.
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[~]` Goose-compatible migration file output.
@@ -491,7 +498,7 @@ Other provider requirement:
 - `[x]` Diff fixture tests.
 - `[x]` Destructive-change fixture tests.
 - `[x]` Rename-aware diff tests.
-- `[ ]` Integration test against live PostgreSQL.
+- `[x]` Integration test against live PostgreSQL.
 - `[ ]` Testcontainers integration test against live PostgreSQL.
 - `[ ]` Testcontainers integration test per supported dialect.
 

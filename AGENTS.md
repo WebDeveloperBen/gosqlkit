@@ -389,7 +389,7 @@ verify:cli) into a pre-commit hook. Run `task setup` once to install it.
 
 ## 8. Code conventions
 
-- **Go version**: see `go.mod` (currently 1.26.3). Don't lower it.
+- **Go version**: see `go.mod` (currently 1.26.4). Don't lower it.
 - **Formatting**: `gofumpt` (stricter than `gofmt`). Run `task fmt` before
   committing. `gofumpt` is the toolchain entry in `go.mod`.
 - **No code comments** unless explicitly requested. The codebase is
@@ -404,9 +404,10 @@ verify:cli) into a pre-commit hook. Run `task setup` once to install it.
   follow that shape.
 - **No `panic` in library code** for schema-level issues. Only panic in DSL
   constructors for programmer errors (section 5).
-- **No new dependencies without thought**. The only runtime dep is
-  `github.com/alecthomas/kong` (CLI). The rest are toolchain entries. Keep
-  the dep surface tiny — a schema DSL should not pull in a driver.
+- **No new dependencies without thought**. Runtime dependencies are limited to
+  CLI/config tooling plus the internal PostgreSQL tooling connection path
+  (`pgx`) used by sandbox replay. The public schema DSL must not pull in a
+  database driver.
 - **gosec**: existing `#nosec` directives have justifications. Don't strip
   them; don't add new suppressions without a comment.
 
@@ -542,8 +543,10 @@ verify — let it run.
 - **Coupling the render test to the example** made the test brittle; they're
   now decoupled. Keep them decoupled. See section 6.
 - **Importing CLI packages from DSL/renderer/ast** breaks layering. Don't.
-- **Adding a runtime DB driver dep** violates the "no ORM, no runtime" scope.
-  Runtime access is `sqlc`/`pgx`. The only dep is `kong`.
+- **Adding a database driver to the public DSL/runtime path** violates the "no
+  ORM, no runtime" scope. Internal tooling may use `pgx` for sandbox replay
+  and future introspection, but application runtime access stays with the
+  user's `sqlc`/`pgx` layer.
 
 ---
 
@@ -580,8 +583,20 @@ update of this file:
   with a reverse `RENAME TO old_name`; extension rename metadata is detected
   as a manual-review replacement because PostgreSQL cannot rename extensions.
   Mismatched `previousName` and rename-plus-alter combinations fail closed.
-- **Next tracks**: sandbox replay and drift check (Slice 6), auth/apply/runner
-  expansion (Slice 7), then advanced PG objects (partitioning, grants).
+  PostgreSQL sandbox replay is implemented: `migrate check --sandbox-url` opens a
+  tooling-only `pgx` connection, replays committed goose `Up` sections into a
+  disposable database, and verifies the latest embedded target snapshot ID
+  matches the current generated schema snapshot, then introspects the replayed
+  database and compares it to the embedded target snapshot. PostgreSQL drift
+  checking is implemented with `drift check --url`; the introspector covers
+  namespaces, extensions, roles, enums, composite types, domains, standalone
+  sequences, functions, tables, columns, comments, RLS flags, table
+  constraints, standalone indexes, policies, triggers, views, and materialized
+  views. Drift projection normalises rename metadata, non-persistent index
+  flags, identity-backed sequences, extension-owned objects, dependency hints,
+  and PostgreSQL defaults.
+- **Next tracks**: auth/apply/runner expansion (Slice 7), then advanced PG
+  objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

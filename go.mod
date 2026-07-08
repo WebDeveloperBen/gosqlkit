@@ -1,9 +1,10 @@
 module github.com/webdeveloperben/gosqlkit
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/alecthomas/kong v1.15.0
+	github.com/jackc/pgx/v5 v5.10.0
 	go.yaml.in/yaml/v3 v3.0.4
 )
 
@@ -32,6 +33,8 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/kaptinlin/go-i18n v0.4.8 // indirect
 	github.com/kaptinlin/jsonpointer v0.4.23 // indirect
 	github.com/kaptinlin/jsonschema v0.7.14 // indirect

@@ -14,6 +14,7 @@ import (
 type CLI struct {
 	Version VersionCmd `cmd:"" help:"Print the gosqlkit version and exit."`
 	GlobalFlags
+	Drift    DriftCmd    `cmd:"" help:"Check database schema drift."`
 	Generate GenerateCmd `cmd:"" help:"Generate deterministic SQL from a Go schema package."`
 	Migrate  MigrateCmd  `cmd:"" help:"Create and check schema migrations."`
 	Snapshot SnapshotCmd `cmd:"" help:"Generate deterministic schema snapshot JSON from a Go schema package."`
