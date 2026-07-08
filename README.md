@@ -91,6 +91,7 @@ gosqlkit migrate check
 gosqlkit migrate check --sandbox-url "$DATABASE_URL"
 gosqlkit drift check --url "$DATABASE_URL"
 gosqlkit migrate apply --url "$DATABASE_URL"
+gosqlkit migrate apply --token-command "az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv"
 ```
 
 Create an empty migration for manual SQL:
@@ -172,7 +173,9 @@ sqlc generate
 - `gosqlkit migrate apply --url ...` for goose-compatible migrations, with
   applied versions tracked in `goose_db_version`
 - `DATABASE_URL` / `--url-env` support for database-backed commands, plus JSON
-  output for drift and migrate status/apply commands
+  and quiet output modes for drift and migrate status/apply commands
+- Provider-neutral token-as-password auth with `--token-command` /
+  `--sandbox-token-command` for managed database workflows
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing
 - Structured column alteration planning for type, default, nullability,

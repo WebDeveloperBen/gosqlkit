@@ -9,10 +9,12 @@ type DriftCmd struct {
 }
 
 type DriftCheckCmd struct {
-	Config string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	URL    string `help:"PostgreSQL URL for the database to inspect. Defaults to DATABASE_URL when omitted."`
-	URLEnv string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
-	JSON   bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Config       string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	URL          string `help:"PostgreSQL URL for the database to inspect. Defaults to DATABASE_URL when omitted."`
+	URLEnv       string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
+	TokenCommand string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the PostgreSQL password."`
+	JSON         bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet        bool   `help:"Suppress human-readable success output."`
 }
 
 func (c *DriftCheckCmd) Run(g *GlobalFlags) error {
@@ -34,8 +36,9 @@ func (c *DriftCheckCmd) Run(g *GlobalFlags) error {
 	}
 
 	result, err := app.DriftCheckWithConfig(config, app.DriftCheckOptions{
-		URL:    c.URL,
-		URLEnv: c.URLEnv,
+		URL:          c.URL,
+		URLEnv:       c.URLEnv,
+		TokenCommand: c.TokenCommand,
 	})
 	if c.JSON && result != nil {
 		if printErr := printJSON(g.stdout(), result); printErr != nil {

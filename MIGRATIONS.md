@@ -446,6 +446,8 @@ gosqlkit migrate check --sandbox-url ...
 gosqlkit drift check --url "$DATABASE_URL"
 gosqlkit migrate apply --url "$DATABASE_URL"
 gosqlkit migrate apply --url-env DATABASE_URL
+gosqlkit migrate apply --token-command "az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv"
+gosqlkit migrate apply --quiet
 ```
 
 `migrate apply` is a convenience wrapper around the same migration files. It
@@ -732,15 +734,17 @@ environments without turning `gosqlkit` into the runtime database layer.
 Scope:
 
 - Add provider-neutral database auth interfaces.
-- Support password, environment URL, custom token command, Azure Entra,
-  AWS IAM, and GCP IAM token flows in the database tooling layer.
+- Support password, environment URL, and custom token command auth in the
+  database tooling layer. Azure Entra, AWS IAM, and GCP IAM provider-specific
+  token flows remain future work on top of the same password-provider
+  interface.
 - Add `gosqlkit migrate apply --url ...` as a wrapper around generated
   migration files. Landed for goose-compatible SQL using `goose_db_version`;
   other runner state tables remain future work.
 - Add a `golang-migrate` renderer from the same structured plan.
 - Add machine-readable command output and quiet mode for CI. JSON output has
-  landed for drift/migrate status and apply commands; quiet mode remains
-  future work.
+  landed for drift/migrate status and apply commands; quiet mode suppresses
+  human-readable success summaries while leaving JSON output available.
 
 Acceptance criteria:
 

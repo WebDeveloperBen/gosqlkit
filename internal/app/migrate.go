@@ -34,11 +34,12 @@ type MigrateCreateResult struct {
 }
 
 type MigrateCheckOptions struct {
-	sandboxReplay  sandboxReplayFunc
-	sandboxInspect driftInspectFunc
-	Dir            string
-	SandboxURL     string
-	SandboxURLEnv  string
+	sandboxReplay       sandboxReplayFunc
+	sandboxInspect      driftInspectFunc
+	Dir                 string
+	SandboxURL          string
+	SandboxURLEnv       string
+	SandboxTokenCommand string
 }
 
 type MigrateCheckResult struct {
@@ -57,11 +58,12 @@ type SandboxReplayResult struct {
 type sandboxReplayFunc func(context.Context, string, string, []migrate.Migration) (*SandboxReplayResult, error)
 
 type MigrateApplyOptions struct {
-	apply  migrateApplyFunc
-	Dir    string
-	Runner string
-	URL    string
-	URLEnv string
+	apply        migrateApplyFunc
+	Dir          string
+	Runner       string
+	URL          string
+	URLEnv       string
+	TokenCommand string
 }
 
 type MigrateApplyResult struct {
@@ -304,7 +306,9 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 	if sandboxURL != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, migrations, opts.sandboxReplay, opts.sandboxInspect)
+		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, databaseAuthOptions{
+			TokenCommand: opts.SandboxTokenCommand,
+		}, migrations, opts.sandboxReplay, opts.sandboxInspect)
 		if err != nil {
 			return nil, err
 		}
@@ -346,7 +350,11 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 
 	apply := opts.apply
 	if apply == nil {
-		apply = applyPostgresMigrations
+		apply = func(ctx context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
+			return applyPostgresMigrations(ctx, postgresConnectionOptions(databaseURL, databaseAuthOptions{
+				TokenCommand: opts.TokenCommand,
+			}), runner, migrations)
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -479,7 +487,7 @@ func validateMigrationFiles(runner string, migrations []migrate.Migration) error
 	}
 }
 
-func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string, migrations []migrate.Migration, replay sandboxReplayFunc, inspect driftInspectFunc) (*SandboxReplayResult, error) {
+func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string, auth databaseAuthOptions, migrations []migrate.Migration, replay sandboxReplayFunc, inspect driftInspectFunc) (*SandboxReplayResult, error) {
 	if len(migrations) == 0 {
 		return nil, errors.New("no migrations to replay")
 	}
@@ -504,7 +512,9 @@ func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string,
 	}
 
 	if replay == nil {
-		replay = replayPostgresSandbox
+		replay = func(ctx context.Context, sandboxURL, runner string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
+			return replayPostgresSandbox(ctx, postgresConnectionOptions(sandboxURL, auth), runner, migrations)
+		}
 	}
 	result, err := replay(ctx, sandboxURL, config.Migrations.Runner, migrations)
 	if err != nil {
@@ -537,8 +547,8 @@ func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string,
 	return result, nil
 }
 
-func replayPostgresSandbox(ctx context.Context, sandboxURL, runner string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
-	conn, err := pgtooling.Open(ctx, sandboxURL)
+func replayPostgresSandbox(ctx context.Context, opts pgtooling.ConnectionOptions, runner string, migrations []migrate.Migration) (*SandboxReplayResult, error) {
+	conn, err := pgtooling.OpenWithOptions(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -559,8 +569,8 @@ func replayPostgresSandbox(ctx context.Context, sandboxURL, runner string, migra
 	}, nil
 }
 
-func applyPostgresMigrations(ctx context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
-	conn, err := pgtooling.Open(ctx, databaseURL)
+func applyPostgresMigrations(ctx context.Context, opts pgtooling.ConnectionOptions, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
+	conn, err := pgtooling.OpenWithOptions(ctx, opts)
 	if err != nil {
 		return nil, err
 	}

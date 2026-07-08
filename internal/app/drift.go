@@ -15,9 +15,10 @@ import (
 )
 
 type DriftCheckOptions struct {
-	inspectPG driftInspectFunc
-	URL       string
-	URLEnv    string
+	inspectPG    driftInspectFunc
+	URL          string
+	URLEnv       string
+	TokenCommand string
 }
 
 type DriftCheckResult struct {
@@ -54,13 +55,16 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 		return nil, fmt.Errorf("build desired drift snapshot: %w", err)
 	}
 
-	inspect := opts.inspectPG
-	if inspect == nil {
-		inspect = inspectPostgres
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	databaseSchema, err := inspect(ctx, databaseURL)
+	var databaseSchema pgschema.Schema
+	if opts.inspectPG != nil {
+		databaseSchema, err = opts.inspectPG(ctx, databaseURL)
+	} else {
+		databaseSchema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(databaseURL, databaseAuthOptions{
+			TokenCommand: opts.TokenCommand,
+		}))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +86,11 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 }
 
 func inspectPostgres(ctx context.Context, rawURL string) (pgschema.Schema, error) {
-	conn, err := pgtooling.Open(ctx, rawURL)
+	return inspectPostgresWithOptions(ctx, pgtooling.ConnectionOptions{URL: rawURL})
+}
+
+func inspectPostgresWithOptions(ctx context.Context, opts pgtooling.ConnectionOptions) (pgschema.Schema, error) {
+	conn, err := pgtooling.OpenWithOptions(ctx, opts)
 	if err != nil {
 		return pgschema.Schema{}, err
 	}

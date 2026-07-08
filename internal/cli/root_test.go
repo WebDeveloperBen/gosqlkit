@@ -197,6 +197,27 @@ migrations:
 	}
 }
 
+func TestPrintHumanHonoursQuietAndJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		json  bool
+		quiet bool
+		want  bool
+	}{
+		{name: "human", want: true},
+		{name: "quiet", quiet: true},
+		{name: "json", json: true},
+		{name: "json quiet", json: true, quiet: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := printHuman(tt.json, tt.quiet); got != tt.want {
+				t.Fatalf("printHuman(%v, %v) = %v, want %v", tt.json, tt.quiet, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestExitErrorWraps(t *testing.T) {
 	inner := errors.New("boom")
 	got := Exit(7, inner)

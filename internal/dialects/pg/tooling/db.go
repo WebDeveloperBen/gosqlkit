@@ -18,15 +18,40 @@ type Queryer interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }
 
+type PasswordProvider interface {
+	Password(context.Context) (string, error)
+}
+
+type ConnectionOptions struct {
+	PasswordProvider PasswordProvider
+	URL              string
+}
+
 type Conn struct {
 	conn *pgx.Conn
 }
 
 func Open(ctx context.Context, rawURL string) (*Conn, error) {
+	return OpenWithOptions(ctx, ConnectionOptions{URL: rawURL})
+}
+
+func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error) {
+	rawURL := strings.TrimSpace(opts.URL)
 	if strings.TrimSpace(rawURL) == "" {
 		return nil, errors.New("postgres connection URL is required")
 	}
-	conn, err := pgx.Connect(ctx, rawURL)
+	config, err := pgx.ParseConfig(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse PostgreSQL URL %s: %w", RedactURL(rawURL), err)
+	}
+	if opts.PasswordProvider != nil {
+		password, err := opts.PasswordProvider.Password(ctx)
+		if err != nil {
+			return nil, err
+		}
+		config.Password = password
+	}
+	conn, err := pgx.ConnectConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("connect to PostgreSQL %s: %w", RedactURL(rawURL), err)
 	}

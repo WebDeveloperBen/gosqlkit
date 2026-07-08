@@ -573,11 +573,14 @@ update of this file:
   default helpers, custom-type escape hatch.
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
   for snapshot), `version`, `migrate create` (with `--empty`, `--no-down`,
-  `--allow-destructive`), `migrate plan` (with `--json`), `migrate check`
-  (with `--json` and optional `--sandbox-url` / `--sandbox-url-env`),
-  `migrate apply` (with `--url`, `--url-env`, and `--json`), and `drift check`
-  (with `--url`, `--url-env`, and `--json`). Database-backed commands default
-  to `DATABASE_URL` when `--url` is omitted.
+  `--allow-destructive`), `migrate plan` (with `--json` and `--quiet`),
+  `migrate check` (with `--json`, `--quiet`, and optional `--sandbox-url` /
+  `--sandbox-url-env`),
+  `migrate apply` (with `--url`, `--url-env`, `--json`, and `--quiet`), and
+  `drift check` (with `--url`, `--url-env`, `--json`, and `--quiet`).
+  Database-backed commands default to `DATABASE_URL` when `--url` is omitted
+  and support custom token-as-password commands through `--token-command` /
+  `--sandbox-token-command`.
   Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
   (SHA-256), metadata maps (schema/table/column/view/role/function/trigger/policy), and rename
   annotations (previousName on all objects).
@@ -612,8 +615,8 @@ update of this file:
   drift detection, sandbox replay, and `migrate apply` version tracking.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: provider token auth, quiet mode, `golang-migrate` renderer,
-  then advanced PG objects (partitioning, grants).
+- **Next tracks**: Azure/AWS/GCP-specific token auth, `golang-migrate`
+  renderer, then advanced PG objects (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

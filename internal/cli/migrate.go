@@ -58,11 +58,13 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 }
 
 type MigrateCheckCmd struct {
-	Config        string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	Dir           string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
-	SandboxURL    string `help:"PostgreSQL URL for replaying migrations into a disposable sandbox database."`
-	SandboxURLEnv string `name:"sandbox-url-env" help:"Environment variable containing the sandbox PostgreSQL URL."`
-	JSON          bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Config              string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	Dir                 string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
+	SandboxURL          string `help:"PostgreSQL URL for replaying migrations into a disposable sandbox database."`
+	SandboxURLEnv       string `name:"sandbox-url-env" help:"Environment variable containing the sandbox PostgreSQL URL."`
+	SandboxTokenCommand string `name:"sandbox-token-command" help:"Command that prints a sandbox database auth token to stdout. The token is used as the PostgreSQL password."`
+	JSON                bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet               bool   `help:"Suppress human-readable success output."`
 }
 
 func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
@@ -84,9 +86,10 @@ func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
 	}
 
 	result, err := app.MigrateCheckWithConfig(config, app.MigrateCheckOptions{
-		Dir:           c.Dir,
-		SandboxURL:    c.SandboxURL,
-		SandboxURLEnv: c.SandboxURLEnv,
+		Dir:                 c.Dir,
+		SandboxURL:          c.SandboxURL,
+		SandboxURLEnv:       c.SandboxURLEnv,
+		SandboxTokenCommand: c.SandboxTokenCommand,
 	})
 	if c.JSON && result != nil {
 		if printErr := printJSON(g.stdout(), result); printErr != nil {
@@ -100,12 +103,14 @@ func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
 }
 
 type MigrateApplyCmd struct {
-	Config string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	Dir    string `help:"Migration directory to apply. Overrides config migrations.dir." type:"path"`
-	Runner string `help:"Migration runner file format. Currently only goose is supported."`
-	URL    string `help:"PostgreSQL URL for the target database. Defaults to DATABASE_URL when omitted."`
-	URLEnv string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
-	JSON   bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Config       string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	Dir          string `help:"Migration directory to apply. Overrides config migrations.dir." type:"path"`
+	Runner       string `help:"Migration runner file format. Currently only goose is supported."`
+	URL          string `help:"PostgreSQL URL for the target database. Defaults to DATABASE_URL when omitted."`
+	URLEnv       string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
+	TokenCommand string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the PostgreSQL password."`
+	JSON         bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet        bool   `help:"Suppress human-readable success output."`
 }
 
 func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
@@ -127,10 +132,11 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 	}
 
 	result, err := app.MigrateApplyWithConfig(config, app.MigrateApplyOptions{
-		Dir:    c.Dir,
-		Runner: c.Runner,
-		URL:    c.URL,
-		URLEnv: c.URLEnv,
+		Dir:          c.Dir,
+		Runner:       c.Runner,
+		URL:          c.URL,
+		URLEnv:       c.URLEnv,
+		TokenCommand: c.TokenCommand,
 	})
 	if err != nil {
 		return Exit(1, err)
@@ -138,6 +144,9 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 
 	if c.JSON {
 		return printJSON(g.stdout(), result)
+	}
+	if !printHuman(c.JSON, c.Quiet) {
+		return nil
 	}
 	return printApply(g.stdout(), result)
 }
@@ -148,6 +157,7 @@ type MigratePlanCmd struct {
 	Runner   string `help:"Migration runner file format. Currently only goose is supported."`
 	Snapshot string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
 	JSON     bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet    bool   `help:"Suppress human-readable success output."`
 }
 
 func (c *MigratePlanCmd) Run(g *GlobalFlags) error {
@@ -180,7 +190,14 @@ func (c *MigratePlanCmd) Run(g *GlobalFlags) error {
 	if c.JSON {
 		return printJSON(g.stdout(), result)
 	}
+	if !printHuman(c.JSON, c.Quiet) {
+		return nil
+	}
 	return printPlan(g.stdout(), result)
+}
+
+func printHuman(jsonOutput, quiet bool) bool {
+	return !jsonOutput && !quiet
 }
 
 func printJSON(w io.Writer, result any) error {

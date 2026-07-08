@@ -347,9 +347,9 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 ### Slice 7: Auth, Apply, and Runner Expansion
 
-- `[ ]` Provider-neutral auth interface for tooling database connections.
+- `[x]` Provider-neutral auth interface for tooling database connections.
 - `[x]` Password and environment URL auth.
-- `[ ]` Custom token command auth.
+- `[x]` Custom token command auth.
 - `[ ]` Azure Entra token auth.
 - `[ ]` AWS IAM token auth.
 - `[ ]` GCP IAM token auth.
@@ -357,7 +357,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` `gosqlkit migrate apply --url ...`.
 - `[ ]` `golang-migrate` renderer from the structured plan.
 - `[x]` Machine-readable JSON command output.
-- `[ ]` Quiet command output mode.
+- `[x]` Quiet command output mode.
 
 ## Database Connectivity and Auth
 
@@ -367,7 +367,7 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Connect using environment-provided connection string, for example `DATABASE_URL`.
 - `[x]` Connect using password authentication.
 - `[x]` Connect using SSL/TLS options required by managed PostgreSQL providers.
-- `[ ]` Connect using token-as-password authentication.
+- `[x]` Connect using token-as-password authentication.
 - `[ ]` Support token providers through a refreshable token callback.
 - `[ ]` Support OAuth2 access-token providers.
 - `[ ]` Support cloud-specific signed database auth tokens.
@@ -380,11 +380,11 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[ ]` Support Google Cloud SQL for PostgreSQL IAM database authentication.
 - `[ ]` Support Google Cloud SQL connector based automatic IAM auth.
 - `[ ]` Support Google `gcloud` OAuth2 token acquisition for local development.
-- `[ ]` Support custom token command execution for other providers.
+- `[x]` Support custom token command execution for other providers.
 - `[ ]` Support custom token-provider plugins/interfaces for providers not built in.
-- `[ ]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
+- `[x]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
 - `[x]` Redact credentials and tokens in diagnostics.
-- `[ ]` Acquire short-lived tokens immediately before opening database connections.
+- `[x]` Acquire short-lived tokens immediately before opening database connections.
 - `[ ]` Refresh tokens for long-running introspection or diff operations.
 - `[ ]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
 - `[ ]` Support provider-specific username formats.
@@ -455,7 +455,7 @@ Other provider requirement:
 - `[ ]` CI command for committed schema drift.
 - `[ ]` CI command for database drift.
 - `[x]` Machine-readable JSON output for commands.
-- `[ ]` Quiet output mode for scripts.
+- `[x]` Quiet output mode for scripts.
 - `[ ]` Shell completion.
 
 ## Validation

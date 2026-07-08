@@ -153,7 +153,10 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		first, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn})
+		first, err := MigrateApplyWithConfig(config, MigrateApplyOptions{
+			URL:          passwordlessPostgresDSN(t, dsn),
+			TokenCommand: writeTokenCommand(t, "postgres", 0),
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -423,6 +426,19 @@ func databaseDSN(t *testing.T, dsn, name string) string {
 		t.Fatal(err)
 	}
 	parsed.Path = "/" + name
+	return parsed.String()
+}
+
+func passwordlessPostgresDSN(t *testing.T, dsn string) string {
+	t.Helper()
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.User == nil {
+		return dsn
+	}
+	parsed.User = url.User(parsed.User.Username())
 	return parsed.String()
 }
 
