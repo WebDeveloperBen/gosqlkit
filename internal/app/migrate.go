@@ -20,6 +20,7 @@ import (
 
 type MigrateCreateOptions struct {
 	CreatedAt        time.Time
+	RenameDecider    RenameDecisionFunc
 	Interaction      InteractionMode
 	Name             string
 	Dir              string
@@ -41,6 +42,22 @@ type MigrateCreateResult struct {
 	Dir   string   `json:"dir"`
 	Files []string `json:"files"`
 }
+
+type RenameCandidate struct {
+	Kind      string `json:"kind"`
+	FromKey   string `json:"fromKey"`
+	ToKey     string `json:"toKey"`
+	FromName  string `json:"fromName"`
+	ToName    string `json:"toName"`
+	ParentKey string `json:"parentKey,omitempty"`
+}
+
+type RenameDecision struct {
+	Candidate RenameCandidate `json:"candidate"`
+	Accept    bool            `json:"accept"`
+}
+
+type RenameDecisionFunc func([]RenameCandidate) ([]RenameDecision, error)
 
 type MigrateCheckOptions struct {
 	sandboxReplay       sandboxReplayFunc
@@ -215,6 +232,13 @@ func diffMigrationPlan(config *Config, opts MigrateCreateOptions, previous migra
 	planned, err := planner.PlanSnapshotDiff(previous.Metadata.TargetSnapshot, []byte(snapshot))
 	if err != nil {
 		return migrate.Plan{}, err
+	}
+	if planned.HasDestructive() && opts.RenameDecider != nil {
+		renamed, err := planWithRenameDecisions(planner, previous.Metadata.TargetSnapshot, snapshot, planned, opts.RenameDecider)
+		if err != nil {
+			return migrate.Plan{}, err
+		}
+		planned = renamed
 	}
 	if len(planned.Changes) == 0 {
 		return migrate.Plan{}, errors.New("schema has no changes")
@@ -670,30 +694,16 @@ func renameAnnotationHints(plan *migrateplan.Plan) []string {
 	if plan == nil {
 		return nil
 	}
-	drops := map[migrateplan.ObjectKind][]string{}
-	creates := map[migrateplan.ObjectKind][]string{}
-	for _, change := range plan.Changes {
-		switch change.Op {
-		case migrateplan.OperationDrop:
-			drops[change.Object.Kind] = append(drops[change.Object.Kind], change.Object.Key)
-		case migrateplan.OperationCreate:
-			creates[change.Object.Kind] = append(creates[change.Object.Kind], change.Object.Key)
-		}
-	}
-
+	candidates := renameCandidatesFromPlan(plan)
 	hints := make([]string, 0)
-	for kind, newKeys := range creates {
-		oldKeys := drops[kind]
-		if len(oldKeys) != 1 || len(newKeys) != 1 {
-			continue
-		}
-		hints = append(hints, previousNameHint(kind, oldKeys[0], newKeys[0]))
+	for _, candidate := range candidates {
+		hints = append(hints, previousNameHint(candidate))
 	}
 	return hints
 }
 
-func previousNameHint(kind migrateplan.ObjectKind, oldKey, newKey string) string {
-	return fmt.Sprintf("%s %s: set previousName to %q", kind, newKey, objectLocalName(oldKey))
+func previousNameHint(candidate RenameCandidate) string {
+	return fmt.Sprintf("%s %s: set previousName to %q", candidate.Kind, candidate.ToKey, objectLocalNameWithoutSignature(candidate.FromKey))
 }
 
 func objectLocalName(key string) string {

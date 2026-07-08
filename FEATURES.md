@@ -455,18 +455,16 @@ Other provider requirement:
 - `[x]` Styled terminal tables for human drift diagnostics using
   `charm.land/lipgloss/v2`.
 - `[x]` Styled terminal tables for migration plan summaries.
-- `[ ]` Interactive ambiguity prompts for migration authoring when stdout/stdin
-  are TTYs.
-- `[~]` Non-interactive fail-closed ambiguity diagnostics with exact schema
-  annotations to accept rename intent. Implemented for simple one-drop /
-  one-create same-kind rename candidates.
-- `[ ]` Interactive rename-candidate selection for tables, columns,
+- `[~]` Interactive ambiguity prompts for migration authoring when stdout/stdin
+  are TTYs. Implemented for rename candidates; other manual-review ambiguity
+  classes remain fail-closed.
+- `[x]` Non-interactive fail-closed ambiguity diagnostics with exact schema
+  annotations to accept rename intent.
+- `[x]` Interactive rename-candidate selection for tables, columns,
   constraints, indexes, schema objects, views, triggers, policies, roles, and
   functions.
-- `[~]` `--interactive` / `--no-interactive` controls for prompt behaviour.
-  Flags are accepted and conflicting usage is rejected; actual prompts are
-  still pending.
-- `[ ]` Script-safe prompt bypass for CI, keeping `--json` and `--quiet`
+- `[x]` `--interactive` / `--no-interactive` controls for prompt behaviour.
+- `[x]` Script-safe prompt bypass for CI, keeping `--json` and `--quiet`
   non-interactive.
 - `[ ]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
@@ -534,8 +532,8 @@ Other provider requirement:
 - `[x]` CLI table-rendering tests for drift diagnostics.
 - `[x]` CLI table-rendering tests for migration plan diagnostics.
 - `[x]` CLI flag validation tests for conflicting prompt-mode controls.
-- `[ ]` CLI prompt tests for interactive migration ambiguity decisions.
-- `[ ]` Non-TTY tests proving ambiguous migrations fail closed without prompts.
+- `[x]` CLI prompt tests for interactive migration ambiguity decisions.
+- `[x]` Non-TTY tests proving ambiguous migrations fail closed without prompts.
 - `[ ]` Testcontainers integration test per supported dialect.
 
 ## Recommended Build Order

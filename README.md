@@ -114,8 +114,9 @@ gosqlkit migrate plan --json   # machine-readable
 
 Human plan output is rendered as terminal tables; `--json` remains the stable
 automation format. `migrate create` also accepts `--interactive` and
-`--no-interactive` prompt-mode controls, while ambiguous plans continue to
-fail closed until interactive candidate selection is implemented.
+`--no-interactive` prompt-mode controls. Rename candidates are presented as a
+numbered table when prompts are enabled; non-interactive runs fail closed with
+the same `previousName` guidance.
 
 Author a migration that drops objects (disabled by default to keep destructive
 changes reviewable):
@@ -197,7 +198,8 @@ sqlc generate
   `gosqlkit migrate plan` to preview the structured plan before writing, using
   styled terminal tables for humans and JSON for automation
 - Fail-closed rename-candidate diagnostics for simple destructive drop/create
-  plans, with `previousName` guidance where rename intent should be explicit
+  plans, with `previousName` guidance where rename intent should be explicit,
+  plus interactive rename selection for TTY workflows
 - Structured column alteration planning for type, default, nullability,
   generated expression, and identity changes, with risk metadata and reverse
   SQL where practical

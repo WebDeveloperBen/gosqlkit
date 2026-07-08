@@ -247,6 +247,88 @@ func TestDestructiveGuardErrorSuggestsRenameAnnotations(t *testing.T) {
 	}
 }
 
+func TestDiffMigrationPlanAcceptsInteractiveRenameDecision(t *testing.T) {
+	previousSnapshot, err := snapshotJSONForSchema(pgschema.Schema{Tables: []pgschema.Table{{
+		Table: ast.Table{
+			Name: "old_users",
+			Columns: []ast.Column{{
+				Name: "id",
+				Type: "uuid",
+			}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousSnapshotID, err := snapshotIDFromJSON(previousSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSnapshot, err := snapshotJSONForSchema(pgschema.Schema{Tables: []pgschema.Table{{
+		Table: ast.Table{
+			Name: "users",
+			Columns: []ast.Column{{
+				Name: "id",
+				Type: "uuid",
+			}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSnapshotID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var prompted []RenameCandidate
+	plan, err := diffMigrationPlan(
+		&Config{Dialect: "postgresql"},
+		MigrateCreateOptions{
+			Name: "rename users",
+			RenameDecider: func(candidates []RenameCandidate) ([]RenameDecision, error) {
+				prompted = append(prompted, candidates...)
+				return []RenameDecision{{Candidate: candidates[0], Accept: true}}, nil
+			},
+		},
+		migrate.Migration{Metadata: migrate.Metadata{
+			ToSnapshotID:   previousSnapshotID,
+			TargetSnapshot: json.RawMessage(previousSnapshot),
+		}},
+		currentSnapshot,
+		currentSnapshotID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prompted) != 1 {
+		t.Fatalf("prompted candidates = %#v", prompted)
+	}
+	if prompted[0].Kind != "table" || prompted[0].FromKey != "public.old_users" || prompted[0].ToKey != "public.users" {
+		t.Fatalf("unexpected candidate %#v", prompted[0])
+	}
+	if len(plan.Changes) != 1 || plan.Changes[0].Op != "rename" {
+		t.Fatalf("expected rename-only plan, got %#v", plan.Changes)
+	}
+	if len(plan.UpStatements) != 1 || !strings.Contains(plan.UpStatements[0].SQL, "ALTER TABLE old_users RENAME TO users;") {
+		t.Fatalf("unexpected up statements %#v", plan.UpStatements)
+	}
+	if strings.Contains(plan.TargetSnapshot, "previousName") {
+		t.Fatalf("target snapshot should remain the generated snapshot without prompt-only previousName metadata\n%s", plan.TargetSnapshot)
+	}
+	if plan.ToSnapshotID != currentSnapshotID {
+		t.Fatalf("to snapshot = %q, want %q", plan.ToSnapshotID, currentSnapshotID)
+	}
+}
+
+func snapshotJSONForSchema(schema pgschema.Schema) (string, error) {
+	raw, err := pgschema.JSON("postgresql", schema)
+	if err != nil {
+		return "", err
+	}
+	return injectSnapshotIDs(string(raw), "")
+}
+
 func TestReverseStatementsUsesReverseChangeOrder(t *testing.T) {
 	statements := reverseStatements([]migrateplan.Change{
 		migrateplan.NewChange(

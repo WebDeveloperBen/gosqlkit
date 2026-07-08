@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -61,6 +63,10 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 	if c.NoInteractive {
 		interaction = app.InteractionNever
 	}
+	var renameDecider app.RenameDecisionFunc
+	if shouldPromptForRenames(interaction, g.stdin(), g.stdout()) {
+		renameDecider = promptRenameCandidates(g.stdin(), g.stdout())
+	}
 	if _, err := app.MigrateCreateWithConfig(config, app.MigrateCreateOptions{
 		Name:             c.Name,
 		Dir:              c.Dir,
@@ -68,6 +74,7 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 		Empty:            c.Empty,
 		NoDown:           c.NoDown,
 		AllowDestructive: c.AllowDestructive,
+		RenameDecider:    renameDecider,
 		Interaction:      interaction,
 	}); err != nil {
 		return Exit(1, err)
@@ -312,4 +319,105 @@ func styledTable(headers ...string) *table.Table {
 			}
 			return style
 		})
+}
+
+func shouldPromptForRenames(mode app.InteractionMode, stdin io.Reader, stdout io.Writer) bool {
+	switch mode {
+	case app.InteractionAlways:
+		return true
+	case app.InteractionNever:
+		return false
+	default:
+		return isTerminal(stdin) && isTerminal(stdout)
+	}
+}
+
+func isTerminal(value any) bool {
+	file, ok := value.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func promptRenameCandidates(stdin io.Reader, stdout io.Writer) app.RenameDecisionFunc {
+	return func(candidates []app.RenameCandidate) ([]app.RenameDecision, error) {
+		if len(candidates) == 0 {
+			return nil, nil
+		}
+		title := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("12")).
+			Render("ambiguous rename candidates")
+		if _, err := fmt.Fprintln(stdout, title); err != nil {
+			return nil, err
+		}
+		if _, err := fmt.Fprintln(stdout); err != nil {
+			return nil, err
+		}
+		if _, err := fmt.Fprintln(stdout, renameCandidateTable(candidates)); err != nil {
+			return nil, err
+		}
+		if _, err := fmt.Fprintln(stdout); err != nil {
+			return nil, err
+		}
+		if _, err := fmt.Fprint(stdout, "Select renames to accept (numbers, comma-separated; all; none): "); err != nil {
+			return nil, err
+		}
+
+		answer, err := bufio.NewReader(stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+		selected, err := parseRenameSelection(answer, len(candidates))
+		if err != nil {
+			return nil, err
+		}
+		decisions := make([]app.RenameDecision, 0, len(candidates))
+		for i, candidate := range candidates {
+			_, accept := selected[i]
+			decisions = append(decisions, app.RenameDecision{Candidate: candidate, Accept: accept})
+		}
+		return decisions, nil
+	}
+}
+
+func renameCandidateTable(candidates []app.RenameCandidate) string {
+	t := styledTable("#", "Kind", "From", "To", "Parent")
+	for i, candidate := range candidates {
+		t.Row(strconv.Itoa(i+1), candidate.Kind, candidate.FromKey, candidate.ToKey, candidate.ParentKey)
+	}
+	return t.String()
+}
+
+func parseRenameSelection(answer string, count int) (map[int]struct{}, error) {
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	selected := map[int]struct{}{}
+	switch answer {
+	case "", "n", "no", "none":
+		return selected, nil
+	case "a", "all":
+		for i := range count {
+			selected[i] = struct{}{}
+		}
+		return selected, nil
+	}
+	parts := strings.FieldsFunc(answer, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	})
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		idx, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid rename selection %q", part)
+		}
+		if idx < 1 || idx > count {
+			return nil, fmt.Errorf("rename selection %d is out of range", idx)
+		}
+		selected[idx-1] = struct{}{}
+	}
+	return selected, nil
 }

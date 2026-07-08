@@ -24,7 +24,15 @@ type CLI struct {
 type GlobalFlags struct {
 	outW io.Writer
 	errW io.Writer
+	inR  io.Reader
 	Root string `help:"Project root (default: current directory)." short:"r" default:""`
+}
+
+func (g *GlobalFlags) stdin() io.Reader {
+	if g.inR != nil {
+		return g.inR
+	}
+	return os.Stdin
 }
 
 func (g *GlobalFlags) stdout() io.Writer {
@@ -83,7 +91,12 @@ func Run(args []string) (code int, err error) {
 }
 
 func run(args []string, stdout, stderr io.Writer) (int, error) {
+	return runWithInput(args, nil, stdout, stderr)
+}
+
+func runWithInput(args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	var cli CLI
+	cli.inR = stdin
 	cli.outW = stdout
 	cli.errW = stderr
 

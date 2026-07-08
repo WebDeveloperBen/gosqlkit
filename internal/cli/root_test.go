@@ -370,6 +370,75 @@ schema: "schema"
 	}
 }
 
+func TestPromptRenameCandidatesSelectsAcceptedRenames(t *testing.T) {
+	stdin := strings.NewReader("1\n")
+	var stdout bytes.Buffer
+	decide := promptRenameCandidates(stdin, &stdout)
+
+	decisions, err := decide([]app.RenameCandidate{
+		{Kind: "table", FromKey: "public.old_users", ToKey: "public.users", ParentKey: ""},
+		{Kind: "column", FromKey: "public.users.old_email", ToKey: "public.users.email", ParentKey: "public.users"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decisions) != 2 {
+		t.Fatalf("decisions = %#v", decisions)
+	}
+	if !decisions[0].Accept || decisions[1].Accept {
+		t.Fatalf("unexpected decisions %#v", decisions)
+	}
+	output := stdout.String()
+	for _, want := range []string{
+		"ambiguous rename candidates",
+		"public.old_users",
+		"public.users.email",
+		"Select renames to accept",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("prompt output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestParseRenameSelectionSupportsAllAndNone(t *testing.T) {
+	all, err := parseRenameSelection("all", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("all selection = %#v", all)
+	}
+	none, err := parseRenameSelection("none", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none) != 0 {
+		t.Fatalf("none selection = %#v", none)
+	}
+}
+
+func TestParseRenameSelectionRejectsInvalidInput(t *testing.T) {
+	if _, err := parseRenameSelection("4", 3); err == nil || !strings.Contains(err.Error(), "out of range") {
+		t.Fatalf("expected out of range error, got %v", err)
+	}
+	if _, err := parseRenameSelection("nope", 3); err == nil || !strings.Contains(err.Error(), "invalid rename selection") {
+		t.Fatalf("expected invalid selection error, got %v", err)
+	}
+}
+
+func TestShouldPromptForRenamesHonoursModeAndTTY(t *testing.T) {
+	if !shouldPromptForRenames(app.InteractionAlways, strings.NewReader("all"), &bytes.Buffer{}) {
+		t.Fatal("explicit interactive mode should prompt")
+	}
+	if shouldPromptForRenames(app.InteractionNever, os.Stdin, os.Stdout) {
+		t.Fatal("explicit non-interactive mode should not prompt")
+	}
+	if shouldPromptForRenames(app.InteractionAuto, strings.NewReader("all"), &bytes.Buffer{}) {
+		t.Fatal("auto mode should not prompt for non-TTY IO")
+	}
+}
+
 func TestExitErrorWraps(t *testing.T) {
 	inner := errors.New("boom")
 	got := Exit(7, inner)
