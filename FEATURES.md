@@ -454,15 +454,18 @@ Other provider requirement:
   objects in human and JSON output.
 - `[x]` Styled terminal tables for human drift diagnostics using
   `charm.land/lipgloss/v2`.
-- `[ ]` Styled terminal tables for migration plan summaries.
+- `[x]` Styled terminal tables for migration plan summaries.
 - `[ ]` Interactive ambiguity prompts for migration authoring when stdout/stdin
   are TTYs.
-- `[ ]` Non-interactive fail-closed ambiguity diagnostics with exact schema
-  annotations to accept rename intent.
+- `[~]` Non-interactive fail-closed ambiguity diagnostics with exact schema
+  annotations to accept rename intent. Implemented for simple one-drop /
+  one-create same-kind rename candidates.
 - `[ ]` Interactive rename-candidate selection for tables, columns,
   constraints, indexes, schema objects, views, triggers, policies, roles, and
   functions.
-- `[ ]` `--interactive` / `--no-interactive` controls for prompt behaviour.
+- `[~]` `--interactive` / `--no-interactive` controls for prompt behaviour.
+  Flags are accepted and conflicting usage is rejected; actual prompts are
+  still pending.
 - `[ ]` Script-safe prompt bypass for CI, keeping `--json` and `--quiet`
   non-interactive.
 - `[ ]` Migration creation support for token-authenticated source databases.
@@ -529,6 +532,8 @@ Other provider requirement:
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
 - `[x]` Drift diagnostics tests for top-level objects and table-nested objects.
 - `[x]` CLI table-rendering tests for drift diagnostics.
+- `[x]` CLI table-rendering tests for migration plan diagnostics.
+- `[x]` CLI flag validation tests for conflicting prompt-mode controls.
 - `[ ]` CLI prompt tests for interactive migration ambiguity decisions.
 - `[ ]` Non-TTY tests proving ambiguous migrations fail closed without prompts.
 - `[ ]` Testcontainers integration test per supported dialect.

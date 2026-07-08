@@ -2,11 +2,16 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/webdeveloperben/gosqlkit/internal/app"
+	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 )
 
 type MigrateCmd struct {
@@ -24,6 +29,8 @@ type MigrateCreateCmd struct {
 	Empty            bool   `help:"Create an empty migration for manual SQL."`
 	NoDown           bool   `help:"Omit the down migration section."`
 	AllowDestructive bool   `help:"Allow the migration to contain destructive changes (drops, disables, comment removals)."`
+	Interactive      bool   `help:"Prompt for ambiguous migration choices when stdin/stdout are TTYs."`
+	NoInteractive    bool   `name:"no-interactive" help:"Disable prompts and fail closed on ambiguous migrations."`
 }
 
 func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
@@ -43,7 +50,17 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 	if err != nil {
 		return Exit(1, err)
 	}
+	if c.Interactive && c.NoInteractive {
+		return Exit(1, errors.New("--interactive and --no-interactive cannot be used together"))
+	}
 
+	interaction := app.InteractionAuto
+	if c.Interactive {
+		interaction = app.InteractionAlways
+	}
+	if c.NoInteractive {
+		interaction = app.InteractionNever
+	}
 	if _, err := app.MigrateCreateWithConfig(config, app.MigrateCreateOptions{
 		Name:             c.Name,
 		Dir:              c.Dir,
@@ -51,6 +68,7 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 		Empty:            c.Empty,
 		NoDown:           c.NoDown,
 		AllowDestructive: c.AllowDestructive,
+		Interaction:      interaction,
 	}); err != nil {
 		return Exit(1, err)
 	}
@@ -238,36 +256,60 @@ func printPlan(w io.Writer, result *app.MigratePlanResult) error {
 		_, err := fmt.Fprintln(w, "no changes")
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "dialect:        %s\n", result.Dialect); err != nil {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("12")).
+		Render("migration plan")
+	if _, err := fmt.Fprintln(w, title); err != nil {
 		return err
-	}
-	if result.FromSnapshotID != "" {
-		if _, err := fmt.Fprintf(w, "fromSnapshot:   %s\n", result.FromSnapshotID); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(w, "toSnapshot:     %s\n", result.ToSnapshotID); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "changes:        %d\n", len(result.Changes)); err != nil {
-		return err
-	}
-	if len(result.Destructive) > 0 {
-		if _, err := fmt.Fprintf(w, "destructive:    %d (pass --allow-destructive to write)\n", len(result.Destructive)); err != nil {
-			return err
-		}
 	}
 	if _, err := fmt.Fprintln(w); err != nil {
 		return err
 	}
-	for _, change := range result.Changes {
-		risks := ""
-		if len(change.Risks) > 0 {
-			risks = "  risks=" + strings.Join(change.Risks, ",")
-		}
-		if _, err := fmt.Fprintf(w, "  %s %s%s\n", change.Op, change.Object.Key, risks); err != nil {
-			return err
-		}
+	if _, err := fmt.Fprintln(w, planSummaryTable(result)); err != nil {
+		return err
 	}
-	return nil
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(w, planChangeTable(result.Changes))
+	return err
+}
+
+func planSummaryTable(result *app.MigratePlanResult) string {
+	t := styledTable("Field", "Value")
+	t.Row("Dialect", result.Dialect)
+	if result.FromSnapshotID != "" {
+		t.Row("From snapshot", result.FromSnapshotID)
+	}
+	t.Row("To snapshot", result.ToSnapshotID)
+	t.Row("Changes", strconv.Itoa(len(result.Changes)))
+	t.Row("Up statements", strconv.Itoa(len(result.Statements)))
+	if len(result.Destructive) > 0 {
+		t.Row("Destructive", fmt.Sprintf("%d (pass --allow-destructive to write)", len(result.Destructive)))
+	}
+	return t.String()
+}
+
+func planChangeTable(changes []migrate.Change) string {
+	t := styledTable("Op", "Kind", "Object", "Risks", "Summary")
+	for _, change := range changes {
+		risks := strings.Join(change.Risks, ", ")
+		t.Row(change.Op, change.Object.Kind, change.Object.Key, risks, change.Summary)
+	}
+	return t.String()
+}
+
+func styledTable(headers ...string) *table.Table {
+	return table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("8"))).
+		Headers(headers...).
+		StyleFunc(func(row, _ int) lipgloss.Style {
+			style := lipgloss.NewStyle().Padding(0, 1)
+			if row == table.HeaderRow {
+				return style.Bold(true).Foreground(lipgloss.Color("12"))
+			}
+			return style
+		})
 }

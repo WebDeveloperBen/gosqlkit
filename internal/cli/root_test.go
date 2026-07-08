@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/webdeveloperben/gosqlkit/internal/app"
+	"github.com/webdeveloperben/gosqlkit/internal/migrate"
+	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 )
 
 func runWithRecover(t *testing.T, args []string) (code int, err error) {
@@ -277,6 +279,94 @@ func TestPrintDriftGroupsDifferences(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("drift output missing %q\n%s", want, output)
 		}
+	}
+}
+
+func TestPrintPlanRendersStyledTables(t *testing.T) {
+	var stdout bytes.Buffer
+	err := printPlan(&stdout, &app.MigratePlanResult{
+		Dialect:        "postgresql",
+		FromSnapshotID: "from-id",
+		ToSnapshotID:   "to-id",
+		Changes: []migrate.Change{
+			{
+				Op:      "alter",
+				Object:  migrate.ObjectRef{Kind: "column", Key: "public.users.email"},
+				Risks:   []string{"lock-heavy"},
+				Summary: "add users email column",
+			},
+			{
+				Op:      "drop",
+				Object:  migrate.ObjectRef{Kind: "table", Key: "public.legacy_users"},
+				Risks:   []string{"destructive", "data-loss"},
+				Summary: "drop legacy users",
+			},
+		},
+		Statements: []migrate.Statement{{SQL: "ALTER TABLE users ADD COLUMN email text;"}},
+		Destructive: []migrateplan.Change{
+			migrateplan.NewChange(
+				migrateplan.OperationDrop,
+				migrateplan.Ref(migrateplan.ObjectKindTable, "public.legacy_users"),
+				"drop legacy users",
+			).WithRisks(migrateplan.RiskDestructive),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := stdout.String()
+	for _, want := range []string{
+		"migration plan",
+		"Field",
+		"Value",
+		"Dialect",
+		"postgresql",
+		"From snapshot",
+		"from-id",
+		"To snapshot",
+		"to-id",
+		"Changes",
+		"2",
+		"Up statements",
+		"1",
+		"Destructive",
+		"pass --allow-destructive",
+		"Op",
+		"Kind",
+		"Object",
+		"Risks",
+		"Summary",
+		"alter",
+		"column",
+		"public.users.email",
+		"lock-heavy",
+		"drop legacy users",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("plan output missing %q\n%s", want, output)
+		}
+	}
+}
+
+func TestRunMigrateCreateRejectsConflictingInteractionFlags(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gosqlkit.yaml"), []byte(`version: "1"
+dialect: postgresql
+schema: "schema"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	code, err := run([]string{"--root", root, "migrate", "create", "add-users", "--interactive", "--no-interactive"}, nil, &stderr)
+	if code != 1 {
+		t.Fatalf("run(migrate create) returned code %d, want 1", code)
+	}
+	if err == nil || !strings.Contains(err.Error(), "--interactive and --no-interactive cannot be used together") {
+		t.Fatalf("expected conflicting interaction flags error, got %v", err)
+	}
+	if !strings.Contains(stderr.String(), "gosqlkit: error:") {
+		t.Fatalf("expected error output, got %q", stderr.String())
 	}
 }
 

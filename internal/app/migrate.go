@@ -20,6 +20,7 @@ import (
 
 type MigrateCreateOptions struct {
 	CreatedAt        time.Time
+	Interaction      InteractionMode
 	Name             string
 	Dir              string
 	Runner           string
@@ -27,6 +28,14 @@ type MigrateCreateOptions struct {
 	NoDown           bool
 	AllowDestructive bool
 }
+
+type InteractionMode string
+
+const (
+	InteractionAuto   InteractionMode = ""
+	InteractionAlways InteractionMode = "always"
+	InteractionNever  InteractionMode = "never"
+)
 
 type MigrateCreateResult struct {
 	Dir   string   `json:"dir"`
@@ -94,6 +103,9 @@ type MigratePlanResult struct {
 func MigrateCreateWithConfig(config *Config, opts MigrateCreateOptions) (*MigrateCreateResult, error) {
 	if config == nil {
 		return nil, errors.New("config is required")
+	}
+	if err := validateInteractionMode(opts.Interaction); err != nil {
+		return nil, err
 	}
 	if opts.Name == "" {
 		return nil, errors.New("migration name is required")
@@ -636,5 +648,57 @@ func destructiveGuardError(plan *migrateplan.Plan) error {
 		}
 		lines = append(lines, fmt.Sprintf("  - %s %s [%s]", change.Op, change.Object.Key, strings.Join(risks, ",")))
 	}
+	if hints := renameAnnotationHints(plan); len(hints) > 0 {
+		lines = append(lines, "possible renames were detected; annotate the new schema object with previousName to accept rename intent:")
+		for _, hint := range hints {
+			lines = append(lines, "  - "+hint)
+		}
+	}
 	return errors.New(strings.Join(lines, "\n"))
+}
+
+func validateInteractionMode(mode InteractionMode) error {
+	switch mode {
+	case InteractionAuto, InteractionAlways, InteractionNever:
+		return nil
+	default:
+		return fmt.Errorf("unsupported interaction mode %q", mode)
+	}
+}
+
+func renameAnnotationHints(plan *migrateplan.Plan) []string {
+	if plan == nil {
+		return nil
+	}
+	drops := map[migrateplan.ObjectKind][]string{}
+	creates := map[migrateplan.ObjectKind][]string{}
+	for _, change := range plan.Changes {
+		switch change.Op {
+		case migrateplan.OperationDrop:
+			drops[change.Object.Kind] = append(drops[change.Object.Kind], change.Object.Key)
+		case migrateplan.OperationCreate:
+			creates[change.Object.Kind] = append(creates[change.Object.Kind], change.Object.Key)
+		}
+	}
+
+	hints := make([]string, 0)
+	for kind, newKeys := range creates {
+		oldKeys := drops[kind]
+		if len(oldKeys) != 1 || len(newKeys) != 1 {
+			continue
+		}
+		hints = append(hints, previousNameHint(kind, oldKeys[0], newKeys[0]))
+	}
+	return hints
+}
+
+func previousNameHint(kind migrateplan.ObjectKind, oldKey, newKey string) string {
+	return fmt.Sprintf("%s %s: set previousName to %q", kind, newKey, objectLocalName(oldKey))
+}
+
+func objectLocalName(key string) string {
+	if dot := strings.LastIndex(key, "."); dot >= 0 && dot < len(key)-1 {
+		return key[dot+1:]
+	}
+	return key
 }

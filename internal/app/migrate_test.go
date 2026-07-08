@@ -203,6 +203,50 @@ func TestMigrateCreateWithConfigRejectsUnsupportedRunnerOverride(t *testing.T) {
 	}
 }
 
+func TestMigrateCreateWithConfigRejectsUnsupportedInteractionMode(t *testing.T) {
+	config := &Config{
+		Dialect: "postgresql",
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+
+	_, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:        "add users",
+		Empty:       true,
+		Interaction: InteractionMode("sometimes"),
+	})
+	if err == nil || !strings.Contains(err.Error(), `unsupported interaction mode "sometimes"`) {
+		t.Fatalf("expected unsupported interaction error, got %v", err)
+	}
+}
+
+func TestDestructiveGuardErrorSuggestsRenameAnnotations(t *testing.T) {
+	planned := &migrateplan.Plan{Changes: []migrateplan.Change{
+		migrateplan.NewChange(
+			migrateplan.OperationDrop,
+			migrateplan.Ref(migrateplan.ObjectKindTable, "public.old_users"),
+			"drop old users",
+		).WithRisks(migrateplan.RiskDestructive),
+		migrateplan.NewChange(
+			migrateplan.OperationCreate,
+			migrateplan.Ref(migrateplan.ObjectKindTable, "public.users"),
+			"create users",
+		),
+	}}
+
+	err := destructiveGuardError(planned)
+	for _, want := range []string{
+		"possible renames were detected",
+		"table public.users: set previousName to \"old_users\"",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("guard error missing %q\n%s", want, err)
+		}
+	}
+}
+
 func TestReverseStatementsUsesReverseChangeOrder(t *testing.T) {
 	statements := reverseStatements([]migrateplan.Change{
 		migrateplan.NewChange(
