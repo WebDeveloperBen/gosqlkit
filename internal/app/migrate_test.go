@@ -69,6 +69,63 @@ migrations:
 	}
 }
 
+func TestMigrateCreateWithConfigWritesEmptyGolangMigrateMigration(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, ConfigName)
+	if err := os.WriteFile(configPath, []byte(`version: "1"
+dialect: postgresql
+schema: "schema"
+migrations:
+  dir: "db/migrations"
+  runner: golang-migrate
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:      "Add Users",
+		Empty:     true,
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Files) != 2 {
+		t.Fatalf("files = %v", result.Files)
+	}
+	if filepath.Base(result.Files[0]) != "20260706143000_add_users.up.sql" {
+		t.Fatalf("up file = %q", result.Files[0])
+	}
+	if filepath.Base(result.Files[1]) != "20260706143000_add_users.down.sql" {
+		t.Fatalf("down file = %q", result.Files[1])
+	}
+
+	up, err := os.ReadFile(result.Files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"-- +gosqlkit Meta",
+		`--   "dialect": "postgresql"`,
+	} {
+		if !strings.Contains(string(up), want) {
+			t.Fatalf("up content missing %q\n%s", want, up)
+		}
+	}
+	down, err := os.ReadFile(result.Files[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(down), "-- +gosqlkit Meta") {
+		t.Fatalf("down content should not contain metadata\n%s", down)
+	}
+}
+
 func TestMigrateCreateWithConfigWritesBaselineGooseMigration(t *testing.T) {
 	config := &Config{
 		Dialect: "postgres",
@@ -195,10 +252,10 @@ func TestMigrateCreateWithConfigRejectsUnsupportedRunnerOverride(t *testing.T) {
 
 	_, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
 		Name:   "add users",
-		Runner: "golang-migrate",
+		Runner: "unknown",
 		Empty:  true,
 	})
-	if err == nil || !strings.Contains(err.Error(), `unsupported migration runner "golang-migrate"`) {
+	if err == nil || !strings.Contains(err.Error(), `unsupported migration runner "unknown"`) {
 		t.Fatalf("expected unsupported runner error, got %v", err)
 	}
 }

@@ -442,7 +442,7 @@ Implement the cross-dialect migration planning workflow described in
 Deliverables:
 
 - `gosqlkit migrate create <name>`
-- goose-compatible SQL migration files with embedded `gosqlkit` metadata
+- runner-compatible SQL migration files with embedded `gosqlkit` metadata
 - cross-dialect change IR
 - PostgreSQL planner as the first implementation
 - database connection layer for introspection/diff inputs
@@ -457,7 +457,7 @@ Deliverables:
 
 ### Phase 4: Migration history integration
 
-Optionally generate goose-compatible migration files.
+Optionally generate runner-compatible migration files.
 
 Deliverables:
 

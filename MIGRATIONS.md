@@ -19,16 +19,16 @@ snapshot diff -> migration plan / change IR -> runner-specific file renderer
 
 The initial and default file renderer is `goose`. It emits one committed SQL
 file per migration with machine-readable `gosqlkit` metadata embedded in SQL
-comments. We will not create per-migration sidecar JSON files or a directory
-checksum file by default.
+comments. `golang-migrate` is also supported as a split-file renderer, with
+metadata embedded in the `.up.sql` file. We will not create per-migration
+sidecar JSON files or a directory checksum file by default.
 
-The migration configuration should be shaped so a project can eventually
-choose a runner format, for example `goose` or `golang-migrate`. Only `goose`
-is implemented at first; unsupported runner values should fail validation
-rather than silently producing the wrong file layout.
+The migration configuration lets a project choose `goose` or
+`golang-migrate`. Unsupported runner values should fail validation rather than
+silently producing the wrong file layout.
 
-Initial migration application should stay compatible with `goose`. A future
-`gosqlkit migrate apply` command may wrap application, but it should not be a
+Migration application should stay compatible with supported runner layouts.
+`gosqlkit migrate apply` may wrap application, but it should not be a
 prerequisite for using generated migrations.
 
 ## Why This Path
@@ -111,8 +111,8 @@ Translate the ideas into `gosqlkit`'s own model:
 - `internal/migrate/plan` owns the shared Go interfaces and change metadata.
 - `internal/dialects/<dialect>/plan` owns snapshot comparison, dialect
   ordering, reversibility rules, risk flags, and SQL rendering.
-- `internal/migrate/goose` and future `internal/migrate/golangmigrate` own
-  runner file layout only.
+- `internal/migrate/goose` and `internal/migrate/golangmigrate` own runner
+  file layout only.
 - `internal/app/migrate.go` orchestrates config, previous metadata lookup,
   planner selection, file rendering, and write/check behaviour.
 
@@ -121,10 +121,10 @@ read semantic catalogue fields instead of diffing rendered SQL text. In
 practice that means identity/generated-column flags, `pg_get_expr` predicates,
 `pg_get_indexdef` expressions, index option bits for direction and null
 ordering, opclasses, storage parameters, and extension-owned object filters.
-For migration replay, split goose `Up` SQL into executable statements after
-section extraction so non-transactional statements such as `CREATE INDEX
-CONCURRENTLY` are not forced into a single batch, while function bodies and
-quoted semicolons remain intact.
+For migration replay, split goose `Up` SQL after section extraction and split
+`golang-migrate` `.up.sql` files directly so non-transactional statements such
+as `CREATE INDEX CONCURRENTLY` are not forced into a single batch, while
+function bodies and quoted semicolons remain intact.
 
 ## Non-Goals
 
@@ -150,20 +150,20 @@ Apply it using goose:
 goose -dir db/migrations postgres "$DATABASE_URL" up
 ```
 
-Or apply the same goose-compatible files through `gosqlkit`:
+Or apply the same runner-compatible files through `gosqlkit`:
 
 ```bash
 gosqlkit migrate apply --url "$DATABASE_URL"
 ```
 
-`migrate apply` records successful versions in the standard
-`goose_db_version` table and skips versions that are already applied. The
-generated SQL remains plain, reviewable, and usable without a custom runner.
-
-Longer term, the same migration plan should be renderable for other runners
-without changing the diff planner. For example, a future `golang-migrate`
-renderer can emit split `.up.sql` and `.down.sql` files from the same plan that
-the `goose` renderer emits as a single annotated SQL file.
+`migrate apply` records successful versions in the runner's standard table
+(`goose_db_version` for goose, `schema_migrations` for `golang-migrate`) and
+skips versions that are already applied. The generated SQL remains plain,
+reviewable, and usable without a custom runner.
+For `golang-migrate`, `schema_migrations` is treated as current state rather
+than append-only history: apply fails when the current row is dirty, marks the
+target version dirty before execution, and records the target version clean
+after successful execution.
 
 ## Migration File Layout
 
@@ -221,14 +221,29 @@ metadata so the latest committed migration can serve as the previous desired
 schema for the next diff. Empty manual migrations may omit the snapshot payload
 until manual-result metadata is supported.
 
-A future `golang-migrate` renderer would use a different file layout while
-preserving the same `gosqlkit` plan and metadata concepts:
+The `golang-migrate` renderer uses a split-file layout while preserving the
+same `gosqlkit` plan and metadata concepts:
 
 ```text
 db/migrations/
   20260706143000_add_rls_policies.up.sql
   20260706143000_add_rls_policies.down.sql
 ```
+
+For PostgreSQL compatibility with the external `golang-migrate` CLI, generated
+`golang-migrate` up files are split into numbered single-statement versions
+when a rendered plan contains multiple PostgreSQL statements:
+
+```text
+db/migrations/
+  202607061430000001_baseline.up.sql
+  202607061430000002_baseline.up.sql
+```
+
+This keeps PostgreSQL function bodies with semicolons intact and preserves
+non-transactional statements such as `CREATE INDEX CONCURRENTLY`, because each
+statement is sent to PostgreSQL as its own migration file instead of being
+forced into an implicit multi-statement transaction.
 
 Runner-specific annotations, filename rules, and one-file versus two-file
 output belong in the file renderer. The migration plan, risk metadata,
@@ -319,7 +334,7 @@ internal/migrate/goose/
   Goose-compatible file rendering
 
 internal/migrate/golangmigrate/
-  Future golang-migrate split-file rendering
+  golang-migrate split-file rendering
 
 internal/dialects/<dialect>/plan/
   Snapshot-to-snapshot diff rules
@@ -341,7 +356,7 @@ internal/app/migrate.go
 The renderer boundary should be intentionally small. A renderer receives a
 planned migration and returns one or more files to write. `goose` returns one
 file containing `-- +goose Up` and optional `-- +goose Down` sections.
-`golang-migrate` can later return separate `.up.sql` and `.down.sql` files.
+`golang-migrate` returns separate `.up.sql` and `.down.sql` files.
 
 The planner boundary follows the same split used by Atlas and Drizzle Kit:
 compare structured snapshots into typed changes first, then let the dialect
@@ -420,6 +435,10 @@ Instead, `gosqlkit migrate check` should validate:
   are present.
 - `[x]` Goose files contain exactly one `-- +goose Up` annotation, at most one
   `-- +goose Down` annotation, and `Down` appears after `Up`.
+- `[x]` `golang-migrate` files store metadata in `.up.sql` files and ignore
+  `.down.sql` files for snapshot lineage scanning.
+- `[x]` External `golang-migrate` Docker CLI applies generated PostgreSQL files
+  against a real PostgreSQL database.
 - `[x]` Adjacent snapshot lineage is coherent when both sides declare
   snapshot IDs.
 - No migration appears before the latest applied migration for a target
@@ -427,8 +446,9 @@ Instead, `gosqlkit migrate check` should validate:
 - `[x]` Replaying migrations in a sandbox reaches the expected final snapshot
   when a PostgreSQL sandbox URL is provided.
 - `[x]` Manual edits do not break declared snapshot lineage; PostgreSQL replay
-  splits goose `Up` SQL into executable statements without breaking function
-  bodies, quoted strings, quoted identifiers, or comments.
+  splits goose `Up` SQL and `golang-migrate` `.up.sql` files into executable
+  statements without breaking function bodies, quoted strings, quoted
+  identifiers, or comments.
 
 If later experience shows that projects need stronger directory integrity, we
 can add an optional hash file. It should not be the default UX.
@@ -461,15 +481,15 @@ migrations:
   runner: goose
 ```
 
-For the first implementation, omitting `runner` is equivalent to `goose`, and
-any value other than `goose` is invalid.
+Omitting `runner` is equivalent to `goose`. Supported values are `goose` and
+`golang-migrate`.
 
 Current implementation status:
 
 - `migrate create <name>` creates a baseline migration from the current schema
   when the migration directory has no existing migrations. The generated
   metadata embeds both `toSnapshotId` and the target snapshot JSON.
-- `migrate create <name> --empty` creates an empty goose-compatible migration
+- `migrate create <name> --empty` creates an empty runner-compatible migration
   for manual SQL.
 - `migrate create <name>` with existing migrations uses the latest migration's
   embedded target snapshot as the previous state and currently supports
@@ -739,8 +759,8 @@ Scope:
   token flows remain future work on top of the same password-provider
   interface.
 - Add `gosqlkit migrate apply --url ...` as a wrapper around generated
-  migration files. Landed for goose-compatible SQL using `goose_db_version`;
-  other runner state tables remain future work.
+  migration files. Landed for goose-compatible SQL using `goose_db_version`
+  and `golang-migrate` SQL using `schema_migrations`.
 - Add a `golang-migrate` renderer from the same structured plan.
 - Add machine-readable command output and quiet mode for CI. JSON output has
   landed for drift/migrate status and apply commands; quiet mode suppresses

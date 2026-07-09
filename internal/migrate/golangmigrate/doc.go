@@ -1,2 +1,2 @@
-// Package golangmigrate will render migration files for golang-migrate.
+// Package golangmigrate renders migration files for golang-migrate.
 package golangmigrate

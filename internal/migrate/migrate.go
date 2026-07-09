@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	RunnerGoose     = "goose"
-	MetadataVersion = 1
+	RunnerGoose         = "goose"
+	RunnerGolangMigrate = "golang-migrate"
+	MetadataVersion     = 1
 )
 
 type Change struct {
@@ -83,11 +84,30 @@ func NormaliseRunner(runner string) string {
 	return strings.TrimSpace(strings.ToLower(runner))
 }
 
+func SupportedRunners() string {
+	return strings.Join([]string{RunnerGoose, RunnerGolangMigrate}, ", ")
+}
+
+func FileStem(plan Plan) (string, error) {
+	slug := slugify(plan.Name)
+	if slug == "" {
+		return "", errors.New("migration name must contain at least one letter or number")
+	}
+
+	createdAt := plan.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	return fmt.Sprintf("%s_%s", createdAt.UTC().Format("20060102150405"), slug), nil
+}
+
 func VersionID(name string) (int64, error) {
 	if err := validateMigrationFileName(name); err != nil {
 		return 0, err
 	}
-	version, err := strconv.ParseInt(name[:14], 10, 64)
+	prefix, _, _ := strings.Cut(name, "_")
+	version, err := strconv.ParseInt(prefix, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("migration file %q has invalid version prefix: %w", name, err)
 	}
@@ -157,6 +177,9 @@ func ScanDir(dir string) ([]Migration, error) {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".sql" {
 			continue
 		}
+		if strings.HasSuffix(entry.Name(), ".down.sql") {
+			continue
+		}
 		if err := validateMigrationFileName(entry.Name()); err != nil {
 			return nil, err
 		}
@@ -186,6 +209,33 @@ func ScanDir(dir string) ([]Migration, error) {
 		return nil, err
 	}
 	return migrations, nil
+}
+
+func SQLStatements(structured []Statement, fallback []string) []string {
+	if structured == nil {
+		return fallback
+	}
+	out := make([]string, 0, len(structured))
+	for _, statement := range structured {
+		out = append(out, statement.SQL)
+	}
+	return out
+}
+
+func WriteSQLSection(b *strings.Builder, statements []string) {
+	for _, statement := range statements {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		b.WriteString(statement)
+		if !strings.HasSuffix(statement, "\n") {
+			b.WriteByte('\n')
+		}
+		if !strings.HasSuffix(statement, "\n\n") {
+			b.WriteByte('\n')
+		}
+	}
 }
 
 func parseMetadataLines(lines []string) (Metadata, error) {
@@ -255,12 +305,20 @@ func validateMigrationFileName(name string) error {
 	if len(name) < len("20060102150405_a.sql") {
 		return fmt.Errorf("migration file %q must start with YYYYMMDDHHMMSS_", name)
 	}
-	prefix := name[:14]
-	if _, err := time.Parse("20060102150405", prefix); err != nil {
-		return fmt.Errorf("migration file %q has invalid timestamp prefix: %w", name, err)
-	}
-	if name[14] != '_' {
+	prefix, rest, ok := strings.Cut(name, "_")
+	if !ok || len(prefix) < 14 || rest == "" {
 		return fmt.Errorf("migration file %q must start with YYYYMMDDHHMMSS_", name)
+	}
+	for _, r := range prefix {
+		if r < '0' || r > '9' {
+			return fmt.Errorf("migration file %q has invalid version prefix", name)
+		}
+	}
+	if _, err := strconv.ParseInt(prefix, 10, 64); err != nil {
+		return fmt.Errorf("migration file %q has invalid version prefix: %w", name, err)
+	}
+	if _, err := time.Parse("20060102150405", prefix[:14]); err != nil {
+		return fmt.Errorf("migration file %q has invalid timestamp prefix: %w", name, err)
 	}
 	return nil
 }
@@ -280,4 +338,21 @@ func validateLineage(migrations []Migration) error {
 		previous = migration
 	}
 	return nil
+}
+
+func slugify(value string) string {
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range strings.ToLower(value) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore && b.Len() > 0 {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return strings.Trim(b.String(), "_")
 }

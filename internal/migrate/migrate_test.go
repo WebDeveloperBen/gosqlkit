@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
+	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
 )
 
@@ -147,6 +148,41 @@ func TestScanDirValidatesMetadataAndLineage(t *testing.T) {
 	}
 }
 
+func TestScanDirIgnoresGolangMigrateDownFiles(t *testing.T) {
+	dir := t.TempDir()
+	files, err := (golangmigrate.Renderer{}).Render(migrate.Plan{
+		Name:         "create users",
+		Dialect:      "postgresql",
+		ToSnapshotID: "one",
+		CreatedAt:    time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes:      []migrate.Change{},
+		UpSQL:        []string{"CREATE TABLE users (id uuid);"},
+		DownSQL:      []string{"DROP TABLE users;"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.WriteFile(filepath.Join(dir, file.Name), []byte(file.Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	migrations, err := migrate.ScanDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(migrations) != 1 {
+		t.Fatalf("migration count = %d", len(migrations))
+	}
+	if migrations[0].Name != "20260706143000_create_users.up.sql" {
+		t.Fatalf("migration name = %q", migrations[0].Name)
+	}
+	if migrations[0].Metadata.ToSnapshotID != "one" {
+		t.Fatalf("metadata not parsed: %+v", migrations[0].Metadata)
+	}
+}
+
 func TestScanDirRejectsBrokenLineage(t *testing.T) {
 	dir := t.TempDir()
 	writeRenderedMigration(t, dir, migrate.Plan{
@@ -180,6 +216,17 @@ func TestScanDirRejectsUntimestampedSQL(t *testing.T) {
 	_, err := migrate.ScanDir(dir)
 	if err == nil || !strings.Contains(err.Error(), "must start with YYYYMMDDHHMMSS_") {
 		t.Fatalf("expected filename error, got %v", err)
+	}
+}
+
+func TestVersionIDAcceptsSplitNumericPrefix(t *testing.T) {
+	got, err := migrate.VersionID("202607061430000002_create_users.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want int64 = 202607061430000002
+	if got != want {
+		t.Fatalf("version = %d, want %d", got, want)
 	}
 }
 

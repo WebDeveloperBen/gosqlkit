@@ -1,10 +1,7 @@
 package goose
 
 import (
-	"errors"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 )
@@ -16,7 +13,7 @@ func (Renderer) Runner() string {
 }
 
 func (Renderer) Render(plan migrate.Plan) ([]migrate.File, error) {
-	name, err := fileName(plan)
+	stem, err := migrate.FileStem(plan)
 	if err != nil {
 		return nil, err
 	}
@@ -29,72 +26,14 @@ func (Renderer) Render(plan migrate.Plan) ([]migrate.File, error) {
 	var b strings.Builder
 	b.WriteString(meta)
 	b.WriteString("\n\n-- +goose Up\n")
-	writeSQLSection(&b, sqlStatements(plan.UpStatements, plan.UpSQL))
+	migrate.WriteSQLSection(&b, migrate.SQLStatements(plan.UpStatements, plan.UpSQL))
 	if plan.DownStatements != nil || plan.DownSQL != nil {
 		b.WriteString("\n-- +goose Down\n")
-		writeSQLSection(&b, sqlStatements(plan.DownStatements, plan.DownSQL))
+		migrate.WriteSQLSection(&b, migrate.SQLStatements(plan.DownStatements, plan.DownSQL))
 	}
 
 	return []migrate.File{{
-		Name:    name,
+		Name:    stem + ".sql",
 		Content: b.String(),
 	}}, nil
-}
-
-func fileName(plan migrate.Plan) (string, error) {
-	slug := slugify(plan.Name)
-	if slug == "" {
-		return "", errors.New("migration name must contain at least one letter or number")
-	}
-
-	createdAt := plan.CreatedAt
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-
-	return fmt.Sprintf("%s_%s.sql", createdAt.UTC().Format("20060102150405"), slug), nil
-}
-
-func sqlStatements(structured []migrate.Statement, fallback []string) []string {
-	if structured == nil {
-		return fallback
-	}
-	out := make([]string, 0, len(structured))
-	for _, statement := range structured {
-		out = append(out, statement.SQL)
-	}
-	return out
-}
-
-func writeSQLSection(b *strings.Builder, statements []string) {
-	for _, statement := range statements {
-		statement = strings.TrimSpace(statement)
-		if statement == "" {
-			continue
-		}
-		b.WriteString(statement)
-		if !strings.HasSuffix(statement, "\n") {
-			b.WriteByte('\n')
-		}
-		if !strings.HasSuffix(statement, "\n\n") {
-			b.WriteByte('\n')
-		}
-	}
-}
-
-func slugify(value string) string {
-	var b strings.Builder
-	lastUnderscore := false
-	for _, r := range strings.ToLower(value) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-			lastUnderscore = false
-			continue
-		}
-		if !lastUnderscore && b.Len() > 0 {
-			b.WriteByte('_')
-			lastUnderscore = true
-		}
-	}
-	return strings.Trim(b.String(), "_")
 }

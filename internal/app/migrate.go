@@ -14,6 +14,7 @@ import (
 	pgplan "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/plan"
 	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
+	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
 	"github.com/webdeveloperben/gosqlkit/kit"
@@ -559,9 +560,11 @@ func renderMigrationFiles(runner string, plan migrate.Plan) ([]migrate.File, err
 	switch migrate.NormaliseRunner(runner) {
 	case migrate.RunnerGoose:
 		return (goose.Renderer{}).Render(plan)
+	case migrate.RunnerGolangMigrate:
+		return (golangmigrate.Renderer{}).Render(plan)
 	default:
 		return nil, fmt.Errorf("unsupported migration runner %q; supported values: %s",
-			strings.TrimSpace(strings.ToLower(runner)), migrate.RunnerGoose)
+			strings.TrimSpace(strings.ToLower(runner)), migrate.SupportedRunners())
 	}
 }
 
@@ -574,9 +577,11 @@ func validateMigrationFiles(runner string, migrations []migrate.Migration) error
 			}
 		}
 		return nil
+	case migrate.RunnerGolangMigrate:
+		return golangmigrate.Validate(migrations)
 	default:
 		return fmt.Errorf("unsupported migration runner %q; supported values: %s",
-			strings.TrimSpace(strings.ToLower(runner)), migrate.RunnerGoose)
+			strings.TrimSpace(strings.ToLower(runner)), migrate.SupportedRunners())
 	}
 }
 

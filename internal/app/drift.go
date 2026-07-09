@@ -160,6 +160,9 @@ func projectDriftDocument(doc pgschema.Document) pgschema.Schema {
 func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 	tables := make([]pgschema.Table, 0, len(schema.Tables))
 	for _, table := range schema.Tables {
+		if isMigrationRunnerTable(table) {
+			continue
+		}
 		tables = append(tables, projectDriftTable(table))
 	}
 	return pgschema.Schema{
@@ -176,6 +179,22 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 		MaterializedViews: projectDriftMaterializedViews(schema.MaterializedViews),
 		Triggers:          projectDriftTriggers(schema.Triggers),
 		Policies:          projectDriftPolicies(schema.Policies),
+	}
+}
+
+func isMigrationRunnerTable(table pgschema.Table) bool {
+	schema := table.Schema
+	if schema == "" {
+		schema = "public"
+	}
+	if schema != "public" {
+		return false
+	}
+	switch table.Name {
+	case "goose_db_version", "schema_migrations":
+		return true
+	default:
+		return false
 	}
 }
 

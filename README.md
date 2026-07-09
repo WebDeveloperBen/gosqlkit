@@ -11,14 +11,14 @@ migration runner**. The toolchain is intentionally split:
 ```text
 gosqlkit        schema declarations -> snapshot JSON -> canonical SQL
 sqlc            SQL queries -> type-safe Go query code
-gosqlkit migrate snapshot diff -> reviewable migration SQL (planned)
-goose           migration runner compatibility (planned)
+gosqlkit migrate snapshot diff -> reviewable migration SQL
+goose/golang-migrate runner-compatible migration files
 pgx             runtime PostgreSQL driver
 ```
 
 `gosqlkit` owns the schema layer. `sqlc` owns query code generation and is the
-runtime data-access layer alongside `pgx`. Migration generation will use a
-`gosqlkit` cross-dialect planner with goose-compatible SQL output. See
+runtime data-access layer alongside `pgx`. Migration generation uses a
+`gosqlkit` cross-dialect planner with runner-compatible SQL output. See
 [MIGRATIONS.md](MIGRATIONS.md) for the migration design.
 
 PostgreSQL is the first implemented dialect; the core is dialect-neutral so
@@ -60,6 +60,9 @@ migrations:
   runner: goose
 ```
 
+The default migration runner is `goose`; set `runner: golang-migrate` to emit
+paired `.up.sql` / `.down.sql` files instead.
+
 Generate SQL and snapshots (reads `gosqlkit.yaml` — no args needed):
 
 ```bash
@@ -83,8 +86,8 @@ task integration
 task integration:postgres:matrix
 ```
 
-Create a baseline goose-compatible migration from the current schema when the
-migration directory is empty:
+Create a baseline runner-compatible migration from the current schema when
+the migration directory is empty:
 
 ```bash
 gosqlkit migrate create init_schema
@@ -179,13 +182,14 @@ sqlc generate
   trigger rename planning and manual-review extension replacement detection
 - Dialect registry with PostgreSQL as the first provider
 - CLI generation, snapshot, and stale-output checks
-- Empty goose-compatible migration files for manual SQL
-- Baseline goose-compatible migration generation from the current schema, with
+- Empty runner-compatible migration files for manual SQL
+- Baseline runner-compatible migration generation from the current schema, with
   target snapshots embedded in `gosqlkit` metadata
 - Conservative additive PostgreSQL diff migrations from embedded snapshots
 - Migration directory checks for timestamped SQL files, embedded metadata,
-  snapshot lineage, and goose `Up` / `Down` annotations
-- Optional sandbox replay for committed goose migrations with
+  snapshot lineage, goose `Up` / `Down` annotations, and `golang-migrate`
+  `.up.sql` metadata
+- Optional sandbox replay for committed goose and `golang-migrate` migrations with
   `gosqlkit migrate check --sandbox-url ...`, including replayed database
   introspection against the embedded target snapshot
 - PostgreSQL database inspection with `gosqlkit inspect --url ...`, emitting
@@ -199,8 +203,8 @@ sqlc generate
 - CI-friendly wrappers: `gosqlkit ci schema` checks committed generated SQL,
   snapshot JSON, and migration metadata; `gosqlkit ci database` checks live
   database drift
-- `gosqlkit migrate apply --url ...` for goose-compatible migrations, with
-  applied versions tracked in `goose_db_version`
+- `gosqlkit migrate apply --url ...` for goose and `golang-migrate` migrations,
+  with runner state tracked in `goose_db_version` or `schema_migrations`
 - `DATABASE_URL` / `--url-env` support for database-backed commands, plus JSON
   and quiet output modes for drift and migrate status/apply commands
 - Provider-neutral token-as-password auth with `--token-command` /

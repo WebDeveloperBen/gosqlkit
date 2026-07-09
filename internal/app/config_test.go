@@ -113,13 +113,33 @@ schema: "schema"
 	}
 }
 
-func TestLoadConfigRejectsUnsupportedMigrationRunner(t *testing.T) {
+func TestLoadConfigAcceptsGolangMigrateRunner(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, app.ConfigName)
 	if err := os.WriteFile(configPath, []byte(`version: "1"
 schema: "schema"
 migrations:
   runner: golang-migrate
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := app.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Migrations.Runner != "golang-migrate" {
+		t.Fatalf("migrations.runner = %q, want golang-migrate", config.Migrations.Runner)
+	}
+}
+
+func TestLoadConfigRejectsUnsupportedMigrationRunner(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, app.ConfigName)
+	if err := os.WriteFile(configPath, []byte(`version: "1"
+schema: "schema"
+migrations:
+  runner: unknown
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -26,7 +26,7 @@ type MigrateCmd struct {
 type MigrateCreateCmd struct {
 	Config           string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	Dir              string `help:"Write migration files to this directory. Overrides config migrations.dir." type:"path"`
-	Runner           string `help:"Migration runner file format. Currently only goose is supported."`
+	Runner           string `help:"Migration runner file format: goose or golang-migrate."`
 	Name             string `arg:"" help:"Migration name."`
 	Empty            bool   `help:"Create an empty migration for manual SQL."`
 	NoDown           bool   `help:"Omit the down migration section."`
@@ -148,7 +148,7 @@ func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
 type MigrateApplyCmd struct {
 	Config                 string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	Dir                    string `help:"Migration directory to apply. Overrides config migrations.dir." type:"path"`
-	Runner                 string `help:"Migration runner file format. Currently only goose is supported."`
+	Runner                 string `help:"Migration runner file format: goose or golang-migrate."`
 	URL                    string `help:"PostgreSQL URL for the target database. Defaults to DATABASE_URL when omitted."`
 	URLEnv                 string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
 	TokenCommand           string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the PostgreSQL password."`
@@ -215,7 +215,7 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 type MigratePlanCmd struct {
 	Config   string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	Dir      string `help:"Migration directory containing the previous migration. Overrides config migrations.dir." type:"path"`
-	Runner   string `help:"Migration runner file format. Currently only goose is supported."`
+	Runner   string `help:"Migration runner file format: goose or golang-migrate."`
 	Snapshot string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
 	JSON     bool   `help:"Emit machine-readable JSON instead of human-readable text."`
 	Quiet    bool   `help:"Suppress human-readable success output."`

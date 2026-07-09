@@ -105,6 +105,19 @@ func TestDriftCheckWithConfigUsesDatabaseURLEnv(t *testing.T) {
 	}
 }
 
+func TestProjectDriftSchemaIgnoresMigrationRunnerTables(t *testing.T) {
+	schema := projectDriftSchema(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users"}},
+			{Table: ast.Table{Name: "goose_db_version"}},
+			{Table: ast.Table{Name: "schema_migrations"}},
+		},
+	})
+	if len(schema.Tables) != 1 || schema.Tables[0].Name != "users" {
+		t.Fatalf("tables = %#v", schema.Tables)
+	}
+}
+
 func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 	cache := int64(10)
 	start := int64(1000)

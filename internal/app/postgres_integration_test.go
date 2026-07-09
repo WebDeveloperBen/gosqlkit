@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -21,6 +23,7 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/render"
 	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
+	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
 )
 
@@ -137,7 +140,31 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		if result == nil || result.Sandbox == nil {
 			t.Fatalf("missing sandbox result: %#v", result)
 		}
-		if result.Sandbox.Applied != 1 || result.Sandbox.ToSnapshotID == "" || result.Sandbox.DatabaseSnapshotID == "" {
+		if result.Sandbox.Applied == 0 || result.Sandbox.ToSnapshotID == "" || result.Sandbox.DatabaseSnapshotID == "" {
+			t.Fatalf("sandbox result = %#v", result.Sandbox)
+		}
+	})
+
+	t.Run("golang-migrate baseline migration replays and matches embedded target snapshot", func(t *testing.T) {
+		config := integrationConfig(t)
+		config.Migrations.Runner = migrate.RunnerGolangMigrate
+		dsn := newPostgresIntegrationDatabase(t, ctx)
+
+		if _, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+			Name:      "baseline",
+			CreatedAt: time.Date(2026, 7, 8, 12, 5, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		result, err := MigrateCheckWithConfig(config, MigrateCheckOptions{SandboxURL: dsn})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result == nil || result.Sandbox == nil {
+			t.Fatalf("missing sandbox result: %#v", result)
+		}
+		if result.Sandbox.Applied == 0 || result.Sandbox.ToSnapshotID == "" || result.Sandbox.DatabaseSnapshotID == "" {
 			t.Fatalf("sandbox result = %#v", result.Sandbox)
 		}
 	})
@@ -198,6 +225,61 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		}
 	})
 
+	t.Run("migrate apply records golang-migrate state and skips current version", func(t *testing.T) {
+		dsn := newPostgresIntegrationDatabase(t, ctx)
+		config := &Config{
+			Dialect: "postgres",
+			Migrations: MigrationSpec{
+				Dir:    filepath.Join(t.TempDir(), "migrations"),
+				Runner: migrate.RunnerGolangMigrate,
+			},
+		}
+		files, err := (golangmigrate.Renderer{}).Render(migrate.Plan{
+			Name:      "add applied users",
+			Dialect:   "postgresql",
+			CreatedAt: time.Date(2026, 7, 8, 12, 35, 0, 0, time.UTC),
+			Changes:   []migrate.Change{{Op: "manual", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+			UpSQL:     []string{"CREATE TABLE applied_users (id integer PRIMARY KEY);"},
+			DownSQL:   []string{"DROP TABLE applied_users;"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(config.Migrations.Dir, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range files {
+			if err := os.WriteFile(filepath.Join(config.Migrations.Dir, file.Name), []byte(file.Content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		first, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if first.Applied != 1 || first.Skipped != 0 || first.LastFile != files[0].Name {
+			t.Fatalf("first apply = %#v", first)
+		}
+
+		conn := openPostgres(t, ctx, dsn)
+		defer func() {
+			_ = conn.Close(context.Background())
+		}()
+		if err := conn.Exec(ctx, "INSERT INTO applied_users (id) VALUES (1);"); err != nil {
+			t.Fatal(err)
+		}
+		assertGolangMigrateVersion(t, ctx, conn, 20260708123500, false)
+
+		second, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if second.Applied != 0 || second.Skipped != 1 || second.LastFile != "" {
+			t.Fatalf("second apply = %#v", second)
+		}
+	})
+
 	t.Run("extension owned objects are filtered", func(t *testing.T) {
 		dsn := newPostgresIntegrationDatabase(t, ctx)
 		conn := openPostgres(t, ctx, dsn)
@@ -219,6 +301,98 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 			t.Fatalf("extension-owned objects leaked into schema: %#v", schema)
 		}
 	})
+}
+
+func TestPostgresIntegrationGolangMigrateDiffReplay(t *testing.T) {
+	requireIntegration(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	previous := integrationUsersSchema("users", "email")
+	current := integrationUsersSchema("users", "email", ast.Column{Name: "display_name", Type: "text"})
+	previousSnapshot, previousID := integrationSnapshot(t, previous)
+	currentSnapshot, currentID := integrationSnapshot(t, current)
+	previousMigration := migrate.Migration{Metadata: migrate.Metadata{
+		ToSnapshotID:   previousID,
+		TargetSnapshot: []byte(previousSnapshot),
+	}}
+
+	dir := t.TempDir()
+	baselineSQL, err := render.Postgres(previous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeIntegrationPlan(t, dir, golangmigrate.Renderer{}, migrate.Plan{
+		Name:           "baseline",
+		Dialect:        "postgresql",
+		ToSnapshotID:   previousID,
+		TargetSnapshot: previousSnapshot,
+		CreatedAt:      time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC),
+		Changes:        []migrate.Change{{Op: "baseline", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+		UpStatements:   []migrate.Statement{{SQL: baselineSQL}},
+		DownStatements: nil,
+	})
+
+	diffPlan, err := diffMigrationPlan(&Config{Dialect: "postgresql"}, MigrateCreateOptions{
+		Name:      "add_profile_column",
+		CreatedAt: time.Date(2026, 7, 8, 12, 1, 0, 0, time.UTC),
+	}, previousMigration, currentSnapshot, currentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeIntegrationPlan(t, dir, golangmigrate.Renderer{}, diffPlan)
+
+	migrations, err := migrate.ScanDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsn := newPostgresIntegrationDatabase(t, ctx)
+	conn := openPostgres(t, ctx, dsn)
+	defer func() {
+		_ = conn.Close(context.Background())
+	}()
+
+	if _, err := pgtooling.Replay(ctx, conn, pgtooling.ReplayOptions{
+		Runner:     migrate.RunnerGolangMigrate,
+		Migrations: migrations,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assertDatabaseMatchesSnapshot(t, ctx, conn, currentSnapshot)
+}
+
+func TestPostgresIntegrationExternalGolangMigrateDockerCLI(t *testing.T) {
+	requireIntegration(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	config := integrationConfig(t)
+	config.Migrations.Runner = migrate.RunnerGolangMigrate
+	dsn := newPostgresIntegrationDatabase(t, ctx)
+	created, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:      "baseline",
+		CreatedAt: time.Date(2026, 7, 8, 12, 10, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedVersion := lastGeneratedUpVersion(t, created.Files)
+
+	containerDSN := dockerContainerPostgresDSN(t, ctx, dsn)
+	runGolangMigrateDockerCLI(t, ctx, config.Migrations.Dir, containerDSN, "up")
+
+	conn := openPostgres(t, ctx, dsn)
+	defer func() {
+		_ = conn.Close(context.Background())
+	}()
+	snapshot, _, err := renderSnapshotWithConfig(config, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDatabaseMatchesSnapshot(t, ctx, conn, snapshot)
+	assertGolangMigrateVersion(t, ctx, conn, expectedVersion, false)
 }
 
 func TestPostgresIntegrationDiffMigrationReplay(t *testing.T) {
@@ -290,7 +464,7 @@ func TestPostgresIntegrationDiffMigrationReplay(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			writeIntegrationPlan(t, dir, migrate.Plan{
+			writeIntegrationPlan(t, dir, goose.Renderer{}, migrate.Plan{
 				Name:           "baseline",
 				Dialect:        "postgresql",
 				ToSnapshotID:   previousID,
@@ -309,7 +483,7 @@ func TestPostgresIntegrationDiffMigrationReplay(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			diffContent := writeIntegrationPlan(t, dir, diffPlan)
+			diffContent := writeIntegrationPlan(t, dir, goose.Renderer{}, diffPlan)
 
 			migrations, err := migrate.ScanDir(dir)
 			if err != nil {
@@ -445,6 +619,66 @@ func databaseDSN(t *testing.T, dsn, name string) string {
 	return parsed.String()
 }
 
+func dockerContainerPostgresDSN(t *testing.T, ctx context.Context, dsn string) string {
+	t.Helper()
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if integrationPostgresEnv == nil || integrationPostgresEnv.container == nil {
+		t.Fatal("PostgreSQL integration container is not initialised")
+	}
+	ip, err := integrationPostgresEnv.container.ContainerIP(ctx)
+	if err != nil {
+		t.Fatalf("read PostgreSQL container IP: %v", err)
+	}
+	parsed.Host = ip + ":5432"
+	query := parsed.Query()
+	query.Set("sslmode", "disable")
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func runGolangMigrateDockerCLI(t *testing.T, ctx context.Context, migrationDir string, databaseURL string, command string) {
+	t.Helper()
+	ctr, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image: "migrate/migrate:v4.18.3",
+			Cmd: []string{
+				"-path=/migrations",
+				"-database", databaseURL,
+				command,
+			},
+			WaitingFor: wait.ForExit().WithExitTimeout(2 * time.Minute),
+			HostConfigModifier: func(hc *container.HostConfig) {
+				hc.Binds = append(hc.Binds, migrationDir+":/migrations:ro")
+			},
+		},
+		Started: true,
+	})
+	if err != nil {
+		t.Fatalf("run golang-migrate Docker CLI: %v", err)
+	}
+	defer func() {
+		_ = ctr.Terminate(context.Background())
+	}()
+	state, err := ctr.State(ctx)
+	if err != nil {
+		t.Fatalf("read golang-migrate Docker CLI state: %v", err)
+	}
+	if state.ExitCode != 0 {
+		logs, logErr := ctr.Logs(ctx)
+		if logErr != nil {
+			t.Fatalf("golang-migrate Docker CLI exited %d; read logs: %v", state.ExitCode, logErr)
+		}
+		defer func() {
+			_ = logs.Close()
+		}()
+		raw, _ := io.ReadAll(logs)
+		t.Fatalf("golang-migrate Docker CLI exited %d:\n%s", state.ExitCode, raw)
+	}
+}
+
 func passwordlessPostgresDSN(t *testing.T, dsn string) string {
 	t.Helper()
 	parsed, err := url.Parse(dsn)
@@ -557,6 +791,28 @@ func execStatements(t *testing.T, ctx context.Context, conn *pgtooling.Conn, sta
 	}
 }
 
+func lastGeneratedUpVersion(t *testing.T, files []string) int64 {
+	t.Helper()
+	var latest int64 = -1
+	for _, file := range files {
+		name := filepath.Base(file)
+		if !strings.HasSuffix(name, ".up.sql") {
+			continue
+		}
+		version, err := migrate.VersionID(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if version > latest {
+			latest = version
+		}
+	}
+	if latest < 0 {
+		t.Fatalf("no up migration files: %#v", files)
+	}
+	return latest
+}
+
 func assertGooseVersionApplied(t *testing.T, ctx context.Context, conn *pgtooling.Conn, version int64) {
 	t.Helper()
 	rows, err := conn.Query(ctx, "SELECT count(*) FROM goose_db_version WHERE version_id = $1 AND is_applied;", version)
@@ -576,6 +832,32 @@ func assertGooseVersionApplied(t *testing.T, ctx context.Context, conn *pgtoolin
 	}
 	if count != 1 {
 		t.Fatalf("goose version %d applied rows = %d, want 1", version, count)
+	}
+}
+
+func assertGolangMigrateVersion(t *testing.T, ctx context.Context, conn *pgtooling.Conn, version int64, dirty bool) {
+	t.Helper()
+	rows, err := conn.Query(ctx, "SELECT version, dirty FROM schema_migrations;")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("golang-migrate version query returned no rows")
+	}
+	var gotVersion int64
+	var gotDirty bool
+	if err := rows.Scan(&gotVersion, &gotDirty); err != nil {
+		t.Fatal(err)
+	}
+	if rows.Next() {
+		t.Fatal("golang-migrate version table returned more than one row")
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if gotVersion != version || gotDirty != dirty {
+		t.Fatalf("golang-migrate version = (%d, %t), want (%d, %t)", gotVersion, gotDirty, version, dirty)
 	}
 }
 
@@ -685,18 +967,17 @@ func integrationSnapshot(t *testing.T, schema pgschema.Schema) (string, string) 
 	return snapshot, snapshotID
 }
 
-func writeIntegrationPlan(t *testing.T, dir string, plan migrate.Plan) string {
+func writeIntegrationPlan(t *testing.T, dir string, renderer migrate.Renderer, plan migrate.Plan) string {
 	t.Helper()
-	files, err := (goose.Renderer{}).Render(plan)
+	files, err := renderer.Render(plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 1 {
-		t.Fatalf("files = %#v", files)
-	}
-	path := filepath.Join(dir, files[0].Name)
-	if err := os.WriteFile(path, []byte(files[0].Content), 0o600); err != nil {
-		t.Fatal(err)
+	for _, file := range files {
+		path := filepath.Join(dir, file.Name)
+		if err := os.WriteFile(path, []byte(file.Content), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return files[0].Content
 }

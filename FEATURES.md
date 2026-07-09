@@ -47,7 +47,7 @@ Legend:
 - `[x]` CLI `snapshot --out`.
 - `[x]` CLI `snapshot --check`.
 - `[x]` CLI `migrate create` baseline migration from the current schema.
-- `[x]` CLI `migrate create --empty` for goose-compatible manual migrations.
+- `[x]` CLI `migrate create --empty` for runner-compatible manual migrations.
 
 ## Dialect Provider Boundary
 
@@ -356,7 +356,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` GCP IAM token auth.
 - `[x]` Credential and token redaction in diagnostics.
 - `[x]` `gosqlkit migrate apply --url ...`.
-- `[ ]` `golang-migrate` renderer from the structured plan.
+- `[x]` `golang-migrate` renderer from the structured plan.
 - `[x]` Machine-readable JSON command output.
 - `[x]` Quiet command output mode.
 
@@ -525,6 +525,11 @@ Other provider requirement:
 - `[x]` Drift normalisation matrix tests for casts, default opclasses, index ordering/nulls, inline constraints, qualified references, and PostgreSQL expression rewrites.
 - `[x]` Goose statement parser tests for `StatementBegin` / `StatementEnd`, tagged dollar quotes, quoted semicolons, comments, empty statements, and non-transactional statements.
 - `[x]` Migration metadata tamper tests for broken JSON, missing target snapshots, stale IDs, and incoherent lineage.
+- `[x]` `golang-migrate` renderer tests for split files, metadata placement, down-file omission, and structured-statement precedence.
+- `[x]` `golang-migrate` migration scan tests proving `.down.sql` files are ignored for metadata lineage.
+- `[x]` `golang-migrate` PostgreSQL replay and apply tests covering `.up.sql` execution, `schema_migrations` current-version state, dirty-state failure, and skip semantics.
+- `[x]` Testcontainers replay/apply tests for generated `golang-migrate` baseline and diff migrations.
+- `[x]` Dockerised external `golang-migrate` CLI compatibility test for generated PostgreSQL migrations, including split single-statement files that preserve `CREATE INDEX CONCURRENTLY`.
 - `[x]` PostgreSQL version matrix for Testcontainers integration, at least PostgreSQL 15, 16, and 17 where CI time allows.
 - `[x]` Extension-owned object filtering tests.
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
@@ -547,7 +552,7 @@ Other provider requirement:
 7. Add database connection plumbing with password and refreshable token auth.
 8. Add database introspection and drift checks.
 9. Add the cross-dialect migration IR and dialect planner boundary.
-10. Add goose-compatible migration file generation and destructive-change guardrails.
+10. Add runner-compatible migration file generation and destructive-change guardrails.
 11. Add styled CLI summaries and interactive ambiguity resolution for migration
     authoring.
 12. Expand into partitioning, grants, and other advanced PostgreSQL features.

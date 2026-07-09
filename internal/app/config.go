@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -13,7 +14,7 @@ const ConfigName = "gosqlkit.yaml"
 
 const (
 	DefaultMigrationsDir    = "db/migrations"
-	DefaultMigrationsRunner = "goose"
+	DefaultMigrationsRunner = migrate.RunnerGoose
 )
 
 type Config struct {
@@ -99,9 +100,11 @@ func LoadConfig(path string) (*Config, error) {
 	if config.Migrations.Runner == "" {
 		config.Migrations.Runner = DefaultMigrationsRunner
 	}
-	if config.Migrations.Runner != DefaultMigrationsRunner {
+	switch config.Migrations.Runner {
+	case migrate.RunnerGoose, migrate.RunnerGolangMigrate:
+	default:
 		return nil, fmt.Errorf("config %q has unsupported migrations.runner %q; supported values: %s",
-			path, config.Migrations.Runner, DefaultMigrationsRunner)
+			path, config.Migrations.Runner, migrate.SupportedRunners())
 	}
 
 	config.rootDir = filepath.Dir(path)
