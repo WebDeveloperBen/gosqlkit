@@ -279,6 +279,30 @@ func TestPostgresRender(t *testing.T) {
 						},
 					},
 				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "range",
+					Keys: []pgschema.PartitionKey{
+						{Expression: "priority"},
+					},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_priority_low"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound: pgschema.PartitionBound{
+						Type: "range",
+						From: []string{"0"},
+						To:   []string{"10"},
+					},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_default"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound:  pgschema.PartitionBound{Type: "default"},
+				},
 			},
 		},
 		Views: []pgschema.View{
@@ -390,6 +414,100 @@ func TestPostgresRejectsIndexWithUnknownColumn(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), `references unknown column "email"`) {
 		t.Fatalf("expected unknown index column error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsPartitioningWithUnknownColumn(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "created_at", Type: "timestamptz"},
+					},
+				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "range",
+					Keys:     []pgschema.PartitionKey{{Expression: "missing_at"}},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `partition key references unknown column "missing_at"`) {
+		t.Fatalf("expected unknown partition column error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsPartitionedUniqueConstraintMissingPartitionKey(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "tenant_id", Type: "integer"},
+						{Name: "event_id", Type: "uuid"},
+					},
+					UniqueConstraints: []ast.UniqueConstraint{
+						{Name: "events_event_id_unique", Columns: []string{"event_id"}},
+					},
+				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "hash",
+					Keys:     []pgschema.PartitionKey{{Expression: "tenant_id"}},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "must include all partition key columns") {
+		t.Fatalf("expected unique partition key error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsPartitionWithUnknownParent(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{Name: "events_low"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound:  pgschema.PartitionBound{Type: "range", From: []string{"0"}, To: []string{"10"}},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown parent table "events"`) {
+		t.Fatalf("expected unknown partition parent error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsPartitionBoundForWrongStrategy(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "priority", Type: "integer"},
+					},
+				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "range",
+					Keys:     []pgschema.PartitionKey{{Expression: "priority"}},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_0"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound:  pgschema.PartitionBound{Type: "hash", Modulus: 4},
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "has hash bound for range-partitioned parent") {
+		t.Fatalf("expected mismatched partition bound error, got %v", err)
 	}
 }
 

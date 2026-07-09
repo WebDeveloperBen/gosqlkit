@@ -235,6 +235,7 @@ Current implementation status:
   - PostgreSQL sequences
   - PostgreSQL composite types
   - PostgreSQL domains
+  - PostgreSQL partitioned tables
   - Schema-qualified table rendering
   - Schema-qualified enum column types
   - Schema-qualified foreign key references
@@ -259,7 +260,6 @@ Current implementation status:
 Future versions may support:
 
 - Grants
-- Partitioned tables
 - Tablespaces
 - Collations
 - Raw SQL schema blocks
@@ -468,7 +468,7 @@ Deliverables:
 
 ### Phase 5: Advanced PostgreSQL support
 
-Add support for remaining advanced PostgreSQL objects such as partitioned tables and grants.
+Add support for remaining advanced PostgreSQL objects such as grants.
 
 ## Open questions
 

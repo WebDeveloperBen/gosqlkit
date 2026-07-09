@@ -258,6 +258,46 @@ func TestTypedPostgresOptions(t *testing.T) {
 	}
 }
 
+func TestTablePartitionDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Table(
+		"events",
+		pg.TimestampTZ("created_at").NotNull(),
+		pg.Text("description"),
+		pg.PartitionByRange("created_at"),
+	)
+	pg.Table(
+		"audit_events",
+		pg.Integer("tenant_id").NotNull(),
+		pg.Text("description"),
+	).PartitionByHash("tenant_id")
+	pg.Table(
+		"audit_events_0",
+		pg.PartitionOf("audit_events", pg.ForValuesWith(4, 0)),
+	)
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 3 {
+		t.Fatalf("tables len = %d, want 3", len(schema.Tables))
+	}
+	events := schema.Tables[0]
+	if events.Partitioning == nil || events.Partitioning.Strategy != "range" || len(events.Partitioning.Keys) != 1 || events.Partitioning.Keys[0].Expression != "created_at" {
+		t.Fatalf("unexpected events partitioning %#v", events.Partitioning)
+	}
+	auditEvents := schema.Tables[1]
+	if auditEvents.Partitioning == nil || auditEvents.Partitioning.Strategy != "hash" || len(auditEvents.Partitioning.Keys) != 1 || auditEvents.Partitioning.Keys[0].Expression != "tenant_id" {
+		t.Fatalf("unexpected audit_events partitioning %#v", auditEvents.Partitioning)
+	}
+	partition := schema.Tables[2]
+	if partition.PartitionOf == nil || partition.PartitionOf.Parent != "audit_events" ||
+		partition.PartitionOf.Bound.Type != "hash" || partition.PartitionOf.Bound.Modulus != 4 ||
+		partition.PartitionOf.Bound.Remainder != 0 {
+		t.Fatalf("unexpected audit_events_0 partition %#v", partition.PartitionOf)
+	}
+}
+
 func TestPolicyDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

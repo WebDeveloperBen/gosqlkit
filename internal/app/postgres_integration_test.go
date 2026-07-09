@@ -876,7 +876,7 @@ func assertExampleSchemaIntrospected(t *testing.T, schema pgschema.Schema) {
 		{name: "domains", got: len(schema.Domains), want: 1},
 		{name: "sequences", got: len(schema.Sequences), want: 1},
 		{name: "functions", got: len(schema.Functions), want: 2},
-		{name: "tables", got: len(schema.Tables), want: 4},
+		{name: "tables", got: len(schema.Tables), want: 6},
 		{name: "views", got: len(schema.Views), want: 2},
 		{name: "materialized views", got: len(schema.MaterializedViews), want: 1},
 		{name: "triggers", got: len(schema.Triggers), want: 1},
@@ -886,6 +886,29 @@ func assertExampleSchemaIntrospected(t *testing.T, schema pgschema.Schema) {
 		if check.got < check.want {
 			t.Fatalf("%s = %d, want at least %d\nschema = %#v", check.name, check.got, check.want, schema)
 		}
+	}
+	var events *pgschema.Table
+	for i := range schema.Tables {
+		if schema.Tables[i].Name == "events" {
+			events = &schema.Tables[i]
+			break
+		}
+	}
+	if events == nil || events.Partitioning == nil || events.Partitioning.Strategy != "range" ||
+		len(events.Partitioning.Keys) != 1 || events.Partitioning.Keys[0].Expression != "priority" {
+		t.Fatalf("events partitioning = %#v", events)
+	}
+	var eventsPriorityLow *pgschema.Table
+	for i := range schema.Tables {
+		if schema.Tables[i].Name == "events_priority_low" {
+			eventsPriorityLow = &schema.Tables[i]
+			break
+		}
+	}
+	if eventsPriorityLow == nil || eventsPriorityLow.PartitionOf == nil || eventsPriorityLow.PartitionOf.Parent != "public.events" ||
+		eventsPriorityLow.PartitionOf.Bound.Type != "range" || len(eventsPriorityLow.PartitionOf.Bound.From) != 1 ||
+		eventsPriorityLow.PartitionOf.Bound.From[0] != "0" {
+		t.Fatalf("events_priority_low partition = %#v", eventsPriorityLow)
 	}
 }
 

@@ -343,6 +343,18 @@ func renderCreateTable(table pgschema.Table) (string, error) {
 	var b strings.Builder
 	b.WriteString("CREATE TABLE ")
 	b.WriteString(renderTableName(table))
+	if table.PartitionOf != nil {
+		b.WriteString(" PARTITION OF ")
+		b.WriteString(renderReferencedTable(table.PartitionOf.Parent))
+		b.WriteString(" ")
+		b.WriteString(renderPartitionBound(table.PartitionOf.Bound))
+		if table.Partitioning != nil {
+			b.WriteString("\n")
+			b.WriteString(renderPartitioning(*table.Partitioning))
+		}
+		b.WriteString(";")
+		return b.String(), nil
+	}
 	b.WriteString(" (\n")
 
 	lines := make([]string, 0, len(table.Columns)+len(table.PrimaryKeys)+len(table.UniqueConstraints)+len(table.ForeignKeys)+len(table.Checks)+len(table.Exclusions))
@@ -369,8 +381,40 @@ func renderCreateTable(table pgschema.Table) (string, error) {
 		lines = append(lines, "    "+renderExclusionConstraint(exclusion))
 	}
 	b.WriteString(strings.Join(lines, ",\n"))
-	b.WriteString("\n);")
+	b.WriteString("\n)")
+	if table.Partitioning != nil {
+		b.WriteString("\n")
+		b.WriteString(renderPartitioning(*table.Partitioning))
+	}
+	b.WriteString(";")
 	return b.String(), nil
+}
+
+func renderPartitioning(partitioning pgschema.Partitioning) string {
+	keys := make([]string, 0, len(partitioning.Keys))
+	for _, key := range partitioning.Keys {
+		expression := key.Expression
+		if key.IsExpression {
+			expression = "(" + expression + ")"
+		}
+		keys = append(keys, expression)
+	}
+	return "PARTITION BY " + strings.ToUpper(partitioning.Strategy) + " (" + strings.Join(keys, ", ") + ")"
+}
+
+func renderPartitionBound(bound pgschema.PartitionBound) string {
+	switch strings.ToLower(bound.Type) {
+	case "range":
+		return "FOR VALUES FROM (" + strings.Join(bound.From, ", ") + ") TO (" + strings.Join(bound.To, ", ") + ")"
+	case "list":
+		return "FOR VALUES IN (" + strings.Join(bound.Values, ", ") + ")"
+	case "hash":
+		return fmt.Sprintf("FOR VALUES WITH (modulus %d, remainder %d)", bound.Modulus, bound.Remainder)
+	case "default":
+		return "DEFAULT"
+	default:
+		return ""
+	}
 }
 
 func renderColumn(column ast.Column) (string, error) {

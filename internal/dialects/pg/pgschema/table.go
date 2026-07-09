@@ -7,8 +7,10 @@ import (
 )
 
 type Table struct {
-	Indexes    []Index               `json:"indexes,omitempty"`
-	Exclusions []ExclusionConstraint `json:"exclusions,omitempty"`
+	Partitioning *Partitioning         `json:"partitioning,omitempty"`
+	PartitionOf  *PartitionOf          `json:"partitionOf,omitempty"`
+	Indexes      []Index               `json:"indexes,omitempty"`
+	Exclusions   []ExclusionConstraint `json:"exclusions,omitempty"`
 	ast.Table
 }
 

@@ -157,12 +157,14 @@
       "increment": 1
     }
   ],
-  "snapshotId": "c97a22265e8b5bba4f39ff713e946ede23463149a47979ae9a989041439f102a",
+  "snapshotId": "8d8c3fb99d42ab6a6eb5206f85e10abc13e0a4b3e950c3c9e49ac2e973ea6395",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
     "public.bookings": {},
     "public.events": {},
+    "public.events_default": {},
+    "public.events_priority_low": {},
     "public.users": {
       "comment": "Application users."
     }
@@ -348,6 +350,14 @@
       ]
     },
     {
+      "partitioning": {
+        "strategy": "range",
+        "keys": [
+          {
+            "expression": "priority"
+          }
+        ]
+      },
       "indexes": [
         {
           "columns": [
@@ -414,6 +424,30 @@
           "notNull": true
         }
       ]
+    },
+    {
+      "partitionOf": {
+        "parent": "events",
+        "bound": {
+          "type": "default"
+        }
+      },
+      "name": "events_default"
+    },
+    {
+      "partitionOf": {
+        "parent": "events",
+        "bound": {
+          "type": "range",
+          "from": [
+            "0"
+          ],
+          "to": [
+            "10"
+          ]
+        }
+      },
+      "name": "events_priority_low"
     },
     {
       "name": "users",

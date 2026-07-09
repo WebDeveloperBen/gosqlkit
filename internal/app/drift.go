@@ -230,6 +230,17 @@ func projectDriftTable(table pgschema.Table) pgschema.Table {
 	table.ForeignKeys = clearForeignKeyPreviousNames(table.ForeignKeys)
 	table.Checks = clearCheckPreviousNames(table.Checks)
 	table.Indexes = projectDriftIndexes(table.Indexes)
+	if table.Partitioning != nil {
+		for i := range table.Partitioning.Keys {
+			table.Partitioning.Keys[i].Expression = normaliseDriftExpression(table.Partitioning.Keys[i].Expression)
+		}
+	}
+	if table.PartitionOf != nil {
+		table.PartitionOf.Parent = normaliseDriftReference(table.PartitionOf.Parent)
+		table.PartitionOf.Bound.From = normaliseDriftExpressions(table.PartitionOf.Bound.From)
+		table.PartitionOf.Bound.To = normaliseDriftExpressions(table.PartitionOf.Bound.To)
+		table.PartitionOf.Bound.Values = normaliseDriftExpressions(table.PartitionOf.Bound.Values)
+	}
 	table.Exclusions = nil
 	table.PreviousName = ""
 	return table
@@ -548,6 +559,14 @@ func normaliseDriftExpression(value string) string {
 	).Replace(out)
 	out = currentSettingParensPattern.ReplaceAllString(out, "$1")
 	return strings.TrimSpace(out)
+}
+
+func normaliseDriftExpressions(values []string) []string {
+	out := append([]string(nil), values...)
+	for i := range out {
+		out[i] = normaliseDriftExpression(out[i])
+	}
+	return out
 }
 
 func normaliseDriftReference(value string) string {

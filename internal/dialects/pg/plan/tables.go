@@ -180,6 +180,8 @@ func (p planner) table(previous, current pgschema.Table) error {
 	if err := p.rls(previous, current); err != nil {
 		return err
 	}
+	p.partitioning(previous, current)
+	p.partitionOf(previous, current)
 
 	withoutColumnsPrevious := previous
 	withoutColumnsCurrent := current
@@ -203,6 +205,10 @@ func (p planner) table(previous, current pgschema.Table) error {
 	withoutColumnsCurrent.RowLevelSecurity = false
 	withoutColumnsPrevious.ForceRLS = false
 	withoutColumnsCurrent.ForceRLS = false
+	withoutColumnsPrevious.Partitioning = nil
+	withoutColumnsCurrent.Partitioning = nil
+	withoutColumnsPrevious.PartitionOf = nil
+	withoutColumnsCurrent.PartitionOf = nil
 	withoutColumnsPrevious.PreviousName = ""
 	withoutColumnsCurrent.PreviousName = ""
 	withoutColumnsPrevious.Name = withoutColumnsCurrent.Name
@@ -821,6 +827,46 @@ func (p planner) rls(previous, current pgschema.Table) error {
 	return nil
 }
 
+func (p planner) partitioning(previous, current pgschema.Table) {
+	if reflect.DeepEqual(previous.Partitioning, current.Partitioning) {
+		return
+	}
+	key := tableKey(current)
+	p.addWith(
+		migrateplan.NewChange(
+			migrateplan.OperationReplace,
+			migrateplan.Ref(migrateplan.ObjectKindTable, key),
+			"replace partitioning for table "+key,
+		).WithRisks(
+			migrateplan.RiskDestructive,
+			migrateplan.RiskDataLoss,
+			migrateplan.RiskLockHeavy,
+			migrateplan.RiskManualReview,
+			migrateplan.RiskRequiresDDLReview,
+		),
+	)
+}
+
+func (p planner) partitionOf(previous, current pgschema.Table) {
+	if reflect.DeepEqual(previous.PartitionOf, current.PartitionOf) {
+		return
+	}
+	key := tableKey(current)
+	p.addWith(
+		migrateplan.NewChange(
+			migrateplan.OperationReplace,
+			migrateplan.Ref(migrateplan.ObjectKindTable, key),
+			"replace partition membership for table "+key,
+		).WithRisks(
+			migrateplan.RiskDestructive,
+			migrateplan.RiskDataLoss,
+			migrateplan.RiskLockHeavy,
+			migrateplan.RiskManualReview,
+			migrateplan.RiskRequiresDDLReview,
+		),
+	)
+}
+
 func ensureCreateTableSupported(table pgschema.Table) error {
 	key := tableKey(table)
 	if table.PreviousName != "" {
@@ -1009,6 +1055,12 @@ func columnDependencyRefs(table pgschema.Table, column ast.Column) []migrateplan
 
 func tableDependencyRefs(table pgschema.Table) []migrateplan.ObjectRef {
 	refs := make([]migrateplan.ObjectRef, 0, len(table.Columns)+len(table.ForeignKeys))
+	if table.PartitionOf != nil {
+		ref := migrateplan.Ref(migrateplan.ObjectKindTable, referencedTableKey(table.PartitionOf.Parent))
+		if ref.Key != tableKey(table) {
+			refs = append(refs, ref)
+		}
+	}
 	for _, column := range table.Columns {
 		if column.References == nil {
 			continue

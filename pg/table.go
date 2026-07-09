@@ -47,6 +47,18 @@ type ExclusionElementDef struct {
 	def pgschema.ExclusionElement
 }
 
+type PartitionDef struct {
+	def pgschema.Partitioning
+}
+
+type PartitionOfDef struct {
+	def pgschema.PartitionOf
+}
+
+type PartitionBoundDef struct {
+	def pgschema.PartitionBound
+}
+
 func Table(name string, elements ...Element) *Definition {
 	return table("", name, elements...)
 }
@@ -331,6 +343,78 @@ func (e *ExclusionDef) InitiallyDeferred() *ExclusionDef {
 	return e
 }
 
+func PartitionByRange(columns ...string) *PartitionDef {
+	return partitionBy("range", columns...)
+}
+
+func PartitionByList(columns ...string) *PartitionDef {
+	return partitionBy("list", columns...)
+}
+
+func PartitionByHash(columns ...string) *PartitionDef {
+	return partitionBy("hash", columns...)
+}
+
+func (d *Definition) PartitionByRange(columns ...string) *Definition {
+	d.def.Partitioning = partitionBy("range", columns...).partitioning()
+	return d
+}
+
+func (d *Definition) PartitionByList(columns ...string) *Definition {
+	d.def.Partitioning = partitionBy("list", columns...).partitioning()
+	return d
+}
+
+func (d *Definition) PartitionByHash(columns ...string) *Definition {
+	d.def.Partitioning = partitionBy("hash", columns...).partitioning()
+	return d
+}
+
+func PartitionValues(values ...string) []string {
+	return append([]string(nil), values...)
+}
+
+func ForValuesFromTo(from, to []string) *PartitionBoundDef {
+	return &PartitionBoundDef{
+		def: pgschema.PartitionBound{
+			Type: "range",
+			From: append([]string(nil), from...),
+			To:   append([]string(nil), to...),
+		},
+	}
+}
+
+func ForValuesIn(values ...string) *PartitionBoundDef {
+	return &PartitionBoundDef{
+		def: pgschema.PartitionBound{
+			Type:   "list",
+			Values: append([]string(nil), values...),
+		},
+	}
+}
+
+func ForValuesWith(modulus, remainder int) *PartitionBoundDef {
+	return &PartitionBoundDef{
+		def: pgschema.PartitionBound{
+			Type:      "hash",
+			Modulus:   modulus,
+			Remainder: remainder,
+		},
+	}
+}
+
+func ForValuesDefault() *PartitionBoundDef {
+	return &PartitionBoundDef{def: pgschema.PartitionBound{Type: "default"}}
+}
+
+func PartitionOf(parent string, bound *PartitionBoundDef) *PartitionOfDef {
+	def := pgschema.PartitionOf{Parent: parent}
+	if bound != nil {
+		def.Bound = bound.partitionBound()
+	}
+	return &PartitionOfDef{def: def}
+}
+
 func (d *Definition) Comment(text string) *Definition {
 	d.def.Comment = text
 	return d
@@ -398,4 +482,48 @@ func (f *ForeignKeyDef) apply(table *pgschema.Table) {
 
 func (e *ExclusionDef) apply(table *pgschema.Table) {
 	table.Exclusions = append(table.Exclusions, e.def)
+}
+
+func (p *PartitionDef) apply(table *pgschema.Table) {
+	table.Partitioning = p.partitioning()
+}
+
+func (p *PartitionOfDef) apply(table *pgschema.Table) {
+	table.PartitionOf = p.partitionOf()
+}
+
+func (p *PartitionDef) partitioning() *pgschema.Partitioning {
+	def := p.def
+	def.Keys = append([]pgschema.PartitionKey(nil), p.def.Keys...)
+	return &def
+}
+
+func (p *PartitionOfDef) partitionOf() *pgschema.PartitionOf {
+	def := p.def
+	def.Bound = copyPartitionBound(p.def.Bound)
+	return &def
+}
+
+func (p *PartitionBoundDef) partitionBound() pgschema.PartitionBound {
+	return copyPartitionBound(p.def)
+}
+
+func copyPartitionBound(bound pgschema.PartitionBound) pgschema.PartitionBound {
+	bound.From = append([]string(nil), bound.From...)
+	bound.To = append([]string(nil), bound.To...)
+	bound.Values = append([]string(nil), bound.Values...)
+	return bound
+}
+
+func partitionBy(strategy string, columns ...string) *PartitionDef {
+	keys := make([]pgschema.PartitionKey, 0, len(columns))
+	for _, column := range columns {
+		keys = append(keys, pgschema.PartitionKey{Expression: column})
+	}
+	return &PartitionDef{
+		def: pgschema.Partitioning{
+			Strategy: strategy,
+			Keys:     keys,
+		},
+	}
 }

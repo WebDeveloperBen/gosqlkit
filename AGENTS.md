@@ -465,7 +465,7 @@ tracks are roughly:
 3. **Database connectivity + introspection + diff** — cross-dialect migration
    IR, dialect planners, sandbox validation, drift checks, and provider-pluggable
    token auth for Azure/AWS/GCP. Largest track (Slices 6 and 7).
-4. **Advanced PG objects** — partitioned tables, grants, and other remaining PostgreSQL objects.
+4. **Advanced PG objects** — grants and other remaining PostgreSQL objects.
 
 When direction is ambiguous, ask the user which track rather than guessing.
 A wrong track wastes more time than a quick clarifying question.
@@ -582,7 +582,7 @@ update of this file:
   scalar types + arrays + identity + generated), constraints (PK, unique
   with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
   (full advanced surface), schemas, extensions, enums, sequences, composite
-  types, domains, roles, functions, triggers, RLS policies, views, materialized views, comments, safe
+  types, domains, partitioned tables with partition children and bounds, roles, functions, triggers, RLS policies, views, materialized views, comments, safe
   default helpers, custom-type escape hatch.
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
   for snapshot), `inspect` (with `--url`, `--url-env`, `--token-command`,
@@ -622,7 +622,7 @@ update of this file:
   database and compares it to the embedded target snapshot. PostgreSQL drift
   checking is implemented with `drift check --url`; the introspector covers
   namespaces, extensions, roles, enums, composite types, domains, standalone
-  sequences, functions, tables, columns, comments, RLS flags, table
+  sequences, functions, tables, partitioning metadata, partition-child bounds, columns, comments, RLS flags, table
   constraints, standalone indexes, policies, triggers, views, and materialized
   views. Drift projection normalises rename metadata, non-persistent index
   flags, identity-backed sequences, extension-owned objects, dependency hints,
@@ -634,8 +634,8 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: `golang-migrate` renderer, then advanced PG objects
-  (partitioning, grants).
+- **Next tracks**: advanced PG objects (grants), then remaining PostgreSQL
+  coverage such as tablespaces and collations.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

@@ -42,3 +42,72 @@ func TestReloptionsMap(t *testing.T) {
 		t.Fatalf("reloptionsMap = %#v", got)
 	}
 }
+
+func TestParsePartitioning(t *testing.T) {
+	got, ok, err := parsePartitioning("RANGE (created_at, tenant_id)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got.Strategy != "range" || len(got.Keys) != 2 {
+		t.Fatalf("partitioning = %#v", got)
+	}
+	if got.Keys[0].Expression != "created_at" || got.Keys[0].IsExpression {
+		t.Fatalf("first key = %#v", got.Keys[0])
+	}
+	if got.Keys[1].Expression != "tenant_id" || got.Keys[1].IsExpression {
+		t.Fatalf("second key = %#v", got.Keys[1])
+	}
+}
+
+func TestParsePartitioningExpressionKey(t *testing.T) {
+	got, ok, err := parsePartitioning("HASH ((lower(email)))")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got.Strategy != "hash" || len(got.Keys) != 1 {
+		t.Fatalf("partitioning = %#v", got)
+	}
+	if got.Keys[0].Expression != "lower(email)" || !got.Keys[0].IsExpression {
+		t.Fatalf("expression key = %#v", got.Keys[0])
+	}
+}
+
+func TestParsePartitionRangeBound(t *testing.T) {
+	got, ok, err := parsePartitionBound("FOR VALUES FROM ('0') TO ('10')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got.Type != "range" || len(got.From) != 1 || got.From[0] != "0" || len(got.To) != 1 || got.To[0] != "10" {
+		t.Fatalf("range bound = %#v", got)
+	}
+}
+
+func TestParsePartitionListBound(t *testing.T) {
+	got, ok, err := parsePartitionBound("FOR VALUES IN ('draft', 'issued')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got.Type != "list" || len(got.Values) != 2 || got.Values[0] != "'draft'" || got.Values[1] != "'issued'" {
+		t.Fatalf("list bound = %#v", got)
+	}
+}
+
+func TestParsePartitionHashBound(t *testing.T) {
+	got, ok, err := parsePartitionBound("FOR VALUES WITH (modulus 4, remainder 2)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got.Type != "hash" || got.Modulus != 4 || got.Remainder != 2 {
+		t.Fatalf("hash bound = %#v", got)
+	}
+}
+
+func TestParsePartitionDefaultBound(t *testing.T) {
+	got, ok, err := parsePartitionBound("DEFAULT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got.Type != "default" {
+		t.Fatalf("default bound = %#v", got)
+	}
+}

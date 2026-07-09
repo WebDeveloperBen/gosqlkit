@@ -264,6 +264,11 @@ func orderTables(input []pgschema.Table) ([]pgschema.Table, error) {
 
 func tableDependencies(table pgschema.Table) []string {
 	deps := map[string]struct{}{}
+	if table.PartitionOf != nil {
+		if dependency, err := referenceKey(table.Schema, table.PartitionOf.Parent); err == nil && dependency != tableKey(table) {
+			deps[dependency] = struct{}{}
+		}
+	}
 	for _, column := range table.Columns {
 		if column.References != nil {
 			dependency, err := referenceKey(table.Schema, column.References.Table)
@@ -519,6 +524,11 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 	}
 
+	tableByKey := make(map[string]pgschema.Table, len(schema.Tables))
+	for _, table := range schema.Tables {
+		tableByKey[tableKey(table)] = table
+	}
+
 	tableNames := map[string]struct{}{}
 	tableColumns := map[string]map[string]struct{}{}
 	indexNames := map[string]struct{}{}
@@ -660,13 +670,45 @@ func validateSchema(schema pgschema.Schema) error {
 			}
 		}
 
+		if table.PartitionOf != nil {
+			if err := validatePartitionChildShape(table); err != nil {
+				return err
+			}
+		} else {
+			for _, index := range table.Indexes {
+				key := indexKey(table, index)
+				if _, ok := indexNames[key]; ok {
+					return fmt.Errorf("duplicate index %q in schema %q", index.Name, tableSchema(table))
+				}
+				indexNames[key] = struct{}{}
+				if err := validateIndex(table.Name, index, columnNames); err != nil {
+					return err
+				}
+			}
+		}
+
+		if table.Partitioning != nil {
+			if err := validatePartitioning(table, columnNames); err != nil {
+				return err
+			}
+		}
+	}
+	for _, table := range schema.Tables {
+		if table.PartitionOf == nil {
+			continue
+		}
+		parent, err := validatePartitionOf(table, *table.PartitionOf, tableByKey)
+		if err != nil {
+			return err
+		}
+		parentColumns := tableColumns[tableKey(parent)]
 		for _, index := range table.Indexes {
 			key := indexKey(table, index)
 			if _, ok := indexNames[key]; ok {
 				return fmt.Errorf("duplicate index %q in schema %q", index.Name, tableSchema(table))
 			}
 			indexNames[key] = struct{}{}
-			if err := validateIndex(table.Name, index, columnNames); err != nil {
+			if err := validateIndex(table.Name, index, parentColumns); err != nil {
 				return err
 			}
 		}
@@ -1083,6 +1125,20 @@ func renderTable(b *strings.Builder, table pgschema.Table) error {
 	if err := validateIdentifier("table", table.Name); err != nil {
 		return err
 	}
+	if table.PartitionOf != nil {
+		b.WriteString("CREATE TABLE ")
+		b.WriteString(renderTableName(table))
+		b.WriteString(" PARTITION OF ")
+		b.WriteString(renderReferencedTable(table.PartitionOf.Parent))
+		b.WriteString(" ")
+		b.WriteString(renderPartitionBound(table.PartitionOf.Bound))
+		if table.Partitioning != nil {
+			b.WriteString("\n")
+			b.WriteString(renderPartitioning(*table.Partitioning))
+		}
+		b.WriteString(";\n")
+		return nil
+	}
 	if len(table.Columns) == 0 {
 		return fmt.Errorf("table %q must have at least one column", table.Name)
 	}
@@ -1179,8 +1235,40 @@ func renderTable(b *strings.Builder, table pgschema.Table) error {
 	}
 
 	b.WriteString(strings.Join(lines, ",\n"))
-	b.WriteString("\n);\n")
+	b.WriteString("\n)")
+	if table.Partitioning != nil {
+		b.WriteString("\n")
+		b.WriteString(renderPartitioning(*table.Partitioning))
+	}
+	b.WriteString(";\n")
 	return nil
+}
+
+func renderPartitioning(partitioning pgschema.Partitioning) string {
+	keys := make([]string, 0, len(partitioning.Keys))
+	for _, key := range partitioning.Keys {
+		expression := key.Expression
+		if key.IsExpression {
+			expression = "(" + expression + ")"
+		}
+		keys = append(keys, expression)
+	}
+	return "PARTITION BY " + strings.ToUpper(partitioning.Strategy) + " (" + strings.Join(keys, ", ") + ")"
+}
+
+func renderPartitionBound(bound pgschema.PartitionBound) string {
+	switch strings.ToLower(bound.Type) {
+	case "range":
+		return "FOR VALUES FROM (" + strings.Join(bound.From, ", ") + ") TO (" + strings.Join(bound.To, ", ") + ")"
+	case "list":
+		return "FOR VALUES IN (" + strings.Join(bound.Values, ", ") + ")"
+	case "hash":
+		return fmt.Sprintf("FOR VALUES WITH (modulus %d, remainder %d)", bound.Modulus, bound.Remainder)
+	case "default":
+		return "DEFAULT"
+	default:
+		return ""
+	}
 }
 
 func renderColumn(column ast.Column) (string, error) {
@@ -2403,6 +2491,223 @@ func validateIndex(tableName string, index pgschema.Index, columnNames map[strin
 		}
 	}
 	return nil
+}
+
+func validatePartitioning(table pgschema.Table, columnNames map[string]struct{}) error {
+	partitioning := table.Partitioning
+	if partitioning == nil {
+		return nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(partitioning.Strategy)) {
+	case "range", "list", "hash":
+	default:
+		return fmt.Errorf("table %q partition strategy %q must be range, list, or hash", renderTableName(table), partitioning.Strategy)
+	}
+	if len(partitioning.Keys) == 0 {
+		return fmt.Errorf("table %q partitioning must include at least one key", renderTableName(table))
+	}
+
+	partitionColumns := make([]string, 0, len(partitioning.Keys))
+	seenColumns := map[string]struct{}{}
+	hasExpressionKey := false
+	for _, key := range partitioning.Keys {
+		expression := strings.TrimSpace(key.Expression)
+		if expression == "" {
+			return fmt.Errorf("table %q has an empty partition key", renderTableName(table))
+		}
+		if key.IsExpression {
+			hasExpressionKey = true
+			if err := validateExpression(expression, "partition key expression"); err != nil {
+				return fmt.Errorf("table %q: %w", renderTableName(table), err)
+			}
+			continue
+		}
+		if err := validateIdentifier("partition key", expression); err != nil {
+			return fmt.Errorf("table %q: %w", renderTableName(table), err)
+		}
+		if _, ok := columnNames[expression]; !ok {
+			return fmt.Errorf("table %q partition key references unknown column %q", renderTableName(table), expression)
+		}
+		if _, ok := seenColumns[expression]; ok {
+			return fmt.Errorf("table %q has duplicate partition key column %q", renderTableName(table), expression)
+		}
+		seenColumns[expression] = struct{}{}
+		partitionColumns = append(partitionColumns, expression)
+	}
+
+	if hasExpressionKey {
+		if tableHasUniqueSemantics(table) {
+			return fmt.Errorf("table %q partition expression keys cannot be combined with primary keys, unique constraints, or unique indexes", renderTableName(table))
+		}
+		return nil
+	}
+	for _, column := range table.Columns {
+		if column.PrimaryKey {
+			if err := validatePartitionUniqueColumns(table, "primary key", []string{column.Name}, partitionColumns); err != nil {
+				return err
+			}
+		}
+		if column.Unique {
+			if err := validatePartitionUniqueColumns(table, "unique constraint", []string{column.Name}, partitionColumns); err != nil {
+				return err
+			}
+		}
+	}
+	for _, primaryKey := range table.PrimaryKeys {
+		if err := validatePartitionUniqueColumns(table, "primary key "+primaryKey.Name, primaryKey.Columns, partitionColumns); err != nil {
+			return err
+		}
+	}
+	for _, unique := range table.UniqueConstraints {
+		if err := validatePartitionUniqueColumns(table, "unique constraint "+unique.Name, unique.Columns, partitionColumns); err != nil {
+			return err
+		}
+	}
+	for _, index := range table.Indexes {
+		if !index.Unique {
+			continue
+		}
+		columns := make([]string, 0, len(index.Columns))
+		for _, column := range index.Columns {
+			if column.IsExpression {
+				return fmt.Errorf("table %q unique index %q on a partitioned table must include all partition key columns", renderTableName(table), index.Name)
+			}
+			columns = append(columns, column.Expression)
+		}
+		if err := validatePartitionUniqueColumns(table, "unique index "+index.Name, columns, partitionColumns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func tableHasUniqueSemantics(table pgschema.Table) bool {
+	for _, column := range table.Columns {
+		if column.PrimaryKey || column.Unique {
+			return true
+		}
+	}
+	if len(table.PrimaryKeys) > 0 || len(table.UniqueConstraints) > 0 {
+		return true
+	}
+	for _, index := range table.Indexes {
+		if index.Unique {
+			return true
+		}
+	}
+	return false
+}
+
+func validatePartitionUniqueColumns(table pgschema.Table, kind string, columns, partitionColumns []string) error {
+	if containsAllColumns(columns, partitionColumns) {
+		return nil
+	}
+	return fmt.Errorf("table %q %s must include all partition key columns", renderTableName(table), kind)
+}
+
+func containsAllColumns(columns, required []string) bool {
+	seen := make(map[string]struct{}, len(columns))
+	for _, column := range columns {
+		seen[column] = struct{}{}
+	}
+	for _, column := range required {
+		if _, ok := seen[column]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func validatePartitionChildShape(table pgschema.Table) error {
+	key := renderTableName(table)
+	if len(table.Columns) > 0 {
+		return fmt.Errorf("partition table %q must not declare columns; columns are inherited from its parent", key)
+	}
+	if len(table.PrimaryKeys) > 0 || len(table.UniqueConstraints) > 0 || len(table.ForeignKeys) > 0 ||
+		len(table.Checks) > 0 || len(table.Exclusions) > 0 {
+		return fmt.Errorf("partition table %q must not declare table constraints; declare constraints on the parent or use a manual migration", key)
+	}
+	if table.RowLevelSecurity || table.ForceRLS {
+		return fmt.Errorf("partition table %q must not declare row-level security; declare RLS on the partitioned parent", key)
+	}
+	return nil
+}
+
+func validatePartitionOf(table pgschema.Table, partition pgschema.PartitionOf, tables map[string]pgschema.Table) (pgschema.Table, error) {
+	if strings.TrimSpace(partition.Parent) == "" {
+		return pgschema.Table{}, fmt.Errorf("partition table %q must reference a parent table", renderTableName(table))
+	}
+	parentKey, err := referenceKey(table.Schema, partition.Parent)
+	if err != nil {
+		return pgschema.Table{}, fmt.Errorf("partition table %q: %w", renderTableName(table), err)
+	}
+	parent, ok := tables[parentKey]
+	if !ok {
+		return pgschema.Table{}, fmt.Errorf("partition table %q references unknown parent table %q", renderTableName(table), renderReferencedTable(partition.Parent))
+	}
+	if parent.Partitioning == nil {
+		return pgschema.Table{}, fmt.Errorf("partition table %q references non-partitioned parent table %q", renderTableName(table), renderReferencedTable(partition.Parent))
+	}
+	if err := validatePartitionBound(table, parent, partition.Bound); err != nil {
+		return pgschema.Table{}, err
+	}
+	return parent, nil
+}
+
+func validatePartitionBound(table, parent pgschema.Table, bound pgschema.PartitionBound) error {
+	kind := strings.ToLower(strings.TrimSpace(bound.Type))
+	if kind == "" {
+		return fmt.Errorf("partition table %q must include a partition bound", renderTableName(table))
+	}
+	parentStrategy := strings.ToLower(parent.Partitioning.Strategy)
+	if kind != "default" && kind != parentStrategy {
+		return fmt.Errorf("partition table %q has %s bound for %s-partitioned parent %q", renderTableName(table), kind, parentStrategy, renderTableName(parent))
+	}
+	keyCount := len(parent.Partitioning.Keys)
+	switch kind {
+	case "range":
+		if len(bound.From) != keyCount || len(bound.To) != keyCount {
+			return fmt.Errorf("partition table %q range bound must include %d FROM and TO value(s)", renderTableName(table), keyCount)
+		}
+		for _, value := range append(append([]string(nil), bound.From...), bound.To...) {
+			if err := validatePartitionBoundValue(value); err != nil {
+				return fmt.Errorf("partition table %q: %w", renderTableName(table), err)
+			}
+		}
+	case "list":
+		if len(bound.Values) == 0 {
+			return fmt.Errorf("partition table %q list bound must include at least one value", renderTableName(table))
+		}
+		for _, value := range bound.Values {
+			if err := validatePartitionBoundValue(value); err != nil {
+				return fmt.Errorf("partition table %q: %w", renderTableName(table), err)
+			}
+		}
+	case "hash":
+		if bound.Modulus <= 0 {
+			return fmt.Errorf("partition table %q hash modulus must be positive", renderTableName(table))
+		}
+		if bound.Remainder < 0 || bound.Remainder >= bound.Modulus {
+			return fmt.Errorf("partition table %q hash remainder must be >= 0 and less than modulus", renderTableName(table))
+		}
+	case "default":
+		return nil
+	default:
+		return fmt.Errorf("partition table %q partition bound type %q must be range, list, hash, or default", renderTableName(table), bound.Type)
+	}
+	return nil
+}
+
+func validatePartitionBoundValue(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errors.New("partition bound values must not be empty")
+	}
+	if strings.EqualFold(value, "MINVALUE") || strings.EqualFold(value, "MAXVALUE") {
+		return nil
+	}
+	return validateExpression(value, "partition bound value")
 }
 
 func validateForeignKeyAction(kind, action string) error {

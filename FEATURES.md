@@ -80,7 +80,7 @@ Legend:
 - `[x]` Roles.
 - `[x]` Domains.
 - `[x]` Composite types.
-- `[ ]` Partitioned tables.
+- `[x]` Partitioned tables, partition children, and partition bounds.
 - `[x]` Comments.
 - `[ ]` Tablespaces.
 - `[ ]` Collations.
@@ -534,6 +534,7 @@ Other provider requirement:
 - `[x]` Extension-owned object filtering tests.
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
 - `[x]` Drift diagnostics tests for top-level objects and table-nested objects.
+- `[x]` Partitioned table and partition-child render, diff, drift, and introspection tests.
 - `[x]` CLI table-rendering tests for drift diagnostics.
 - `[x]` CLI table-rendering tests for migration plan diagnostics.
 - `[x]` CLI flag validation tests for conflicting prompt-mode controls.
@@ -555,7 +556,7 @@ Other provider requirement:
 10. Add runner-compatible migration file generation and destructive-change guardrails.
 11. Add styled CLI summaries and interactive ambiguity resolution for migration
     authoring.
-12. Expand into partitioning, grants, and other advanced PostgreSQL features.
+12. Expand into grants and other advanced PostgreSQL features.
 
 ## Drizzle Reference Notes
 

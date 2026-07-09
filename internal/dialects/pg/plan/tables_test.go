@@ -69,6 +69,195 @@ func TestSnapshotDiffAddsTableAndColumn(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffCreatesPartitionedTable(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "created_at", Type: "timestamptz", NotNull: true},
+					{Name: "description", Type: "text"},
+				},
+			},
+			Partitioning: &pgschema.Partitioning{
+				Strategy: "range",
+				Keys:     []pgschema.PartitionKey{{Expression: "created_at"}},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	if !strings.Contains(got, "PARTITION BY RANGE (created_at);") {
+		t.Fatalf("missing partition SQL in\n%s", got)
+	}
+}
+
+func TestSnapshotDiffCreatesPartitionChild(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "priority", Type: "integer", NotNull: true},
+				},
+			},
+			Partitioning: &pgschema.Partitioning{
+				Strategy: "range",
+				Keys:     []pgschema.PartitionKey{{Expression: "priority"}},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "priority", Type: "integer", NotNull: true},
+					},
+				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "range",
+					Keys:     []pgschema.PartitionKey{{Expression: "priority"}},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_priority_low"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound:  pgschema.PartitionBound{Type: "range", From: []string{"0"}, To: []string{"10"}},
+				},
+			},
+		},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	if !strings.Contains(got, "CREATE TABLE events_priority_low PARTITION OF events FOR VALUES FROM (0) TO (10);") {
+		t.Fatalf("missing partition child SQL in\n%s", got)
+	}
+	if len(planned.Changes) != 1 || len(planned.Changes[0].Dependencies) != 1 ||
+		planned.Changes[0].Dependencies[0] != migrateplan.Ref(migrateplan.ObjectKindTable, "public.events") {
+		t.Fatalf("unexpected partition child dependencies: %#v", planned.Changes)
+	}
+}
+
+func TestSnapshotDiffPlansPartitioningChangeAsManualReviewReplacement(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "created_at", Type: "timestamptz", NotNull: true},
+					{Name: "description", Type: "text"},
+				},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "events",
+				Columns: []ast.Column{
+					{Name: "created_at", Type: "timestamptz", NotNull: true},
+					{Name: "description", Type: "text"},
+				},
+			},
+			Partitioning: &pgschema.Partitioning{
+				Strategy: "range",
+				Keys:     []pgschema.PartitionKey{{Expression: "created_at"}},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationReplace || change.Object.Kind != migrateplan.ObjectKindTable || change.Object.Key != "public.events" {
+		t.Fatalf("unexpected partition change %#v", change)
+	}
+	if len(change.Statements) != 0 {
+		t.Fatalf("partition replacement should not emit automatic SQL, got %#v", change.Statements)
+	}
+	for _, risk := range []migrateplan.Risk{
+		migrateplan.RiskDestructive,
+		migrateplan.RiskDataLoss,
+		migrateplan.RiskLockHeavy,
+		migrateplan.RiskManualReview,
+		migrateplan.RiskRequiresDDLReview,
+	} {
+		if !change.HasRisk(risk) {
+			t.Fatalf("expected risk %s, got %#v", risk, change.Risks)
+		}
+	}
+}
+
+func TestSnapshotDiffPlansPartitionBoundChangeAsManualReviewReplacement(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{Name: "events_priority_low"},
+			PartitionOf: &pgschema.PartitionOf{
+				Parent: "events",
+				Bound:  pgschema.PartitionBound{Type: "range", From: []string{"0"}, To: []string{"10"}},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{Name: "events_priority_low"},
+			PartitionOf: &pgschema.PartitionOf{
+				Parent: "events",
+				Bound:  pgschema.PartitionBound{Type: "range", From: []string{"0"}, To: []string{"20"}},
+			},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationReplace || change.Object.Kind != migrateplan.ObjectKindTable || change.Object.Key != "public.events_priority_low" {
+		t.Fatalf("unexpected partition bound change %#v", change)
+	}
+	if len(change.Statements) != 0 || !change.HasRisk(migrateplan.RiskManualReview) {
+		t.Fatalf("unexpected partition bound change statements/risks: %#v", change)
+	}
+}
+
 func TestSnapshotDiffOrdersNewTablesByForeignKeyDependency(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

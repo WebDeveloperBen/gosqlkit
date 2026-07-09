@@ -106,9 +106,14 @@ CREATE TABLE events (
     duration interval day to second (6) NOT NULL,
     priority smallint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now()
-);
+)
+PARTITION BY RANGE (priority);
 
 CREATE INDEX events_priority_created_at_idx ON events (priority, created_at);
+
+CREATE TABLE events_default PARTITION OF events DEFAULT;
+
+CREATE TABLE events_priority_low PARTITION OF events FOR VALUES FROM (0) TO (10);
 
 CREATE POLICY users_read_self ON users
 AS PERMISSIVE

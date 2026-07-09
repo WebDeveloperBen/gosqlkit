@@ -133,6 +133,20 @@ var Events = pg.Table(
 		NotNull().
 		Default("now()"),
 	pg.Index("", "priority", "created_at"),
+	pg.PartitionByRange("priority"),
+)
+
+var EventsPriorityLow = pg.Table(
+	"events_priority_low",
+	pg.PartitionOf("events", pg.ForValuesFromTo(
+		pg.PartitionValues("0"),
+		pg.PartitionValues("10"),
+	)),
+)
+
+var EventsDefault = pg.Table(
+	"events_default",
+	pg.PartitionOf("events", pg.ForValuesDefault()),
 )
 
 var Bookings = pg.Table(

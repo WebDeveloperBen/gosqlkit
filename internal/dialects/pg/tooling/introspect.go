@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
@@ -459,9 +460,17 @@ SELECT n.nspname,
        c.relname,
        COALESCE(obj_description(c.oid, 'pg_class'), ''),
        c.relrowsecurity,
-       c.relforcerowsecurity
+       c.relforcerowsecurity,
+       COALESCE(CASE WHEN p.partrelid IS NULL THEN '' ELSE pg_get_partkeydef(c.oid) END, ''),
+       COALESCE(pn.nspname, ''),
+       COALESCE(pc.relname, ''),
+       COALESCE(CASE WHEN c.relispartition THEN pg_get_expr(c.relpartbound, c.oid) ELSE '' END, '')
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_partitioned_table p ON p.partrelid = c.oid
+LEFT JOIN pg_inherits inh ON inh.inhrelid = c.oid
+LEFT JOIN pg_class pc ON pc.oid = inh.inhparent
+LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
 WHERE c.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
@@ -474,10 +483,28 @@ ORDER BY n.nspname, c.relname`)
 	var out []pgschema.Table
 	for rows.Next() {
 		var table pgschema.Table
-		if err := rows.Scan(&table.Schema, &table.Name, &table.Comment, &table.RowLevelSecurity, &table.ForceRLS); err != nil {
+		var partitionDef, parentSchema, parentName, partitionBoundDef string
+		if err := rows.Scan(&table.Schema, &table.Name, &table.Comment, &table.RowLevelSecurity, &table.ForceRLS, &partitionDef, &parentSchema, &parentName, &partitionBoundDef); err != nil {
 			return nil, fmt.Errorf("scan table: %w", err)
 		}
 		table.Schema = snapshotSchema(table.Schema)
+		partitioning, ok, err := parsePartitioning(partitionDef)
+		if err != nil {
+			return nil, fmt.Errorf("scan table %s: %w", qualified(table.Schema, table.Name), err)
+		}
+		if ok {
+			table.Partitioning = &partitioning
+		}
+		partitionBound, hasPartitionBound, err := parsePartitionBound(partitionBoundDef)
+		if err != nil {
+			return nil, fmt.Errorf("scan table %s: %w", qualified(table.Schema, table.Name), err)
+		}
+		if hasPartitionBound {
+			table.PartitionOf = &pgschema.PartitionOf{
+				Parent: renderReference(snapshotSchema(parentSchema), parentName),
+				Bound:  partitionBound,
+			}
+		}
 		out = append(out, table)
 	}
 	if err := rows.Err(); err != nil {
@@ -505,6 +532,7 @@ LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
 WHERE c.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
+  AND NOT c.relispartition
   AND a.attnum > 0
   AND NOT a.attisdropped
 ORDER BY n.nspname, c.relname, a.attnum`)
@@ -574,6 +602,7 @@ LEFT JOIN pg_namespace fn ON fn.oid = fc.relnamespace
 WHERE con.contype IN ('p', 'u', 'f', 'c')
   AND n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
+  AND NOT c.relispartition
 ORDER BY n.nspname, c.relname, con.conname`)
 	if err != nil {
 		return fmt.Errorf("introspect constraints: %w", err)
@@ -636,6 +665,7 @@ JOIN LATERAL (
 ) keydef ON true
 WHERE n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
+  AND NOT c.relispartition
   AND NOT EXISTS (
     SELECT 1
     FROM pg_constraint con
@@ -1233,6 +1263,203 @@ func normaliseType(value string) string {
 		out = strings.ReplaceAll(out, replacement.old, replacement.new)
 	}
 	return out
+}
+
+func parsePartitioning(value string) (pgschema.Partitioning, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return pgschema.Partitioning{}, false, nil
+	}
+	open := strings.Index(value, "(")
+	if open == -1 || !strings.HasSuffix(value, ")") {
+		return pgschema.Partitioning{}, false, fmt.Errorf("invalid partition key definition %q", value)
+	}
+	strategy := strings.ToLower(strings.TrimSpace(value[:open]))
+	switch strategy {
+	case "range", "list", "hash":
+	default:
+		return pgschema.Partitioning{}, false, fmt.Errorf("unknown partition strategy %q", strategy)
+	}
+	body := strings.TrimSpace(value[open+1 : len(value)-1])
+	parts, err := splitTopLevelCSV(body)
+	if err != nil {
+		return pgschema.Partitioning{}, false, err
+	}
+	if len(parts) == 0 {
+		return pgschema.Partitioning{}, false, fmt.Errorf("partition key definition %q has no keys", value)
+	}
+	keys := make([]pgschema.PartitionKey, 0, len(parts))
+	for _, part := range parts {
+		key := strings.TrimSpace(part)
+		if key == "" {
+			return pgschema.Partitioning{}, false, fmt.Errorf("partition key definition %q has an empty key", value)
+		}
+		isExpression := strings.HasPrefix(key, "(") && strings.HasSuffix(key, ")") && balanced(key[1:len(key)-1])
+		if isExpression {
+			key = stripOuterParens(key)
+		}
+		keys = append(keys, pgschema.PartitionKey{
+			Expression:   key,
+			IsExpression: isExpression,
+		})
+	}
+	return pgschema.Partitioning{Strategy: strategy, Keys: keys}, true, nil
+}
+
+func parsePartitionBound(value string) (pgschema.PartitionBound, bool, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return pgschema.PartitionBound{}, false, nil
+	}
+	if strings.EqualFold(value, "DEFAULT") {
+		return pgschema.PartitionBound{Type: "default"}, true, nil
+	}
+	const prefix = "FOR VALUES "
+	if !strings.HasPrefix(strings.ToUpper(value), prefix) {
+		return pgschema.PartitionBound{}, false, fmt.Errorf("invalid partition bound %q", value)
+	}
+	rest := strings.TrimSpace(value[len(prefix):])
+	upperRest := strings.ToUpper(rest)
+	switch {
+	case strings.HasPrefix(upperRest, "FROM "):
+		from, tail, err := parseParenthesisedPartitionValues(strings.TrimSpace(rest[len("FROM "):]))
+		if err != nil {
+			return pgschema.PartitionBound{}, false, err
+		}
+		tail = strings.TrimSpace(tail)
+		if !strings.HasPrefix(strings.ToUpper(tail), "TO ") {
+			return pgschema.PartitionBound{}, false, fmt.Errorf("invalid range partition bound %q", value)
+		}
+		to, tail, err := parseParenthesisedPartitionValues(strings.TrimSpace(tail[len("TO "):]))
+		if err != nil {
+			return pgschema.PartitionBound{}, false, err
+		}
+		if strings.TrimSpace(tail) != "" {
+			return pgschema.PartitionBound{}, false, fmt.Errorf("invalid range partition bound %q", value)
+		}
+		return pgschema.PartitionBound{Type: "range", From: from, To: to}, true, nil
+	case strings.HasPrefix(upperRest, "IN "):
+		values, tail, err := parseParenthesisedPartitionValues(strings.TrimSpace(rest[len("IN "):]))
+		if err != nil {
+			return pgschema.PartitionBound{}, false, err
+		}
+		if strings.TrimSpace(tail) != "" {
+			return pgschema.PartitionBound{}, false, fmt.Errorf("invalid list partition bound %q", value)
+		}
+		return pgschema.PartitionBound{Type: "list", Values: values}, true, nil
+	case strings.HasPrefix(upperRest, "WITH "):
+		values, tail, err := parseParenthesisedPartitionValues(strings.TrimSpace(rest[len("WITH "):]))
+		if err != nil {
+			return pgschema.PartitionBound{}, false, err
+		}
+		if strings.TrimSpace(tail) != "" {
+			return pgschema.PartitionBound{}, false, fmt.Errorf("invalid hash partition bound %q", value)
+		}
+		bound := pgschema.PartitionBound{Type: "hash"}
+		for _, value := range values {
+			key, raw, ok := strings.Cut(strings.TrimSpace(value), " ")
+			if !ok {
+				return pgschema.PartitionBound{}, false, fmt.Errorf("invalid hash partition bound option %q", value)
+			}
+			number, err := strconv.Atoi(strings.TrimSpace(raw))
+			if err != nil {
+				return pgschema.PartitionBound{}, false, fmt.Errorf("invalid hash partition bound option %q: %w", value, err)
+			}
+			switch strings.ToLower(key) {
+			case "modulus":
+				bound.Modulus = number
+			case "remainder":
+				bound.Remainder = number
+			default:
+				return pgschema.PartitionBound{}, false, fmt.Errorf("invalid hash partition bound option %q", key)
+			}
+		}
+		return bound, true, nil
+	default:
+		return pgschema.PartitionBound{}, false, fmt.Errorf("invalid partition bound %q", value)
+	}
+}
+
+func parseParenthesisedPartitionValues(value string) ([]string, string, error) {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "(") {
+		return nil, "", fmt.Errorf("partition bound values %q must start with '('", value)
+	}
+	depth := 0
+	inString := false
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case '\'':
+			inString = !inString
+		case '(':
+			if !inString {
+				depth++
+			}
+		case ')':
+			if !inString {
+				depth--
+				if depth == 0 {
+					body := value[1:i]
+					parts, err := splitTopLevelCSV(body)
+					if err != nil {
+						return nil, "", err
+					}
+					for j := range parts {
+						parts[j] = normalisePartitionBoundValue(strings.TrimSpace(parts[j]))
+					}
+					return parts, value[i+1:], nil
+				}
+				if depth < 0 {
+					return nil, "", errors.New("partition bound values have unbalanced parentheses")
+				}
+			}
+		}
+	}
+	return nil, "", errors.New("partition bound values are not balanced")
+}
+
+var quotedNumericPartitionBoundPattern = regexp.MustCompile(`^'(-?[0-9]+(?:\.[0-9]+)?)'$`)
+
+func normalisePartitionBoundValue(value string) string {
+	matches := quotedNumericPartitionBoundPattern.FindStringSubmatch(value)
+	if len(matches) == 2 {
+		return matches[1]
+	}
+	return value
+}
+
+func splitTopLevelCSV(value string) ([]string, error) {
+	var parts []string
+	start := 0
+	depth := 0
+	inString := false
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case '\'':
+			inString = !inString
+		case '(':
+			if !inString {
+				depth++
+			}
+		case ')':
+			if !inString {
+				depth--
+				if depth < 0 {
+					return nil, errors.New("partition key definition has unbalanced parentheses")
+				}
+			}
+		case ',':
+			if !inString && depth == 0 {
+				parts = append(parts, value[start:i])
+				start = i + 1
+			}
+		}
+	}
+	if depth != 0 || inString {
+		return nil, errors.New("partition key definition is not balanced")
+	}
+	parts = append(parts, value[start:])
+	return parts, nil
 }
 
 var parenPattern = regexp.MustCompile(`^\((.*)\)$`)
