@@ -277,10 +277,15 @@ func TestTablePartitionDSLRegistersOptions(t *testing.T) {
 		"audit_events_0",
 		pg.PartitionOf("audit_events", pg.ForValuesWith(4, 0)),
 	)
+	pg.Table(
+		"email_events",
+		pg.Text("email").NotNull(),
+		pg.PartitionByHashOn(pg.PartitionExpression("lower(email)")),
+	)
 
 	schema := pg.Schema()
-	if len(schema.Tables) != 3 {
-		t.Fatalf("tables len = %d, want 3", len(schema.Tables))
+	if len(schema.Tables) != 4 {
+		t.Fatalf("tables len = %d, want 4", len(schema.Tables))
 	}
 	events := schema.Tables[0]
 	if events.Partitioning == nil || events.Partitioning.Strategy != "range" || len(events.Partitioning.Keys) != 1 || events.Partitioning.Keys[0].Expression != "created_at" {
@@ -295,6 +300,12 @@ func TestTablePartitionDSLRegistersOptions(t *testing.T) {
 		partition.PartitionOf.Bound.Type != "hash" || partition.PartitionOf.Bound.Modulus != 4 ||
 		partition.PartitionOf.Bound.Remainder != 0 {
 		t.Fatalf("unexpected audit_events_0 partition %#v", partition.PartitionOf)
+	}
+	emailEvents := schema.Tables[3]
+	if emailEvents.Partitioning == nil || emailEvents.Partitioning.Strategy != "hash" ||
+		len(emailEvents.Partitioning.Keys) != 1 || emailEvents.Partitioning.Keys[0].Expression != "lower(email)" ||
+		!emailEvents.Partitioning.Keys[0].IsExpression {
+		t.Fatalf("unexpected email_events partitioning %#v", emailEvents.Partitioning)
 	}
 }
 

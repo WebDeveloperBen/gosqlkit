@@ -511,6 +511,58 @@ func TestPostgresRejectsPartitionBoundForWrongStrategy(t *testing.T) {
 	}
 }
 
+func TestPostgresRendersListHashAndSubpartitionedTables(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "events",
+					Columns: []ast.Column{
+						{Name: "status", Type: "text"},
+						{Name: "email", Type: "text"},
+					},
+				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "list",
+					Keys:     []pgschema.PartitionKey{{Expression: "status"}},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_active"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound:  pgschema.PartitionBound{Type: "list", Values: []string{"'active'", "'pending'"}},
+				},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "hash",
+					Keys: []pgschema.PartitionKey{{
+						Expression:   "lower(email)",
+						IsExpression: true,
+					}},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_active_0"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events_active",
+					Bound:  pgschema.PartitionBound{Type: "hash", Modulus: 4, Remainder: 0},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"CREATE TABLE events_active PARTITION OF events FOR VALUES IN ('active', 'pending')\nPARTITION BY HASH ((lower(email)));",
+		"CREATE TABLE events_active_0 PARTITION OF events_active FOR VALUES WITH (modulus 4, remainder 0);",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+}
+
 func TestPostgresAllowsSameTableNameInDifferentSchemas(t *testing.T) {
 	got, err := render.Postgres(pgschema.Schema{
 		Namespaces: []pgschema.Namespace{

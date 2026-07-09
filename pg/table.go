@@ -51,6 +51,10 @@ type PartitionDef struct {
 	def pgschema.Partitioning
 }
 
+type PartitionKeyDef struct {
+	def pgschema.PartitionKey
+}
+
 type PartitionOfDef struct {
 	def pgschema.PartitionOf
 }
@@ -347,16 +351,46 @@ func PartitionByRange(columns ...string) *PartitionDef {
 	return partitionBy("range", columns...)
 }
 
+func PartitionByRangeOn(keys ...*PartitionKeyDef) *PartitionDef {
+	return partitionByOn("range", keys...)
+}
+
 func PartitionByList(columns ...string) *PartitionDef {
 	return partitionBy("list", columns...)
+}
+
+func PartitionByListOn(keys ...*PartitionKeyDef) *PartitionDef {
+	return partitionByOn("list", keys...)
 }
 
 func PartitionByHash(columns ...string) *PartitionDef {
 	return partitionBy("hash", columns...)
 }
 
+func PartitionByHashOn(keys ...*PartitionKeyDef) *PartitionDef {
+	return partitionByOn("hash", keys...)
+}
+
+func PartitionColumn(name string) *PartitionKeyDef {
+	return &PartitionKeyDef{def: pgschema.PartitionKey{Expression: name}}
+}
+
+func PartitionExpression(expression string) *PartitionKeyDef {
+	return &PartitionKeyDef{
+		def: pgschema.PartitionKey{
+			Expression:   expression,
+			IsExpression: true,
+		},
+	}
+}
+
 func (d *Definition) PartitionByRange(columns ...string) *Definition {
 	d.def.Partitioning = partitionBy("range", columns...).partitioning()
+	return d
+}
+
+func (d *Definition) PartitionByRangeOn(keys ...*PartitionKeyDef) *Definition {
+	d.def.Partitioning = partitionByOn("range", keys...).partitioning()
 	return d
 }
 
@@ -365,8 +399,18 @@ func (d *Definition) PartitionByList(columns ...string) *Definition {
 	return d
 }
 
+func (d *Definition) PartitionByListOn(keys ...*PartitionKeyDef) *Definition {
+	d.def.Partitioning = partitionByOn("list", keys...).partitioning()
+	return d
+}
+
 func (d *Definition) PartitionByHash(columns ...string) *Definition {
 	d.def.Partitioning = partitionBy("hash", columns...).partitioning()
+	return d
+}
+
+func (d *Definition) PartitionByHashOn(keys ...*PartitionKeyDef) *Definition {
+	d.def.Partitioning = partitionByOn("hash", keys...).partitioning()
 	return d
 }
 
@@ -520,6 +564,18 @@ func partitionBy(strategy string, columns ...string) *PartitionDef {
 	for _, column := range columns {
 		keys = append(keys, pgschema.PartitionKey{Expression: column})
 	}
+	return newPartitionDef(strategy, keys)
+}
+
+func partitionByOn(strategy string, keys ...*PartitionKeyDef) *PartitionDef {
+	out := make([]pgschema.PartitionKey, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, key.def)
+	}
+	return newPartitionDef(strategy, out)
+}
+
+func newPartitionDef(strategy string, keys []pgschema.PartitionKey) *PartitionDef {
 	return &PartitionDef{
 		def: pgschema.Partitioning{
 			Strategy: strategy,

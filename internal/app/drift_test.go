@@ -278,6 +278,42 @@ func TestProjectDriftSchemaNormalisesPostgreSQLExpressionRewrites(t *testing.T) 
 	}
 }
 
+func TestProjectDriftSchemaNormalisesPartitionMetadata(t *testing.T) {
+	projected := projectDriftSchema(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{Name: "events"},
+				Partitioning: &pgschema.Partitioning{
+					Strategy: "hash",
+					Keys: []pgschema.PartitionKey{{
+						Expression:   "lower(email)::text",
+						IsExpression: true,
+					}},
+				},
+			},
+			{
+				Table: ast.Table{Name: "events_0"},
+				PartitionOf: &pgschema.PartitionOf{
+					Parent: "events",
+					Bound: pgschema.PartitionBound{
+						Type:   "list",
+						Values: []string{"'draft'::text"},
+					},
+				},
+			},
+		},
+	})
+
+	parent := projected.Tables[0]
+	if parent.Partitioning.Keys[0].Expression != "lower(email)" {
+		t.Fatalf("partition key = %#v", parent.Partitioning.Keys[0])
+	}
+	child := projected.Tables[1]
+	if child.PartitionOf.Parent != "public.events" || child.PartitionOf.Bound.Values[0] != "'draft'" {
+		t.Fatalf("partition child = %#v", child.PartitionOf)
+	}
+}
+
 func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 	projected := projectDriftSchema(pgschema.Schema{
 		Tables: []pgschema.Table{{
