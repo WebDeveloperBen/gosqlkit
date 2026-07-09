@@ -20,6 +20,7 @@ type Schema struct {
 	MaterializedViews []MaterializedView `json:"materializedViews,omitempty"`
 	Triggers          []Trigger          `json:"triggers,omitempty"`
 	Policies          []Policy           `json:"policies,omitempty"`
+	Grants            []Grant            `json:"grants,omitempty"`
 }
 
 type Document struct {
@@ -47,6 +48,7 @@ type Document struct {
 	MaterializedViews  []MaterializedView          `json:"materializedViews,omitempty"`
 	Triggers           []Trigger                   `json:"triggers,omitempty"`
 	Policies           []Policy                    `json:"policies,omitempty"`
+	Grants             []Grant                     `json:"grants,omitempty"`
 	Version            int                         `json:"version"`
 }
 
@@ -67,6 +69,7 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		MaterializedViews: sortedMaterializedViews(schema.MaterializedViews),
 		Triggers:          sortedTriggers(schema.Triggers),
 		Policies:          sortedPolicies(schema.Policies),
+		Grants:            sortedGrants(schema.Grants),
 		SchemaMetadata:    buildSchemaMetadata(schema.Namespaces),
 		TableMetadata:     buildTableMetadata(schema.Tables),
 		ColumnMetadata:    buildColumnMetadata(schema.Tables),

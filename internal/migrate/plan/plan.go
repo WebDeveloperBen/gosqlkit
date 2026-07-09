@@ -46,6 +46,7 @@ const (
 	ObjectKindMaterializedView ObjectKind = "materialized_view"
 	ObjectKindTrigger          ObjectKind = "trigger"
 	ObjectKindPolicy           ObjectKind = "policy"
+	ObjectKindGrant            ObjectKind = "grant"
 )
 
 type ObjectRef struct {

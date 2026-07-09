@@ -64,6 +64,9 @@ func Introspect(ctx context.Context, queryer Queryer) (pgschema.Schema, error) {
 	if schema.Triggers, err = introspectTriggers(ctx, queryer); err != nil {
 		return pgschema.Schema{}, err
 	}
+	if schema.Grants, err = introspectGrants(ctx, queryer); err != nil {
+		return pgschema.Schema{}, err
+	}
 	return schema, nil
 }
 
@@ -825,6 +828,283 @@ ORDER BY schemaname, tablename, policyname`)
 		return nil, fmt.Errorf("introspect policies: %w", err)
 	}
 	return out, nil
+}
+
+func introspectGrants(ctx context.Context, queryer Queryer) ([]pgschema.Grant, error) {
+	acc := grantAccumulator{items: map[string]*pgschema.Grant{}}
+	if err := introspectRelationGrants(ctx, queryer, &acc); err != nil {
+		return nil, err
+	}
+	if err := introspectColumnGrants(ctx, queryer, &acc); err != nil {
+		return nil, err
+	}
+	if err := introspectSchemaGrants(ctx, queryer, &acc); err != nil {
+		return nil, err
+	}
+	if err := introspectTypeGrants(ctx, queryer, &acc); err != nil {
+		return nil, err
+	}
+	if err := introspectFunctionGrants(ctx, queryer, &acc); err != nil {
+		return nil, err
+	}
+	if err := introspectDatabaseGrants(ctx, queryer, &acc); err != nil {
+		return nil, err
+	}
+	return acc.grants(), nil
+}
+
+type grantAccumulator struct {
+	items map[string]*pgschema.Grant
+}
+
+func (a *grantAccumulator) add(target pgschema.GrantTarget, grantee, privilege string, grantOption bool, columns ...string) {
+	key := target.Type + ":" + target.Schema + ":" + target.Name + ":" + grantee + ":" + strconv.FormatBool(grantOption)
+	grant := a.items[key]
+	if grant == nil {
+		grant = &pgschema.Grant{
+			Target:      target,
+			Grantees:    []string{grantee},
+			GrantOption: grantOption,
+		}
+		a.items[key] = grant
+	}
+	for i := range grant.Privileges {
+		if grant.Privileges[i].Name == privilege && len(columns) > 0 {
+			grant.Privileges[i].Columns = append(grant.Privileges[i].Columns, columns...)
+			return
+		}
+	}
+	grant.Privileges = append(grant.Privileges, pgschema.GrantPrivilege{
+		Name:    privilege,
+		Columns: append([]string(nil), columns...),
+	})
+}
+
+func (a *grantAccumulator) grants() []pgschema.Grant {
+	out := make([]pgschema.Grant, 0, len(a.items))
+	for _, grant := range a.items {
+		out = append(out, *grant)
+	}
+	return out
+}
+
+func introspectRelationGrants(ctx context.Context, queryer Queryer, acc *grantAccumulator) error {
+	rows, err := queryer.Query(ctx, `
+SELECT CASE WHEN c.relkind = 'S' THEN 'sequence' ELSE 'table' END,
+       n.nspname,
+       c.relname,
+       COALESCE(grantee.rolname, 'public'),
+       acl.privilege_type,
+       acl.is_grantable
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL aclexplode(c.relacl) AS acl
+LEFT JOIN pg_roles grantee ON grantee.oid = acl.grantee
+WHERE c.relacl IS NOT NULL
+  AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+  AND n.nspname NOT LIKE 'pg_%'
+  AND n.nspname <> 'information_schema'
+  AND acl.grantee <> c.relowner
+ORDER BY n.nspname, c.relname, grantee.rolname, acl.privilege_type, acl.is_grantable`)
+	if err != nil {
+		return fmt.Errorf("introspect relation grants: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var typ, schemaName, objectName, grantee, privilege string
+		var grantOption bool
+		if err := rows.Scan(&typ, &schemaName, &objectName, &grantee, &privilege, &grantOption); err != nil {
+			return fmt.Errorf("scan relation grant: %w", err)
+		}
+		acc.add(pgschema.GrantTarget{Type: typ, Name: renderReference(snapshotSchema(schemaName), objectName)}, grantee, privilege, grantOption)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("introspect relation grants: %w", err)
+	}
+	return nil
+}
+
+func introspectColumnGrants(ctx context.Context, queryer Queryer, acc *grantAccumulator) error {
+	rows, err := queryer.Query(ctx, `
+SELECT n.nspname,
+       c.relname,
+       a.attname,
+       COALESCE(grantee.rolname, 'public'),
+       acl.privilege_type,
+       acl.is_grantable
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL aclexplode(a.attacl) AS acl
+LEFT JOIN pg_roles grantee ON grantee.oid = acl.grantee
+WHERE a.attacl IS NOT NULL
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+  AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+  AND n.nspname NOT LIKE 'pg_%'
+  AND n.nspname <> 'information_schema'
+  AND acl.grantee <> c.relowner
+ORDER BY n.nspname, c.relname, grantee.rolname, acl.privilege_type, a.attnum, acl.is_grantable`)
+	if err != nil {
+		return fmt.Errorf("introspect column grants: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var schemaName, objectName, columnName, grantee, privilege string
+		var grantOption bool
+		if err := rows.Scan(&schemaName, &objectName, &columnName, &grantee, &privilege, &grantOption); err != nil {
+			return fmt.Errorf("scan column grant: %w", err)
+		}
+		acc.add(pgschema.GrantTarget{Type: "table", Name: renderReference(snapshotSchema(schemaName), objectName)}, grantee, privilege, grantOption, columnName)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("introspect column grants: %w", err)
+	}
+	return nil
+}
+
+func introspectSchemaGrants(ctx context.Context, queryer Queryer, acc *grantAccumulator) error {
+	rows, err := queryer.Query(ctx, `
+SELECT n.nspname,
+       COALESCE(grantee.rolname, 'public'),
+       acl.privilege_type,
+       acl.is_grantable
+FROM pg_namespace n
+CROSS JOIN LATERAL aclexplode(n.nspacl) AS acl
+LEFT JOIN pg_roles grantee ON grantee.oid = acl.grantee
+WHERE n.nspacl IS NOT NULL
+  AND n.nspname NOT LIKE 'pg_%'
+  AND n.nspname <> 'information_schema'
+  AND acl.grantee <> n.nspowner
+  AND NOT (n.nspname = 'public' AND COALESCE(grantee.rolname, 'public') IN ('public', 'pg_database_owner'))
+ORDER BY n.nspname, grantee.rolname, acl.privilege_type, acl.is_grantable`)
+	if err != nil {
+		return fmt.Errorf("introspect schema grants: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var schemaName, grantee, privilege string
+		var grantOption bool
+		if err := rows.Scan(&schemaName, &grantee, &privilege, &grantOption); err != nil {
+			return fmt.Errorf("scan schema grant: %w", err)
+		}
+		acc.add(pgschema.GrantTarget{Type: "schema", Name: snapshotSchema(schemaName)}, grantee, privilege, grantOption)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("introspect schema grants: %w", err)
+	}
+	return nil
+}
+
+func introspectTypeGrants(ctx context.Context, queryer Queryer, acc *grantAccumulator) error {
+	rows, err := queryer.Query(ctx, `
+SELECT n.nspname,
+       t.typname,
+       COALESCE(grantee.rolname, 'public'),
+       acl.privilege_type,
+       acl.is_grantable
+FROM pg_type t
+JOIN pg_namespace n ON n.oid = t.typnamespace
+LEFT JOIN pg_class c ON c.oid = t.typrelid
+CROSS JOIN LATERAL aclexplode(t.typacl) AS acl
+LEFT JOIN pg_roles grantee ON grantee.oid = acl.grantee
+WHERE t.typacl IS NOT NULL
+  AND t.typtype IN ('e', 'c', 'd')
+  AND (t.typtype <> 'c' OR c.relkind = 'c')
+  AND n.nspname NOT LIKE 'pg_%'
+  AND n.nspname <> 'information_schema'
+  AND acl.grantee <> t.typowner
+  AND NOT (acl.grantee = 0 AND acl.privilege_type = 'USAGE')
+ORDER BY n.nspname, t.typname, grantee.rolname, acl.privilege_type, acl.is_grantable`)
+	if err != nil {
+		return fmt.Errorf("introspect type grants: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var schemaName, objectName, grantee, privilege string
+		var grantOption bool
+		if err := rows.Scan(&schemaName, &objectName, &grantee, &privilege, &grantOption); err != nil {
+			return fmt.Errorf("scan type grant: %w", err)
+		}
+		acc.add(pgschema.GrantTarget{Type: "type", Name: renderReference(snapshotSchema(schemaName), objectName)}, grantee, privilege, grantOption)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("introspect type grants: %w", err)
+	}
+	return nil
+}
+
+func introspectFunctionGrants(ctx context.Context, queryer Queryer, acc *grantAccumulator) error {
+	rows, err := queryer.Query(ctx, `
+SELECT n.nspname,
+       p.proname,
+       pg_get_function_identity_arguments(p.oid),
+       COALESCE(grantee.rolname, 'public'),
+       acl.privilege_type,
+       acl.is_grantable
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+CROSS JOIN LATERAL aclexplode(p.proacl) AS acl
+LEFT JOIN pg_roles grantee ON grantee.oid = acl.grantee
+WHERE p.proacl IS NOT NULL
+  AND n.nspname NOT LIKE 'pg_%'
+  AND n.nspname <> 'information_schema'
+  AND acl.grantee <> p.proowner
+  AND NOT (acl.grantee = 0 AND acl.privilege_type = 'EXECUTE')
+ORDER BY n.nspname, p.proname, grantee.rolname, acl.privilege_type, acl.is_grantable`)
+	if err != nil {
+		return fmt.Errorf("introspect function grants: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var schemaName, objectName, args, grantee, privilege string
+		var grantOption bool
+		if err := rows.Scan(&schemaName, &objectName, &args, &grantee, &privilege, &grantOption); err != nil {
+			return fmt.Errorf("scan function grant: %w", err)
+		}
+		acc.add(pgschema.GrantTarget{Type: "function", Name: renderReference(snapshotSchema(schemaName), objectName) + "(" + args + ")"}, grantee, privilege, grantOption)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("introspect function grants: %w", err)
+	}
+	return nil
+}
+
+func introspectDatabaseGrants(ctx context.Context, queryer Queryer, acc *grantAccumulator) error {
+	rows, err := queryer.Query(ctx, `
+SELECT d.datname,
+       COALESCE(grantee.rolname, 'public'),
+       acl.privilege_type,
+       acl.is_grantable
+FROM pg_database d
+CROSS JOIN LATERAL aclexplode(d.datacl) AS acl
+LEFT JOIN pg_roles grantee ON grantee.oid = acl.grantee
+WHERE d.datacl IS NOT NULL
+  AND d.datname = current_database()
+  AND acl.grantee <> d.datdba
+ORDER BY d.datname, grantee.rolname, acl.privilege_type, acl.is_grantable`)
+	if err != nil {
+		return fmt.Errorf("introspect database grants: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var databaseName, grantee, privilege string
+		var grantOption bool
+		if err := rows.Scan(&databaseName, &grantee, &privilege, &grantOption); err != nil {
+			return fmt.Errorf("scan database grant: %w", err)
+		}
+		acc.add(pgschema.GrantTarget{Type: "database", Name: databaseName}, grantee, privilege, grantOption)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("introspect database grants: %w", err)
+	}
+	return nil
 }
 
 func introspectTriggers(ctx context.Context, queryer Queryer) ([]pgschema.Trigger, error) {

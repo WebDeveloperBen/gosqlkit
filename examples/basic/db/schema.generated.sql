@@ -124,3 +124,15 @@ FOR EACH ROW
 WHEN (OLD.* IS DISTINCT FROM NEW.*)
 EXECUTE FUNCTION set_updated_at();
 COMMENT ON TRIGGER users_set_updated_at ON users IS 'Automatically updates updated_at timestamp on row updates.';
+
+GRANT EXECUTE ON FUNCTION normalise_email(email text) TO app_writer;
+
+GRANT USAGE ON SCHEMA billing TO app_reader;
+
+GRANT SELECT, USAGE ON SEQUENCE billing.order_number_seq TO app_writer;
+
+GRANT SELECT ON TABLE users TO app_reader;
+
+GRANT INSERT, REFERENCES (id), UPDATE ON TABLE users TO app_writer;
+
+GRANT USAGE ON TYPE billing.invoice_status TO app_reader;

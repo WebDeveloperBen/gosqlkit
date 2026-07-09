@@ -32,7 +32,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, role := range roles {
 		renderRole(&b, role)
-		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -45,7 +45,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		b.WriteString("CREATE SCHEMA ")
 		b.WriteString(namespace.Name)
 		b.WriteString(";\n")
-		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -56,7 +56,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, extension := range extensions {
 		renderExtension(&b, extension)
-		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -67,7 +67,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, enum := range enums {
 		renderEnum(&b, enum)
-		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(enums)-1 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -80,7 +80,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderCompositeType(&b, compositeType); err != nil {
 			return "", err
 		}
-		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(compositeTypes)-1 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -93,7 +93,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		if err := renderDomain(&b, domain); err != nil {
 			return "", err
 		}
-		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(domains)-1 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -104,7 +104,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, sequence := range sequences {
 		renderSequence(&b, sequence)
-		if i < len(sequences)-1 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(sequences)-1 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -116,12 +116,12 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, function := range functions {
 		renderFunction(&b, function)
 		renderFunctionComment(&b, function)
-		if i < len(functions)-1 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(functions)-1 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
 
-	hasPostTableObjects := len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0
+	hasPostTableObjects := len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0
 	for i, table := range tables {
 		if err := renderTable(&b, table); err != nil {
 			return "", err
@@ -162,12 +162,12 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, policy := range policies {
 		renderPolicy(&b, policy)
-		if i < len(policies)-1 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(policies)-1 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
 
-	hasViews := len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0
+	hasViews := len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0
 	lastTableHasOutput := len(tables) > 0 && (hasComments(tables[len(tables)-1]) || len(tables[len(tables)-1].Indexes) > 0 || hasRLS(tables[len(tables)-1]))
 	if len(policies) == 0 && hasViews && lastTableHasOutput {
 		b.WriteString("\n")
@@ -180,7 +180,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, view := range views {
 		renderView(&b, view)
 		renderViewComment(&b, view)
-		if i < len(views)-1 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 {
+		if i < len(views)-1 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -192,7 +192,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, mv := range materializedViews {
 		renderMaterializedView(&b, mv)
 		renderMaterializedViewComment(&b, mv)
-		if i < len(materializedViews)-1 || len(schema.Triggers) > 0 {
+		if i < len(materializedViews)-1 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -204,7 +204,18 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	for i, trigger := range triggers {
 		renderTrigger(&b, trigger)
 		renderTriggerComment(&b, trigger)
-		if i < len(triggers)-1 {
+		if i < len(triggers)-1 || len(schema.Grants) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	grants := append([]pgschema.Grant(nil), schema.Grants...)
+	sort.SliceStable(grants, func(i, j int) bool {
+		return renderGrantKey(grants[i]) < renderGrantKey(grants[j])
+	})
+	for i, grant := range grants {
+		renderGrant(&b, grant)
+		if i < len(grants)-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -728,6 +739,33 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 	}
 
+	relationNames := make(map[string]struct{}, len(tableNames)+len(viewNames)+len(materializedViewNames))
+	for key := range tableNames {
+		relationNames[key] = struct{}{}
+	}
+	for key := range viewNames {
+		relationNames[key] = struct{}{}
+	}
+	for key := range materializedViewNames {
+		relationNames[key] = struct{}{}
+	}
+	typeNames := make(map[string]struct{}, len(enumNames)+len(compositeTypeNames)+len(domainNames))
+	for key := range enumNames {
+		typeNames[key] = struct{}{}
+	}
+	for key := range compositeTypeNames {
+		typeNames[key] = struct{}{}
+	}
+	for key := range domainNames {
+		typeNames[key] = struct{}{}
+	}
+	grantNames := map[string]struct{}{}
+	for _, grant := range schema.Grants {
+		if err := validateGrant(grant, grantNames, namespaceNames, relationNames, sequenceNames, typeNames, tableColumns); err != nil {
+			return err
+		}
+	}
+
 	return validateReferences(schema.Tables, tableColumns)
 }
 
@@ -770,6 +808,78 @@ func appendBoolRoleOption(parts []string, value *bool, on, off string) []string 
 		return append(parts, on)
 	}
 	return append(parts, off)
+}
+
+func renderGrant(b *strings.Builder, grant pgschema.Grant) {
+	b.WriteString("GRANT ")
+	privileges := append([]pgschema.GrantPrivilege(nil), grant.Privileges...)
+	sort.SliceStable(privileges, func(i, j int) bool {
+		if privileges[i].Name != privileges[j].Name {
+			return privileges[i].Name < privileges[j].Name
+		}
+		return strings.Join(sortedStrings(privileges[i].Columns), "\x00") < strings.Join(sortedStrings(privileges[j].Columns), "\x00")
+	})
+	parts := make([]string, 0, len(privileges))
+	for _, privilege := range privileges {
+		part := strings.ToUpper(privilege.Name)
+		if len(privilege.Columns) > 0 {
+			part += " (" + strings.Join(sortedStrings(privilege.Columns), ", ") + ")"
+		}
+		parts = append(parts, part)
+	}
+	b.WriteString(strings.Join(parts, ", "))
+	b.WriteString(" ON ")
+	b.WriteString(renderGrantTarget(grant.Target))
+	b.WriteString(" TO ")
+	b.WriteString(strings.Join(sortedStrings(grant.Grantees), ", "))
+	if grant.GrantOption {
+		b.WriteString(" WITH GRANT OPTION")
+	}
+	b.WriteString(";\n")
+}
+
+func renderGrantTarget(target pgschema.GrantTarget) string {
+	if target.AllInSchema {
+		switch target.Type {
+		case "table":
+			return "ALL TABLES IN SCHEMA " + target.Schema
+		case "sequence":
+			return "ALL SEQUENCES IN SCHEMA " + target.Schema
+		case "function":
+			return "ALL FUNCTIONS IN SCHEMA " + target.Schema
+		default:
+			return strings.ToUpper(target.Type)
+		}
+	}
+	switch target.Type {
+	case "table":
+		return "TABLE " + renderReferencedTable(target.Name)
+	case "sequence":
+		return "SEQUENCE " + renderReferencedTable(target.Name)
+	case "schema":
+		return "SCHEMA " + target.Name
+	case "function":
+		return "FUNCTION " + target.Name
+	case "type":
+		return "TYPE " + renderReferencedTable(target.Name)
+	case "database":
+		return "DATABASE " + target.Name
+	default:
+		return strings.ToUpper(target.Type) + " " + target.Name
+	}
+}
+
+func renderGrantKey(grant pgschema.Grant) string {
+	target := grant.Target.Type + ":" + grant.Target.Schema + ":" + grant.Target.Name
+	if grant.Target.AllInSchema {
+		target += ":all"
+	}
+	privileges := make([]string, 0, len(grant.Privileges))
+	for _, privilege := range grant.Privileges {
+		privileges = append(privileges, strings.ToUpper(privilege.Name)+"("+strings.Join(sortedStrings(privilege.Columns), ",")+")")
+	}
+	sort.Strings(privileges)
+	return target + ":" + strings.Join(sortedStrings(grant.Grantees), ",") + ":" + strings.Join(privileges, ",")
 }
 
 func renderExtension(b *strings.Builder, extension pgschema.Extension) {
@@ -1910,6 +2020,233 @@ func validateRoleList(roleName, field string, roles []string) error {
 		seen[name] = struct{}{}
 	}
 	return nil
+}
+
+func validateGrant(grant pgschema.Grant, names map[string]struct{}, namespaceNames, relationNames, sequenceNames, typeNames map[string]struct{}, tableColumns map[string]map[string]struct{}) error {
+	if len(grant.Privileges) == 0 {
+		return errors.New("grant must include at least one privilege")
+	}
+	if len(grant.Grantees) == 0 {
+		return errors.New("grant must include at least one grantee")
+	}
+	key, err := validateGrantTarget(grant.Target, namespaceNames, relationNames, sequenceNames, typeNames)
+	if err != nil {
+		return err
+	}
+	if err := validateGrantPrivileges(grant.Target, grant.Privileges, tableColumns); err != nil {
+		return err
+	}
+	seenGrantees := map[string]struct{}{}
+	for _, grantee := range grant.Grantees {
+		if err := validatePolicyRole(grantee); err != nil {
+			return fmt.Errorf("grant on %s: %w", key, err)
+		}
+		normalised := strings.ToLower(grantee)
+		if _, ok := seenGrantees[normalised]; ok {
+			return fmt.Errorf("grant on %s has duplicate grantee %q", key, grantee)
+		}
+		seenGrantees[normalised] = struct{}{}
+	}
+	identity := key + ":" + renderGrantKey(grant)
+	if _, ok := names[identity]; ok {
+		return fmt.Errorf("duplicate grant on %s", key)
+	}
+	names[identity] = struct{}{}
+	return nil
+}
+
+func validateGrantTarget(target pgschema.GrantTarget, namespaceNames, relationNames, sequenceNames, typeNames map[string]struct{}) (string, error) {
+	if target.Type == "" {
+		return "", errors.New("grant target type must not be empty")
+	}
+	switch target.Type {
+	case "table", "sequence", "function":
+		if target.AllInSchema {
+			if target.Name != "" {
+				return "", fmt.Errorf("grant on all %ss in schema must not set a target name", target.Type)
+			}
+			if err := validateIdentifier("grant schema", target.Schema); err != nil {
+				return "", err
+			}
+			if target.Schema != "public" {
+				if _, ok := namespaceNames[target.Schema]; !ok {
+					return "", fmt.Errorf("grant target schema %q does not exist", target.Schema)
+				}
+			}
+			return "all " + target.Type + "s in schema " + target.Schema, nil
+		}
+	case "schema", "type", "database":
+		if target.AllInSchema {
+			return "", fmt.Errorf("grant target type %q does not support all-in-schema grants", target.Type)
+		}
+	default:
+		return "", fmt.Errorf("grant target type %q is not supported", target.Type)
+	}
+
+	if target.Schema != "" {
+		return "", fmt.Errorf("grant target %q must use a schema-qualified name instead of the schema field", target.Type)
+	}
+	switch target.Type {
+	case "table":
+		key, err := referenceKey("", target.Name)
+		if err != nil {
+			return "", fmt.Errorf("grant table target: %w", err)
+		}
+		if _, ok := relationNames[key]; !ok {
+			return "", fmt.Errorf("grant target table %q does not exist", renderReferencedTable(target.Name))
+		}
+		return "table " + key, nil
+	case "sequence":
+		key, err := referenceKey("", target.Name)
+		if err != nil {
+			return "", fmt.Errorf("grant sequence target: %w", err)
+		}
+		if _, ok := sequenceNames[key]; !ok {
+			return "", fmt.Errorf("grant target sequence %q does not exist", renderReferencedTable(target.Name))
+		}
+		return "sequence " + key, nil
+	case "schema":
+		if err := validateIdentifier("grant schema target", target.Name); err != nil {
+			return "", err
+		}
+		if target.Name != "public" {
+			if _, ok := namespaceNames[target.Name]; !ok {
+				return "", fmt.Errorf("grant target schema %q does not exist", target.Name)
+			}
+		}
+		return "schema " + target.Name, nil
+	case "function":
+		if err := validateGrantFunctionTarget(target.Name); err != nil {
+			return "", err
+		}
+		return "function " + target.Name, nil
+	case "type":
+		key, err := referenceKey("", target.Name)
+		if err != nil {
+			return "", fmt.Errorf("grant type target: %w", err)
+		}
+		if _, ok := typeNames[key]; !ok {
+			return "", fmt.Errorf("grant target type %q does not exist", renderReferencedTable(target.Name))
+		}
+		return "type " + key, nil
+	case "database":
+		if err := validateIdentifier("grant database target", target.Name); err != nil {
+			return "", err
+		}
+		return "database " + target.Name, nil
+	default:
+		return "", fmt.Errorf("grant target type %q is not supported", target.Type)
+	}
+}
+
+func validateGrantFunctionTarget(name string) error {
+	if strings.TrimSpace(name) != name || name == "" {
+		return errors.New("grant function target must not be empty or padded with whitespace")
+	}
+	open := strings.Index(name, "(")
+	closeIndex := strings.LastIndex(name, ")")
+	if open <= 0 || closeIndex != len(name)-1 {
+		return fmt.Errorf("grant function target %q must include an argument signature, for example touch_events()", name)
+	}
+	qualified := name[:open]
+	if _, err := parseQualifiedIdentifier("grant function target", qualified); err != nil {
+		return err
+	}
+	args := name[open+1 : closeIndex]
+	for _, r := range args {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == ' ' || r == ',' || r == '.' || r == '[' || r == ']' {
+			continue
+		}
+		return fmt.Errorf("grant function target %q has unsupported argument signature character %q", name, r)
+	}
+	return nil
+}
+
+func validateGrantPrivileges(target pgschema.GrantTarget, privileges []pgschema.GrantPrivilege, tableColumns map[string]map[string]struct{}) error {
+	seen := map[string]struct{}{}
+	for _, privilege := range privileges {
+		name := strings.ToUpper(privilege.Name)
+		if name == "" {
+			return errors.New("grant privilege must not be empty")
+		}
+		if !grantPrivilegeAllowed(target.Type, name) {
+			return fmt.Errorf("privilege %q is not valid for grant target type %q", privilege.Name, target.Type)
+		}
+		if len(privilege.Columns) > 0 {
+			if target.Type != "table" || target.AllInSchema {
+				return fmt.Errorf("privilege %q cannot specify columns for grant target type %q", privilege.Name, target.Type)
+			}
+			if !grantColumnPrivilegeAllowed(name) {
+				return fmt.Errorf("privilege %q cannot specify columns", privilege.Name)
+			}
+			seenColumns := map[string]struct{}{}
+			for _, column := range privilege.Columns {
+				if err := validateIdentifier("grant column", column); err != nil {
+					return err
+				}
+				targetKey, err := referenceKey("", target.Name)
+				if err == nil {
+					if columns, ok := tableColumns[targetKey]; ok {
+						if _, exists := columns[column]; !exists {
+							return fmt.Errorf("grant target table %q has no column %q", renderReferencedTable(target.Name), column)
+						}
+					}
+				}
+				if _, ok := seenColumns[column]; ok {
+					return fmt.Errorf("grant privilege %q has duplicate column %q", privilege.Name, column)
+				}
+				seenColumns[column] = struct{}{}
+			}
+		}
+		key := name + ":" + strings.Join(sortedStrings(privilege.Columns), ",")
+		if _, ok := seen[key]; ok {
+			return fmt.Errorf("grant has duplicate privilege %q", privilege.Name)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func grantPrivilegeAllowed(targetType, privilege string) bool {
+	if privilege == "ALL PRIVILEGES" || privilege == "ALL" {
+		return true
+	}
+	switch targetType {
+	case "table":
+		switch privilege {
+		case "SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER", "MAINTAIN":
+			return true
+		}
+	case "sequence":
+		switch privilege {
+		case "USAGE", "SELECT", "UPDATE":
+			return true
+		}
+	case "schema":
+		switch privilege {
+		case "CREATE", "USAGE":
+			return true
+		}
+	case "function":
+		return privilege == "EXECUTE"
+	case "type":
+		return privilege == "USAGE"
+	case "database":
+		switch privilege {
+		case "CREATE", "CONNECT", "TEMPORARY", "TEMP":
+			return true
+		}
+	}
+	return false
+}
+
+func grantColumnPrivilegeAllowed(privilege string) bool {
+	switch privilege {
+	case "ALL", "ALL PRIVILEGES", "SELECT", "INSERT", "UPDATE", "REFERENCES":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateFunction(function pgschema.Function, names map[string]struct{}) error {

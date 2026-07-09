@@ -56,6 +56,35 @@ func TestRoleDSLRegistersOptions(t *testing.T) {
 	}
 }
 
+func TestGrantDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Grant(pg.PrivilegeSelect).
+		Columns(pg.PrivilegeUpdate, "display_name").
+		OnTable("users").
+		To("app_reader").
+		WithGrantOption()
+
+	schema := pg.Schema()
+	if len(schema.Grants) != 1 {
+		t.Fatalf("grants len = %d, want 1", len(schema.Grants))
+	}
+	grant := schema.Grants[0]
+	if grant.Target.Type != "table" || grant.Target.Name != "users" {
+		t.Fatalf("target = %#v", grant.Target)
+	}
+	if len(grant.Privileges) != 2 || grant.Privileges[0].Name != "SELECT" || grant.Privileges[1].Name != "UPDATE" {
+		t.Fatalf("privileges = %#v", grant.Privileges)
+	}
+	if len(grant.Privileges[1].Columns) != 1 || grant.Privileges[1].Columns[0] != "display_name" {
+		t.Fatalf("column privileges = %#v", grant.Privileges[1].Columns)
+	}
+	if len(grant.Grantees) != 1 || grant.Grantees[0] != "app_reader" || !grant.GrantOption {
+		t.Fatalf("grant options = %#v", grant)
+	}
+}
+
 func TestFunctionDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

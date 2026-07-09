@@ -98,6 +98,104 @@
       "volatility": "VOLATILE"
     }
   ],
+  "grants": [
+    {
+      "target": {
+        "type": "function",
+        "name": "normalise_email(email text)"
+      },
+      "privileges": [
+        {
+          "name": "EXECUTE"
+        }
+      ],
+      "grantees": [
+        "app_writer"
+      ]
+    },
+    {
+      "target": {
+        "type": "schema",
+        "name": "billing"
+      },
+      "privileges": [
+        {
+          "name": "USAGE"
+        }
+      ],
+      "grantees": [
+        "app_reader"
+      ]
+    },
+    {
+      "target": {
+        "type": "sequence",
+        "name": "billing.order_number_seq"
+      },
+      "privileges": [
+        {
+          "name": "SELECT"
+        },
+        {
+          "name": "USAGE"
+        }
+      ],
+      "grantees": [
+        "app_writer"
+      ]
+    },
+    {
+      "target": {
+        "type": "table",
+        "name": "users"
+      },
+      "privileges": [
+        {
+          "name": "SELECT"
+        }
+      ],
+      "grantees": [
+        "app_reader"
+      ]
+    },
+    {
+      "target": {
+        "type": "table",
+        "name": "users"
+      },
+      "privileges": [
+        {
+          "name": "INSERT"
+        },
+        {
+          "name": "REFERENCES",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "UPDATE"
+        }
+      ],
+      "grantees": [
+        "app_writer"
+      ]
+    },
+    {
+      "target": {
+        "type": "type",
+        "name": "billing.invoice_status"
+      },
+      "privileges": [
+        {
+          "name": "USAGE"
+        }
+      ],
+      "grantees": [
+        "app_reader"
+      ]
+    }
+  ],
   "materializedViews": [
     {
       "name": "cached_bookings",
@@ -157,7 +255,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "8d8c3fb99d42ab6a6eb5206f85e10abc13e0a4b3e950c3c9e49ac2e973ea6395",
+  "snapshotId": "65faf6bcd674cebc42b266a1ba2af34b8015e38146b47541280986d03ef993ef",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},

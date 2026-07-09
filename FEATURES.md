@@ -81,6 +81,7 @@ Legend:
 - `[x]` Domains.
 - `[x]` Composite types.
 - `[x]` Partitioned tables, partition children, and partition bounds.
+- `[x]` Explicit grants and column-level table privileges.
 - `[x]` Comments.
 - `[ ]` Tablespaces.
 - `[ ]` Collations.
@@ -513,6 +514,7 @@ Other provider requirement:
 - `[x]` Function rendering tests.
 - `[x]` Trigger rendering tests.
 - `[x]` RLS policy rendering tests.
+- `[x]` Grant rendering tests.
 - `[x]` Diff fixture tests.
 - `[x]` Destructive-change fixture tests.
 - `[x]` Rename-aware diff tests.
@@ -535,6 +537,7 @@ Other provider requirement:
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
 - `[x]` Drift diagnostics tests for top-level objects and table-nested objects.
 - `[x]` Partitioned table and partition-child render, diff, drift, and introspection tests.
+- `[x]` Grant render, diff, drift, and introspection coverage.
 - `[x]` CLI table-rendering tests for drift diagnostics.
 - `[x]` CLI table-rendering tests for migration plan diagnostics.
 - `[x]` CLI flag validation tests for conflicting prompt-mode controls.
@@ -556,13 +559,14 @@ Other provider requirement:
 10. Add runner-compatible migration file generation and destructive-change guardrails.
 11. Add styled CLI summaries and interactive ambiguity resolution for migration
     authoring.
-12. Expand into grants and other advanced PostgreSQL features.
+12. Expand into remaining advanced PostgreSQL features such as tablespaces,
+    collations, and raw SQL schema blocks.
 
 ## Drizzle Reference Notes
 
 The Drizzle source is useful as a requirements reference, not as an implementation blueprint. Important patterns to carry forward:
 
-- PostgreSQL schema declarations include more than tables: enums, schemas, sequences, views, materialized views, roles, functions, triggers, policies, and relations.
+- PostgreSQL schema declarations include more than tables: enums, schemas, sequences, views, materialized views, roles, functions, triggers, policies, grants, and relations.
 - The serializer collects exported objects into typed groups before producing a snapshot.
 - The snapshot stores columns, indexes, foreign keys, composite primary keys, unique constraints, policies, check constraints, RLS state, views, sequences, roles, functions, triggers, and metadata.
 - Index modelling needs to account for methods, expressions, operator classes, sort direction, null ordering, partial predicates, concurrent creation, and storage parameters.

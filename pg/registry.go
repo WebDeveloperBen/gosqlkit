@@ -22,6 +22,7 @@ var registry = struct {
 	materializedViews []*pgschema.MaterializedView
 	triggers          []*pgschema.Trigger
 	policies          []*pgschema.Policy
+	grants            []*pgschema.Grant
 	sync.Mutex
 }{}
 
@@ -121,6 +122,11 @@ func Schema() pgschema.Schema {
 		policies = append(policies, *policy)
 	}
 
+	grants := make([]pgschema.Grant, 0, len(registry.grants))
+	for _, grant := range registry.grants {
+		grants = append(grants, *grant)
+	}
+
 	return pgschema.Schema{
 		Namespaces:        namespaces,
 		Extensions:        extensions,
@@ -135,6 +141,7 @@ func Schema() pgschema.Schema {
 		MaterializedViews: materializedViews,
 		Triggers:          triggers,
 		Policies:          policies,
+		Grants:            grants,
 	}
 }
 
@@ -177,6 +184,7 @@ func Reset() {
 	registry.materializedViews = nil
 	registry.triggers = nil
 	registry.policies = nil
+	registry.grants = nil
 }
 
 func register(table *pgschema.Table) {
@@ -268,4 +276,11 @@ func registerPolicy(policy *pgschema.Policy) {
 	defer registry.Unlock()
 
 	registry.policies = append(registry.policies, policy)
+}
+
+func registerGrant(grant *pgschema.Grant) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.grants = append(registry.grants, grant)
 }

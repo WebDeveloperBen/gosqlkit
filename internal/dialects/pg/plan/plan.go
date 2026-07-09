@@ -70,6 +70,9 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.triggers(previous.Triggers, current.Triggers, current.Tables, current.Views, current.MaterializedViews); err != nil {
 		return nil, err
 	}
+	if err := planner.grants(previous.Grants, current.Grants); err != nil {
+		return nil, err
+	}
 	if err := planner.sortChanges(); err != nil {
 		return nil, err
 	}

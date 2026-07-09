@@ -54,6 +54,29 @@ type PolicyDef struct {
 	def *pgschema.Policy
 }
 
+type GrantDef struct {
+	def *pgschema.Grant
+}
+
+type Privilege string
+
+const (
+	PrivilegeAll        Privilege = "ALL PRIVILEGES"
+	PrivilegeSelect     Privilege = "SELECT"
+	PrivilegeInsert     Privilege = "INSERT"
+	PrivilegeUpdate     Privilege = "UPDATE"
+	PrivilegeDelete     Privilege = "DELETE"
+	PrivilegeTruncate   Privilege = "TRUNCATE"
+	PrivilegeReferences Privilege = "REFERENCES"
+	PrivilegeTrigger    Privilege = "TRIGGER"
+	PrivilegeMaintain   Privilege = "MAINTAIN"
+	PrivilegeUsage      Privilege = "USAGE"
+	PrivilegeExecute    Privilege = "EXECUTE"
+	PrivilegeConnect    Privilege = "CONNECT"
+	PrivilegeCreate     Privilege = "CREATE"
+	PrivilegeTemporary  Privilege = "TEMPORARY"
+)
+
 func Namespace(name string) *NamespaceDef {
 	namespace := pgschema.Namespace{Name: name}
 	registerNamespace(namespace)
@@ -169,6 +192,84 @@ func (r *RoleDef) AdminOf(roles ...string) *RoleDef {
 func (r *RoleDef) PreviousName(name string) *RoleDef {
 	r.def.PreviousName = name
 	return r
+}
+
+func Grant(privileges ...Privilege) *GrantDef {
+	grant := &pgschema.Grant{}
+	def := &GrantDef{def: grant}
+	def.Privileges(privileges...)
+	registerGrant(grant)
+	return def
+}
+
+func (g *GrantDef) Privileges(privileges ...Privilege) *GrantDef {
+	for _, privilege := range privileges {
+		g.def.Privileges = append(g.def.Privileges, pgschema.GrantPrivilege{Name: string(privilege)})
+	}
+	return g
+}
+
+func (g *GrantDef) Columns(privilege Privilege, columns ...string) *GrantDef {
+	g.def.Privileges = append(g.def.Privileges, pgschema.GrantPrivilege{
+		Name:    string(privilege),
+		Columns: append([]string(nil), columns...),
+	})
+	return g
+}
+
+func (g *GrantDef) OnTable(name string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "table", Name: name}
+	return g
+}
+
+func (g *GrantDef) OnSequence(name string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "sequence", Name: name}
+	return g
+}
+
+func (g *GrantDef) OnSchema(name string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "schema", Name: name}
+	return g
+}
+
+func (g *GrantDef) OnFunction(name string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "function", Name: name}
+	return g
+}
+
+func (g *GrantDef) OnType(name string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "type", Name: name}
+	return g
+}
+
+func (g *GrantDef) OnDatabase(name string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "database", Name: name}
+	return g
+}
+
+func (g *GrantDef) OnAllTablesInSchema(schema string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "table", Schema: schema, AllInSchema: true}
+	return g
+}
+
+func (g *GrantDef) OnAllSequencesInSchema(schema string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "sequence", Schema: schema, AllInSchema: true}
+	return g
+}
+
+func (g *GrantDef) OnAllFunctionsInSchema(schema string) *GrantDef {
+	g.def.Target = pgschema.GrantTarget{Type: "function", Schema: schema, AllInSchema: true}
+	return g
+}
+
+func (g *GrantDef) To(roles ...string) *GrantDef {
+	g.def.Grantees = append(g.def.Grantees, roles...)
+	return g
+}
+
+func (g *GrantDef) WithGrantOption() *GrantDef {
+	g.def.GrantOption = true
+	return g
 }
 
 func EnumType(name string, values ...string) *EnumDef {

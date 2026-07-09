@@ -189,3 +189,28 @@ var CachedBookings = pg.MaterializedView("cached_bookings").
 	).From("bookings").GroupBy(pg.Col("owner"), pg.Col("resource"))).
 	Comment("Pre-aggregated booking counts.").
 	DependsOn("bookings")
+
+var ReaderUserGrant = pg.Grant(pg.PrivilegeSelect).
+	OnTable("users").
+	To("app_reader")
+
+var WriterUserGrant = pg.Grant(pg.PrivilegeInsert, pg.PrivilegeUpdate).
+	Columns(pg.PrivilegeReferences, "id").
+	OnTable("users").
+	To("app_writer")
+
+var BillingSchemaGrant = pg.Grant(pg.PrivilegeUsage).
+	OnSchema("billing").
+	To("app_reader")
+
+var OrderNumberGrant = pg.Grant(pg.PrivilegeUsage, pg.PrivilegeSelect).
+	OnSequence("billing.order_number_seq").
+	To("app_writer")
+
+var InvoiceStatusGrant = pg.Grant(pg.PrivilegeUsage).
+	OnType("billing.invoice_status").
+	To("app_reader")
+
+var NormaliseEmailGrant = pg.Grant(pg.PrivilegeExecute).
+	OnFunction("normalise_email(email text)").
+	To("app_writer")

@@ -154,6 +154,7 @@ func projectDriftDocument(doc pgschema.Document) pgschema.Schema {
 		MaterializedViews: doc.MaterializedViews,
 		Triggers:          doc.Triggers,
 		Policies:          doc.Policies,
+		Grants:            doc.Grants,
 	})
 }
 
@@ -179,6 +180,7 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 		MaterializedViews: projectDriftMaterializedViews(schema.MaterializedViews),
 		Triggers:          projectDriftTriggers(schema.Triggers),
 		Policies:          projectDriftPolicies(schema.Policies),
+		Grants:            projectDriftGrants(schema.Grants),
 	}
 }
 
@@ -422,6 +424,34 @@ func projectDriftPolicies(items []pgschema.Policy) []pgschema.Policy {
 		}
 	}
 	return out
+}
+
+func projectDriftGrants(items []pgschema.Grant) []pgschema.Grant {
+	out := append([]pgschema.Grant(nil), items...)
+	for i := range out {
+		switch out[i].Target.Type {
+		case "table", "sequence", "type":
+			if !out[i].Target.AllInSchema {
+				out[i].Target.Name = normaliseDriftReference(out[i].Target.Name)
+			}
+		case "function":
+			if !out[i].Target.AllInSchema {
+				out[i].Target.Name = normaliseDriftFunctionReference(out[i].Target.Name)
+			}
+		}
+		for j := range out[i].Privileges {
+			out[i].Privileges[j].Name = strings.ToUpper(out[i].Privileges[j].Name)
+		}
+	}
+	return out
+}
+
+func normaliseDriftFunctionReference(value string) string {
+	name, signature, ok := strings.Cut(value, "(")
+	if !ok {
+		return normaliseDriftReference(value)
+	}
+	return normaliseDriftReference(name) + "(" + signature
 }
 
 func normaliseSQLDefinition(value string) string {

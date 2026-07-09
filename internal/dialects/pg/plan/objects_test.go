@@ -124,6 +124,83 @@ func TestSnapshotDiffProducesRoleReverse(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffProducesGrantReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Roles: []pgschema.Role{{
+			Name: "app_reader",
+		}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+		}},
+		Grants: []pgschema.Grant{{
+			Target:     pgschema.GrantTarget{Type: "table", Name: "users"},
+			Privileges: []pgschema.GrantPrivilege{{Name: "SELECT"}},
+			Grantees:   []string{"app_reader"},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 3 || planned.Statements[2] != "GRANT SELECT ON TABLE users TO app_reader;" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	grant := planned.Changes[2]
+	if grant.Object.Kind != migrateplan.ObjectKindGrant || grant.Op != migrateplan.OperationCreate {
+		t.Fatalf("grant change = %#v", grant)
+	}
+	if !grant.Reversible || len(grant.ReverseStatements) != 1 || grant.ReverseStatements[0].SQL != "REVOKE SELECT ON TABLE users FROM app_reader;" {
+		t.Fatalf("reverse = %#v reversible=%v", grant.ReverseStatements, grant.Reversible)
+	}
+}
+
+func TestSnapshotDiffGrantRemovalIsManualReview(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Grants: []pgschema.Grant{{
+			Target:     pgschema.GrantTarget{Type: "table", Name: "users"},
+			Privileges: []pgschema.GrantPrivilege{{Name: "SELECT"}},
+			Grantees:   []string{"app_reader"},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 0 || len(planned.Changes) != 1 {
+		t.Fatalf("planned = %#v", planned)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationDrop || change.Object.Kind != migrateplan.ObjectKindGrant {
+		t.Fatalf("change = %#v", change)
+	}
+	for _, risk := range []migrateplan.Risk{
+		migrateplan.RiskManualReview,
+		migrateplan.RiskDestructive,
+		migrateplan.RiskRequiresDDLReview,
+	} {
+		if !change.HasRisk(risk) {
+			t.Fatalf("expected risk %q in %#v", risk, change.Risks)
+		}
+	}
+}
+
 func TestSnapshotDiffOrdersRolesByMembershipDependency(t *testing.T) {
 	login := true
 	previous := snapshot(t, pgschema.Document{

@@ -1015,6 +1015,123 @@ func TestPostgresRejectsRoleSelfMembership(t *testing.T) {
 	}
 }
 
+func TestPostgresRendersGrants(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Roles: []pgschema.Role{{Name: "app_reader"}},
+		Namespaces: []pgschema.Namespace{
+			{Name: "billing"},
+		},
+		Enums: []pgschema.Enum{{
+			Schema: "billing",
+			Name:   "invoice_status",
+			Values: []string{"draft"},
+		}},
+		Sequences: []pgschema.Sequence{{
+			Schema: "billing",
+			Name:   "order_number_seq",
+		}},
+		Functions: []pgschema.Function{{
+			Name:       "normalise_email",
+			Language:   "sql",
+			ReturnType: "text",
+			Body:       "SELECT $1",
+			Arguments:  []pgschema.FunctionArgument{{Type: "text"}},
+		}},
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name: "users",
+				Columns: []ast.Column{
+					{Name: "id", Type: "uuid"},
+					{Name: "email", Type: "text"},
+				},
+			},
+		}},
+		Grants: []pgschema.Grant{
+			{
+				Target: pgschema.GrantTarget{Type: "table", Name: "users"},
+				Privileges: []pgschema.GrantPrivilege{
+					{Name: "SELECT"},
+					{Name: "UPDATE", Columns: []string{"email"}},
+				},
+				Grantees:    []string{"app_reader"},
+				GrantOption: true,
+			},
+			{
+				Target:     pgschema.GrantTarget{Type: "schema", Name: "billing"},
+				Privileges: []pgschema.GrantPrivilege{{Name: "USAGE"}},
+				Grantees:   []string{"app_reader"},
+			},
+			{
+				Target:     pgschema.GrantTarget{Type: "sequence", Name: "billing.order_number_seq"},
+				Privileges: []pgschema.GrantPrivilege{{Name: "USAGE"}},
+				Grantees:   []string{"app_reader"},
+			},
+			{
+				Target:     pgschema.GrantTarget{Type: "type", Name: "billing.invoice_status"},
+				Privileges: []pgschema.GrantPrivilege{{Name: "USAGE"}},
+				Grantees:   []string{"app_reader"},
+			},
+			{
+				Target:     pgschema.GrantTarget{Type: "function", Name: "normalise_email(text)"},
+				Privileges: []pgschema.GrantPrivilege{{Name: "EXECUTE"}},
+				Grantees:   []string{"app_reader"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"GRANT EXECUTE ON FUNCTION normalise_email(text) TO app_reader;",
+		"GRANT USAGE ON SCHEMA billing TO app_reader;",
+		"GRANT USAGE ON SEQUENCE billing.order_number_seq TO app_reader;",
+		"GRANT SELECT, UPDATE (email) ON TABLE users TO app_reader WITH GRANT OPTION;",
+		"GRANT USAGE ON TYPE billing.invoice_status TO app_reader;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+}
+
+func TestPostgresRejectsGrantWithInvalidPrivilegeForTarget(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+		}},
+		Grants: []pgschema.Grant{{
+			Target:     pgschema.GrantTarget{Type: "table", Name: "users"},
+			Privileges: []pgschema.GrantPrivilege{{Name: "EXECUTE"}},
+			Grantees:   []string{"public"},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "not valid for grant target type") {
+		t.Fatalf("expected invalid privilege error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsGrantWithUnknownColumn(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+		}},
+		Grants: []pgschema.Grant{{
+			Target:     pgschema.GrantTarget{Type: "table", Name: "users"},
+			Privileges: []pgschema.GrantPrivilege{{Name: "SELECT", Columns: []string{"email"}}},
+			Grantees:   []string{"public"},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "has no column") {
+		t.Fatalf("expected unknown grant column error, got %v", err)
+	}
+}
+
 func TestPostgresRejectsDuplicateFunctionSignature(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
 		Functions: []pgschema.Function{

@@ -465,7 +465,8 @@ tracks are roughly:
 3. **Database connectivity + introspection + diff** — cross-dialect migration
    IR, dialect planners, sandbox validation, drift checks, and provider-pluggable
    token auth for Azure/AWS/GCP. Largest track (Slices 6 and 7).
-4. **Advanced PG objects** — grants and other remaining PostgreSQL objects.
+4. **Advanced PG objects** — remaining PostgreSQL objects such as tablespaces,
+   collations, and raw SQL schema blocks.
 
 When direction is ambiguous, ask the user which track rather than guessing.
 A wrong track wastes more time than a quick clarifying question.
@@ -623,7 +624,7 @@ update of this file:
   checking is implemented with `drift check --url`; the introspector covers
   namespaces, extensions, roles, enums, composite types, domains, standalone
   sequences, functions, tables, partitioning metadata, partition-child bounds, columns, comments, RLS flags, table
-  constraints, standalone indexes, policies, triggers, views, and materialized
+  constraints, standalone indexes, policies, triggers, grants, views, and materialized
   views. Drift projection normalises rename metadata, non-persistent index
   flags, identity-backed sequences, extension-owned objects, dependency hints,
   and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
@@ -634,8 +635,8 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: advanced PG objects (grants), then remaining PostgreSQL
-  coverage such as tablespaces and collations.
+- **Next tracks**: remaining PostgreSQL coverage such as tablespaces,
+  collations, raw SQL schema blocks, and the first non-PostgreSQL provider.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

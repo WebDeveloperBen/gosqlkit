@@ -170,7 +170,7 @@ sqlc generate
   key actions, index methods, and view check options
 - PostgreSQL schemas/namespaces, extensions, enums, sequences, composite
   types, domains, partitioned tables with child bounds, roles, functions,
-  triggers, and RLS policies
+  triggers, RLS policies, and explicit grants
 - Builder-style function bodies, composite fields, views, and materialized
   views, while keeping raw SQL escape hatches
 - Views with column aliases, check options, and security options
@@ -198,7 +198,7 @@ sqlc generate
 - PostgreSQL drift checking with `gosqlkit drift check --url ...` across the
   PostgreSQL snapshot model: namespaces, extensions, roles, enums, composite
   types, domains, sequences, functions, tables, columns, table constraints,
-  standalone indexes, comments, RLS flags, policies, triggers, views, and
+  standalone indexes, comments, RLS flags, policies, triggers, grants, views, and
   materialized views, with object-level diagnostics for missing, extra, and
   changed objects in a styled terminal table and JSON output
 - CI-friendly wrappers: `gosqlkit ci schema` checks committed generated SQL,

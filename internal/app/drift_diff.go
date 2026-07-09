@@ -54,6 +54,7 @@ func driftDifferences(desired, database pgschema.Schema) []DriftDifference {
 	})
 	compareDriftCollection(&diffs, "trigger", desired.Triggers, database.Triggers, driftTriggerKey)
 	compareDriftCollection(&diffs, "policy", desired.Policies, database.Policies, driftPolicyKey)
+	compareDriftCollection(&diffs, "grant", desired.Grants, database.Grants, driftGrantKey)
 	compareDriftTableChildren(&diffs, desired.Tables, database.Tables)
 	return diffs
 }
@@ -216,6 +217,21 @@ func driftTriggerKey(trigger pgschema.Trigger) string {
 
 func driftPolicyKey(policy pgschema.Policy) string {
 	return driftQualifiedReference(policy.Table) + "." + policy.Name
+}
+
+func driftGrantKey(grant pgschema.Grant) string {
+	parts := []string{grant.Target.Type, grant.Target.Schema, grant.Target.Name}
+	if grant.Target.AllInSchema {
+		parts = append(parts, "all")
+	}
+	parts = append(parts, strings.Join(driftSortedStrings(grant.Grantees), ","))
+	return strings.Join(parts, ":")
+}
+
+func driftSortedStrings(values []string) []string {
+	out := append([]string(nil), values...)
+	sort.Strings(out)
+	return out
 }
 
 func driftQualified(schema, name string) string {

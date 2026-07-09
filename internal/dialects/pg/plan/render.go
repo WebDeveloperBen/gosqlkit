@@ -52,6 +52,81 @@ func appendBoolRoleOption(parts []string, value *bool, on, off string) []string 
 	return append(parts, off)
 }
 
+func renderGrant(grant pgschema.Grant) string {
+	var b strings.Builder
+	b.WriteString("GRANT ")
+	b.WriteString(renderGrantPrivileges(grant.Privileges))
+	b.WriteString(" ON ")
+	b.WriteString(renderGrantTarget(grant.Target))
+	b.WriteString(" TO ")
+	b.WriteString(strings.Join(sortedStrings(grant.Grantees), ", "))
+	if grant.GrantOption {
+		b.WriteString(" WITH GRANT OPTION")
+	}
+	b.WriteString(";")
+	return b.String()
+}
+
+func renderRevokeGrant(grant pgschema.Grant) string {
+	var b strings.Builder
+	b.WriteString("REVOKE ")
+	b.WriteString(renderGrantPrivileges(grant.Privileges))
+	b.WriteString(" ON ")
+	b.WriteString(renderGrantTarget(grant.Target))
+	b.WriteString(" FROM ")
+	b.WriteString(strings.Join(sortedStrings(grant.Grantees), ", "))
+	b.WriteString(";")
+	return b.String()
+}
+
+func renderGrantPrivileges(privileges []pgschema.GrantPrivilege) string {
+	items := append([]pgschema.GrantPrivilege(nil), privileges...)
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Name != items[j].Name {
+			return items[i].Name < items[j].Name
+		}
+		return strings.Join(sortedStrings(items[i].Columns), "\x00") < strings.Join(sortedStrings(items[j].Columns), "\x00")
+	})
+	parts := make([]string, 0, len(items))
+	for _, privilege := range items {
+		part := strings.ToUpper(privilege.Name)
+		if len(privilege.Columns) > 0 {
+			part += " (" + strings.Join(sortedStrings(privilege.Columns), ", ") + ")"
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func renderGrantTarget(target pgschema.GrantTarget) string {
+	if target.AllInSchema {
+		switch target.Type {
+		case "table":
+			return "ALL TABLES IN SCHEMA " + target.Schema
+		case "sequence":
+			return "ALL SEQUENCES IN SCHEMA " + target.Schema
+		case "function":
+			return "ALL FUNCTIONS IN SCHEMA " + target.Schema
+		}
+	}
+	switch target.Type {
+	case "table":
+		return "TABLE " + renderReferencedTable(target.Name)
+	case "sequence":
+		return "SEQUENCE " + renderReferencedTable(target.Name)
+	case "schema":
+		return "SCHEMA " + target.Name
+	case "function":
+		return "FUNCTION " + target.Name
+	case "type":
+		return "TYPE " + renderReferencedTable(target.Name)
+	case "database":
+		return "DATABASE " + target.Name
+	default:
+		return strings.ToUpper(target.Type) + " " + target.Name
+	}
+}
+
 func renderSequence(sequence pgschema.Sequence, includeOwnedBy bool) string {
 	var b strings.Builder
 	b.WriteString("CREATE SEQUENCE ")

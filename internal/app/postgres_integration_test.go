@@ -881,6 +881,7 @@ func assertExampleSchemaIntrospected(t *testing.T, schema pgschema.Schema) {
 		{name: "materialized views", got: len(schema.MaterializedViews), want: 1},
 		{name: "triggers", got: len(schema.Triggers), want: 1},
 		{name: "policies", got: len(schema.Policies), want: 1},
+		{name: "grants", got: len(schema.Grants), want: 6},
 	}
 	for _, check := range checks {
 		if check.got < check.want {
@@ -909,6 +910,18 @@ func assertExampleSchemaIntrospected(t *testing.T, schema pgschema.Schema) {
 		eventsPriorityLow.PartitionOf.Bound.Type != "range" || len(eventsPriorityLow.PartitionOf.Bound.From) != 1 ||
 		eventsPriorityLow.PartitionOf.Bound.From[0] != "0" {
 		t.Fatalf("events_priority_low partition = %#v", eventsPriorityLow)
+	}
+	hasUserReaderGrant := false
+	for _, grant := range schema.Grants {
+		if grant.Target.Type == "table" && grant.Target.Name == "public.users" &&
+			len(grant.Grantees) == 1 && grant.Grantees[0] == "app_reader" &&
+			len(grant.Privileges) == 1 && grant.Privileges[0].Name == "SELECT" {
+			hasUserReaderGrant = true
+			break
+		}
+	}
+	if !hasUserReaderGrant {
+		t.Fatalf("missing users app_reader SELECT grant in %#v", schema.Grants)
 	}
 }
 
