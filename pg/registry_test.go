@@ -23,7 +23,10 @@ func TestProviderRegistersPostgresDialectMetadata(t *testing.T) {
 	if !info.Capabilities.Tables || !info.Capabilities.Schemas || !info.Capabilities.Extensions ||
 		!info.Capabilities.Enums || !info.Capabilities.AdvancedIndexes || !info.Capabilities.Snapshots ||
 		!info.Capabilities.Roles || !info.Capabilities.Functions || !info.Capabilities.Triggers ||
-		!info.Capabilities.RLS {
+		!info.Capabilities.RLS || !info.Capabilities.RenderSQL || !info.Capabilities.SnapshotJSON ||
+		!info.Capabilities.InspectDatabase || !info.Capabilities.DriftCheck ||
+		!info.Capabilities.MigrationPlan || !info.Capabilities.MigrationApply ||
+		!info.Capabilities.SandboxReplay {
 		t.Fatalf("unexpected capabilities %#v", info.Capabilities)
 	}
 }

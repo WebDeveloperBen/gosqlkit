@@ -594,7 +594,9 @@ update of this file:
   `drift check` (with `--url`, `--url-env`, `--json`, and `--quiet`).
   Database-backed commands default to `DATABASE_URL` when `--url` is omitted
   and support custom token-as-password commands through `--token-command` /
-  `--sandbox-token-command`.
+  `--sandbox-token-command`, Azure CLI and DefaultAzureCredential token
+  providers, AWS SDK/CLI IAM token providers, and gcloud Cloud SQL IAM login
+  token providers.
   Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
   (SHA-256), metadata maps (schema/table/column/view/role/function/trigger/policy), and rename
   annotations (previousName on all objects).
@@ -632,8 +634,8 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: Azure/AWS/GCP-specific token auth, `golang-migrate`
-  renderer, then advanced PG objects (partitioning, grants).
+- **Next tracks**: `golang-migrate` renderer, then advanced PG objects
+  (partitioning, grants).
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

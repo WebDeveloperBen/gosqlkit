@@ -51,6 +51,13 @@ func (provider) Dialect() kit.DialectInfo {
 			Functions:         true,
 			Triggers:          true,
 			RLS:               true,
+			RenderSQL:         true,
+			SnapshotJSON:      true,
+			InspectDatabase:   true,
+			DriftCheck:        true,
+			MigrationPlan:     true,
+			MigrationApply:    true,
+			SandboxReplay:     true,
 		},
 	}
 }

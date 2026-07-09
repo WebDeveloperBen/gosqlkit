@@ -62,7 +62,7 @@ Legend:
 - `[x]` Shared table/index core explicitly separated from all dialect-specific options.
 - `[x]` Move PostgreSQL-only index options out of the shared index model.
 - `[ ]` First non-PostgreSQL provider proving the boundary.
-- `[ ]` Dialect capability checks in CLI commands where a command needs unsupported features.
+- `[x]` Dialect capability checks in CLI commands where a command needs unsupported features.
 
 ## Schema Object Model
 
@@ -351,9 +351,9 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` Provider-neutral auth interface for tooling database connections.
 - `[x]` Password and environment URL auth.
 - `[x]` Custom token command auth.
-- `[ ]` Azure Entra token auth.
-- `[ ]` AWS IAM token auth.
-- `[ ]` GCP IAM token auth.
+- `[~]` Azure Entra token auth.
+- `[x]` AWS IAM token auth.
+- `[x]` GCP IAM token auth.
 - `[x]` Credential and token redaction in diagnostics.
 - `[x]` `gosqlkit migrate apply --url ...`.
 - `[ ]` `golang-migrate` renderer from the structured plan.
@@ -369,29 +369,29 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Connect using password authentication.
 - `[x]` Connect using SSL/TLS options required by managed PostgreSQL providers.
 - `[x]` Connect using token-as-password authentication.
-- `[ ]` Support token providers through a refreshable token callback.
-- `[ ]` Support OAuth2 access-token providers.
-- `[ ]` Support cloud-specific signed database auth tokens.
-- `[ ]` Support Azure Database for PostgreSQL Microsoft Entra authentication.
-- `[ ]` Support Azure CLI token acquisition for local development.
-- `[ ]` Support Azure managed identity/service principal token acquisition for CI and hosted workloads.
-- `[ ]` Support AWS RDS and Aurora PostgreSQL IAM database authentication.
-- `[ ]` Support AWS SDK/credential-chain token generation.
-- `[ ]` Support AWS CLI token generation for local development.
-- `[ ]` Support Google Cloud SQL for PostgreSQL IAM database authentication.
+- `[~]` Support token providers through a refreshable token callback.
+- `[~]` Support OAuth2 access-token providers.
+- `[~]` Support cloud-specific signed database auth tokens.
+- `[~]` Support Azure Database for PostgreSQL Microsoft Entra authentication.
+- `[x]` Support Azure CLI token acquisition for local development.
+- `[x]` Support Azure managed identity/service principal token acquisition for CI and hosted workloads.
+- `[x]` Support AWS RDS and Aurora PostgreSQL IAM database authentication.
+- `[x]` Support AWS SDK/credential-chain token generation.
+- `[x]` Support AWS CLI token generation for local development.
+- `[x]` Support Google Cloud SQL for PostgreSQL IAM database authentication.
 - `[ ]` Support Google Cloud SQL connector based automatic IAM auth.
-- `[ ]` Support Google `gcloud` OAuth2 token acquisition for local development.
+- `[x]` Support Google `gcloud` OAuth2 token acquisition for local development.
 - `[x]` Support custom token command execution for other providers.
 - `[ ]` Support custom token-provider plugins/interfaces for providers not built in.
 - `[x]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
 - `[x]` Redact credentials and tokens in diagnostics.
 - `[x]` Acquire short-lived tokens immediately before opening database connections.
 - `[ ]` Refresh tokens for long-running introspection or diff operations.
-- `[ ]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
+- `[x]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
 - `[ ]` Support provider-specific username formats.
 - `[ ]` Support provider-specific TLS/SSL requirements.
 - `[ ]` Support direct connections and proxy/connector-mediated connections.
-- `[ ]` Keep database auth plumbing isolated from the schema DSL and renderer.
+- `[x]` Keep database auth plumbing isolated from the schema DSL and renderer.
 
 Azure-specific requirement:
 

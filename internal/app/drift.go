@@ -12,13 +12,23 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/ast"
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
+	"github.com/webdeveloperben/gosqlkit/kit"
 )
 
 type DriftCheckOptions struct {
-	inspectPG    driftInspectFunc
-	URL          string
-	URLEnv       string
-	TokenCommand string
+	inspectPG              driftInspectFunc
+	URL                    string
+	URLEnv                 string
+	TokenCommand           string
+	AWSProfile             string
+	AWSRegion              string
+	GCloudInstance         string
+	AzureCLIToken          bool
+	AzureDefaultCredential bool
+	AWSCLIToken            bool
+	AWSIAMToken            bool
+	GCloudADCToken         bool
+	GCloudToken            bool
 }
 
 type DriftCheckResult struct {
@@ -35,11 +45,26 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 	if config == nil {
 		return nil, errors.New("config is required")
 	}
-	if _, err := snapshotPlanner(config.Dialect); err != nil {
+	if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilityDriftCheck); err != nil {
 		return nil, err
 	}
 	databaseURL, err := resolveRequiredDatabaseURL(opts.URL, opts.URLEnv, "database")
 	if err != nil {
+		return nil, err
+	}
+	auth := databaseAuthOptions{
+		TokenCommand:           opts.TokenCommand,
+		AWSProfile:             opts.AWSProfile,
+		AWSRegion:              opts.AWSRegion,
+		GCloudInstance:         opts.GCloudInstance,
+		AzureCLIToken:          opts.AzureCLIToken,
+		AzureDefaultCredential: opts.AzureDefaultCredential,
+		AWSCLIToken:            opts.AWSCLIToken,
+		AWSIAMToken:            opts.AWSIAMToken,
+		GCloudADCToken:         opts.GCloudADCToken,
+		GCloudToken:            opts.GCloudToken,
+	}
+	if err := validateDatabaseAuthOptions(auth); err != nil {
 		return nil, err
 	}
 
@@ -63,9 +88,7 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 	if opts.inspectPG != nil {
 		databaseSchema, err = opts.inspectPG(ctx, databaseURL)
 	} else {
-		databaseSchema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(databaseURL, databaseAuthOptions{
-			TokenCommand: opts.TokenCommand,
-		}))
+		databaseSchema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(databaseURL, auth))
 	}
 	if err != nil {
 		return nil, err

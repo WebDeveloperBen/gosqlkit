@@ -35,7 +35,26 @@ type Capabilities struct {
 	Functions         bool
 	Triggers          bool
 	RLS               bool
+	RenderSQL         bool
+	SnapshotJSON      bool
+	InspectDatabase   bool
+	DriftCheck        bool
+	MigrationPlan     bool
+	MigrationApply    bool
+	SandboxReplay     bool
 }
+
+type Capability string
+
+const (
+	CapabilityRenderSQL       Capability = "SQL generation"
+	CapabilitySnapshotJSON    Capability = "snapshot generation"
+	CapabilityInspectDatabase Capability = "database inspection"
+	CapabilityDriftCheck      Capability = "drift checking"
+	CapabilityMigrationPlan   Capability = "migration planning"
+	CapabilityMigrationApply  Capability = "migration apply"
+	CapabilitySandboxReplay   Capability = "migration sandbox replay"
+)
 
 var registry = struct {
 	providers map[string]Provider
@@ -137,6 +156,38 @@ func DialectInfoFor(dialect string) (DialectInfo, error) {
 		return DialectInfo{}, unknownDialectError(name, dialectsLocked())
 	}
 	return cloneInfo(registry.infos[canonical]), nil
+}
+
+func RequireCapability(dialect string, capability Capability) (DialectInfo, error) {
+	info, err := DialectInfoFor(dialect)
+	if err != nil {
+		return DialectInfo{}, err
+	}
+	if !capability.supportedBy(info.Capabilities) {
+		return DialectInfo{}, fmt.Errorf("dialect %q does not support %s", info.Name, capability)
+	}
+	return info, nil
+}
+
+func (c Capability) supportedBy(caps Capabilities) bool {
+	switch c {
+	case CapabilityRenderSQL:
+		return caps.RenderSQL
+	case CapabilitySnapshotJSON:
+		return caps.SnapshotJSON
+	case CapabilityInspectDatabase:
+		return caps.InspectDatabase
+	case CapabilityDriftCheck:
+		return caps.DriftCheck
+	case CapabilityMigrationPlan:
+		return caps.MigrationPlan
+	case CapabilityMigrationApply:
+		return caps.MigrationApply
+	case CapabilitySandboxReplay:
+		return caps.SandboxReplay
+	default:
+		return false
+	}
 }
 
 func provider(dialect string) (Provider, error) {

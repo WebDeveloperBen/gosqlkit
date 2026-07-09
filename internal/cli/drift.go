@@ -16,12 +16,21 @@ type DriftCmd struct {
 }
 
 type DriftCheckCmd struct {
-	Config       string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	URL          string `help:"Database URL to inspect. Defaults to DATABASE_URL when omitted."`
-	URLEnv       string `name:"url-env" help:"Environment variable containing the database URL."`
-	TokenCommand string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the database password."`
-	JSON         bool   `help:"Emit machine-readable JSON instead of human-readable text."`
-	Quiet        bool   `help:"Suppress human-readable success output."`
+	Config                 string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	URL                    string `help:"Database URL to inspect. Defaults to DATABASE_URL when omitted."`
+	URLEnv                 string `name:"url-env" help:"Environment variable containing the database URL."`
+	TokenCommand           string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the database password."`
+	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
+	AWSRegion              string `name:"aws-region" help:"AWS region for RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
+	GCloudInstance         string `name:"gcloud-instance" help:"Cloud SQL instance ID passed to gcloud sql generate-login-token."`
+	AzureCLIToken          bool   `name:"azure-cli-token" help:"Use Azure CLI to acquire an Azure Database for PostgreSQL access token as the database password."`
+	AzureDefaultCredential bool   `name:"azure-default-credential" help:"Use Azure SDK DefaultAzureCredential to acquire an Azure Database for PostgreSQL access token as the database password."`
+	AWSCLIToken            bool   `name:"aws-cli-token" help:"Use AWS CLI to generate an RDS/Aurora PostgreSQL IAM auth token as the database password."`
+	AWSIAMToken            bool   `name:"aws-iam-token" help:"Use AWS SDK credentials to generate an RDS/Aurora PostgreSQL IAM auth token as the database password."`
+	GCloudADCToken         bool   `name:"gcloud-adc-token" help:"Use gcloud with Application Default Credentials to generate a Cloud SQL PostgreSQL IAM login token as the database password."`
+	GCloudToken            bool   `name:"gcloud-token" help:"Use gcloud to generate a Cloud SQL PostgreSQL IAM login token as the database password."`
+	JSON                   bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet                  bool   `help:"Suppress human-readable success output."`
 }
 
 func (c *DriftCheckCmd) Run(g *GlobalFlags) error {
@@ -43,9 +52,18 @@ func (c *DriftCheckCmd) Run(g *GlobalFlags) error {
 	}
 
 	result, err := app.DriftCheckWithConfig(config, app.DriftCheckOptions{
-		URL:          c.URL,
-		URLEnv:       c.URLEnv,
-		TokenCommand: c.TokenCommand,
+		URL:                    c.URL,
+		URLEnv:                 c.URLEnv,
+		TokenCommand:           c.TokenCommand,
+		AWSProfile:             c.AWSProfile,
+		AWSRegion:              c.AWSRegion,
+		GCloudInstance:         c.GCloudInstance,
+		AzureCLIToken:          c.AzureCLIToken,
+		AzureDefaultCredential: c.AzureDefaultCredential,
+		AWSCLIToken:            c.AWSCLIToken,
+		AWSIAMToken:            c.AWSIAMToken,
+		GCloudADCToken:         c.GCloudADCToken,
+		GCloudToken:            c.GCloudToken,
 	})
 	if c.JSON && result != nil {
 		if printErr := printJSON(g.stdout(), result); printErr != nil {

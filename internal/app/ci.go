@@ -1,10 +1,19 @@
 package app
 
 type CISchemaOptions struct {
-	Dir                 string
-	SandboxURL          string
-	SandboxURLEnv       string
-	SandboxTokenCommand string
+	Dir                           string
+	SandboxURL                    string
+	SandboxURLEnv                 string
+	SandboxTokenCommand           string
+	SandboxAWSProfile             string
+	SandboxAWSRegion              string
+	SandboxGCloudInstance         string
+	SandboxAzureCLIToken          bool
+	SandboxAzureDefaultCredential bool
+	SandboxAWSCLIToken            bool
+	SandboxAWSIAMToken            bool
+	SandboxGCloudADCToken         bool
+	SandboxGCloudToken            bool
 }
 
 type CISchemaResult struct {
@@ -14,9 +23,18 @@ type CISchemaResult struct {
 }
 
 type CIDatabaseOptions struct {
-	URL          string
-	URLEnv       string
-	TokenCommand string
+	URL                    string
+	URLEnv                 string
+	TokenCommand           string
+	AWSProfile             string
+	AWSRegion              string
+	GCloudInstance         string
+	AzureCLIToken          bool
+	AzureDefaultCredential bool
+	AWSCLIToken            bool
+	AWSIAMToken            bool
+	GCloudADCToken         bool
+	GCloudToken            bool
 }
 
 type CIDatabaseResult struct {
@@ -33,10 +51,19 @@ func CISchemaWithConfig(config *Config, opts CISchemaOptions) (*CISchemaResult, 
 		return nil, err
 	}
 	migration, err := MigrateCheckWithConfig(config, MigrateCheckOptions{
-		Dir:                 opts.Dir,
-		SandboxURL:          opts.SandboxURL,
-		SandboxURLEnv:       opts.SandboxURLEnv,
-		SandboxTokenCommand: opts.SandboxTokenCommand,
+		Dir:                           opts.Dir,
+		SandboxURL:                    opts.SandboxURL,
+		SandboxURLEnv:                 opts.SandboxURLEnv,
+		SandboxTokenCommand:           opts.SandboxTokenCommand,
+		SandboxAWSProfile:             opts.SandboxAWSProfile,
+		SandboxAWSRegion:              opts.SandboxAWSRegion,
+		SandboxGCloudInstance:         opts.SandboxGCloudInstance,
+		SandboxAzureCLIToken:          opts.SandboxAzureCLIToken,
+		SandboxAzureDefaultCredential: opts.SandboxAzureDefaultCredential,
+		SandboxAWSCLIToken:            opts.SandboxAWSCLIToken,
+		SandboxAWSIAMToken:            opts.SandboxAWSIAMToken,
+		SandboxGCloudADCToken:         opts.SandboxGCloudADCToken,
+		SandboxGCloudToken:            opts.SandboxGCloudToken,
 	})
 	if err != nil {
 		return nil, err
@@ -50,9 +77,18 @@ func CISchemaWithConfig(config *Config, opts CISchemaOptions) (*CISchemaResult, 
 
 func CIDatabaseWithConfig(config *Config, opts CIDatabaseOptions) (*CIDatabaseResult, error) {
 	drift, err := DriftCheckWithConfig(config, DriftCheckOptions{
-		URL:          opts.URL,
-		URLEnv:       opts.URLEnv,
-		TokenCommand: opts.TokenCommand,
+		URL:                    opts.URL,
+		URLEnv:                 opts.URLEnv,
+		TokenCommand:           opts.TokenCommand,
+		AWSProfile:             opts.AWSProfile,
+		AWSRegion:              opts.AWSRegion,
+		GCloudInstance:         opts.GCloudInstance,
+		AzureCLIToken:          opts.AzureCLIToken,
+		AzureDefaultCredential: opts.AzureDefaultCredential,
+		AWSCLIToken:            opts.AWSCLIToken,
+		AWSIAMToken:            opts.AWSIAMToken,
+		GCloudADCToken:         opts.GCloudADCToken,
+		GCloudToken:            opts.GCloudToken,
 	})
 	if err != nil {
 		return &CIDatabaseResult{Drift: drift}, err

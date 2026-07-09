@@ -95,6 +95,12 @@ gosqlkit inspect --url "$DATABASE_URL" --drift-projection
 gosqlkit drift check --url "$DATABASE_URL"
 gosqlkit ci database --url "$DATABASE_URL"
 gosqlkit migrate apply --url "$DATABASE_URL"
+gosqlkit migrate apply --azure-cli-token --url "$AZURE_POSTGRES_URL"
+gosqlkit migrate apply --azure-default-credential --url "$AZURE_POSTGRES_URL"
+gosqlkit migrate apply --aws-iam-token --aws-region us-east-1 --url "$AWS_RDS_POSTGRES_URL"
+gosqlkit migrate apply --aws-cli-token --aws-region us-east-1 --aws-profile dev --url "$AWS_RDS_POSTGRES_URL"
+gosqlkit migrate apply --gcloud-token --gcloud-instance app-prod --url "$CLOUD_SQL_POSTGRES_URL"
+gosqlkit migrate apply --gcloud-adc-token --gcloud-instance app-prod --url "$CLOUD_SQL_POSTGRES_URL"
 gosqlkit migrate apply --token-command "az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv"
 ```
 
@@ -199,6 +205,16 @@ sqlc generate
   and quiet output modes for drift and migrate status/apply commands
 - Provider-neutral token-as-password auth with `--token-command` /
   `--sandbox-token-command` for managed database workflows
+- First-class Azure CLI token acquisition with `--azure-cli-token` and
+  `--sandbox-azure-cli-token` for Azure Database for PostgreSQL Entra auth
+- Azure SDK `DefaultAzureCredential` support with `--azure-default-credential`
+  and `--sandbox-azure-default-credential` for hosted and CI workloads
+- AWS RDS/Aurora PostgreSQL IAM auth token generation with `--aws-iam-token`
+  / `--sandbox-aws-iam-token` via the AWS SDK credential chain, or
+  `--aws-cli-token` / `--sandbox-aws-cli-token` via AWS CLI
+- Google Cloud SQL PostgreSQL IAM login token generation with `--gcloud-token`
+  / `--sandbox-gcloud-token`, or `--gcloud-adc-token` /
+  `--sandbox-gcloud-adc-token` for Application Default Credentials
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing, using
   styled terminal tables for humans and JSON for automation

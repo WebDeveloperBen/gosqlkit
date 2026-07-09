@@ -129,7 +129,22 @@ func TestInspectRequiresDatabaseURL(t *testing.T) {
 	}
 }
 
-func TestInspectRejectsUnsupportedDialect(t *testing.T) {
+func TestInspectRejectsConflictingTokenProviders(t *testing.T) {
+	_, err := InspectWithConfig(inspectTestConfig(t, "postgres"), InspectOptions{
+		URL:           "postgres://example",
+		TokenCommand:  "print-token",
+		AzureCLIToken: true,
+		inspectPG: func(context.Context, string) (pgschema.Schema, error) {
+			t.Fatal("inspectPG should not be called")
+			return pgschema.Schema{}, nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "only one database token provider") {
+		t.Fatalf("expected token provider conflict, got %v", err)
+	}
+}
+
+func TestInspectRejectsUnknownDialect(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://example")
 	_, err := InspectWithConfig(inspectTestConfig(t, "sqlite"), InspectOptions{
 		inspectPG: func(context.Context, string) (pgschema.Schema, error) {
@@ -137,8 +152,8 @@ func TestInspectRejectsUnsupportedDialect(t *testing.T) {
 			return pgschema.Schema{}, nil
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), `unsupported inspect dialect "sqlite"`) {
-		t.Fatalf("expected unsupported dialect error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), `unknown dialect "sqlite"`) {
+		t.Fatalf("expected unknown dialect error, got %v", err)
 	}
 }
 

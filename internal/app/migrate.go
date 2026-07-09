@@ -16,6 +16,7 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
 	migrateplan "github.com/webdeveloperben/gosqlkit/internal/migrate/plan"
+	"github.com/webdeveloperben/gosqlkit/kit"
 )
 
 type MigrateCreateOptions struct {
@@ -60,12 +61,21 @@ type RenameDecision struct {
 type RenameDecisionFunc func([]RenameCandidate) ([]RenameDecision, error)
 
 type MigrateCheckOptions struct {
-	sandboxReplay       sandboxReplayFunc
-	sandboxInspect      driftInspectFunc
-	Dir                 string
-	SandboxURL          string
-	SandboxURLEnv       string
-	SandboxTokenCommand string
+	sandboxReplay                 sandboxReplayFunc
+	sandboxInspect                driftInspectFunc
+	Dir                           string
+	SandboxURL                    string
+	SandboxURLEnv                 string
+	SandboxTokenCommand           string
+	SandboxAWSProfile             string
+	SandboxAWSRegion              string
+	SandboxGCloudInstance         string
+	SandboxAzureCLIToken          bool
+	SandboxAzureDefaultCredential bool
+	SandboxAWSCLIToken            bool
+	SandboxAWSIAMToken            bool
+	SandboxGCloudADCToken         bool
+	SandboxGCloudToken            bool
 }
 
 type MigrateCheckResult struct {
@@ -84,12 +94,21 @@ type SandboxReplayResult struct {
 type sandboxReplayFunc func(context.Context, string, string, []migrate.Migration) (*SandboxReplayResult, error)
 
 type MigrateApplyOptions struct {
-	apply        migrateApplyFunc
-	Dir          string
-	Runner       string
-	URL          string
-	URLEnv       string
-	TokenCommand string
+	apply                  migrateApplyFunc
+	Dir                    string
+	Runner                 string
+	URL                    string
+	URLEnv                 string
+	TokenCommand           string
+	AWSProfile             string
+	AWSRegion              string
+	GCloudInstance         string
+	AzureCLIToken          bool
+	AzureDefaultCredential bool
+	AWSCLIToken            bool
+	AWSIAMToken            bool
+	GCloudADCToken         bool
+	GCloudToken            bool
 }
 
 type MigrateApplyResult struct {
@@ -180,6 +199,10 @@ func MigrateCreateWithConfig(config *Config, opts MigrateCreateOptions) (*Migrat
 }
 
 func plannedMigration(config *Config, dir string, opts MigrateCreateOptions) (migrate.Plan, error) {
+	if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilityMigrationPlan); err != nil {
+		return migrate.Plan{}, err
+	}
+
 	existing, err := migrate.ScanDir(dir)
 	if err != nil {
 		return migrate.Plan{}, err
@@ -319,6 +342,30 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 	if config == nil {
 		return nil, errors.New("config is required")
 	}
+	sandboxURL, err := resolveOptionalDatabaseURL(opts.SandboxURL, opts.SandboxURLEnv, "sandbox")
+	if err != nil {
+		return nil, err
+	}
+	sandboxAuth := databaseAuthOptions{
+		TokenCommand:           opts.SandboxTokenCommand,
+		AWSProfile:             opts.SandboxAWSProfile,
+		AWSRegion:              opts.SandboxAWSRegion,
+		GCloudInstance:         opts.SandboxGCloudInstance,
+		AzureCLIToken:          opts.SandboxAzureCLIToken,
+		AzureDefaultCredential: opts.SandboxAzureDefaultCredential,
+		AWSCLIToken:            opts.SandboxAWSCLIToken,
+		AWSIAMToken:            opts.SandboxAWSIAMToken,
+		GCloudADCToken:         opts.SandboxGCloudADCToken,
+		GCloudToken:            opts.SandboxGCloudToken,
+	}
+	if err := validateDatabaseAuthOptions(sandboxAuth); err != nil {
+		return nil, err
+	}
+	if sandboxURL != "" {
+		if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilitySandboxReplay); err != nil {
+			return nil, err
+		}
+	}
 
 	dir := opts.Dir
 	if dir == "" {
@@ -335,16 +382,10 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 		return nil, err
 	}
 	result := &MigrateCheckResult{Dir: dir, Count: len(migrations)}
-	sandboxURL, err := resolveOptionalDatabaseURL(opts.SandboxURL, opts.SandboxURLEnv, "sandbox")
-	if err != nil {
-		return nil, err
-	}
 	if sandboxURL != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, databaseAuthOptions{
-			TokenCommand: opts.SandboxTokenCommand,
-		}, migrations, opts.sandboxReplay, opts.sandboxInspect)
+		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, sandboxAuth, migrations, opts.sandboxReplay, opts.sandboxInspect)
 		if err != nil {
 			return nil, err
 		}
@@ -357,11 +398,26 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 	if config == nil {
 		return nil, errors.New("config is required")
 	}
-	if _, err := snapshotPlanner(config.Dialect); err != nil {
+	if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilityMigrationApply); err != nil {
 		return nil, err
 	}
 	databaseURL, err := resolveRequiredDatabaseURL(opts.URL, opts.URLEnv, "database")
 	if err != nil {
+		return nil, err
+	}
+	auth := databaseAuthOptions{
+		TokenCommand:           opts.TokenCommand,
+		AWSProfile:             opts.AWSProfile,
+		AWSRegion:              opts.AWSRegion,
+		GCloudInstance:         opts.GCloudInstance,
+		AzureCLIToken:          opts.AzureCLIToken,
+		AzureDefaultCredential: opts.AzureDefaultCredential,
+		AWSCLIToken:            opts.AWSCLIToken,
+		AWSIAMToken:            opts.AWSIAMToken,
+		GCloudADCToken:         opts.GCloudADCToken,
+		GCloudToken:            opts.GCloudToken,
+	}
+	if err := validateDatabaseAuthOptions(auth); err != nil {
 		return nil, err
 	}
 
@@ -387,9 +443,7 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 	apply := opts.apply
 	if apply == nil {
 		apply = func(ctx context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
-			return applyPostgresMigrations(ctx, postgresConnectionOptions(databaseURL, databaseAuthOptions{
-				TokenCommand: opts.TokenCommand,
-			}), runner, migrations)
+			return applyPostgresMigrations(ctx, postgresConnectionOptions(databaseURL, auth), runner, migrations)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -409,6 +463,9 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePlanResult, error) {
 	if config == nil {
 		return nil, errors.New("config is required")
+	}
+	if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilityMigrationPlan); err != nil {
+		return nil, err
 	}
 
 	dir := opts.Dir

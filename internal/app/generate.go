@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/webdeveloperben/gosqlkit/kit"
 )
 
 type GenerateOptions struct {
@@ -56,6 +58,9 @@ func Generate(opts GenerateOptions) (*GenerateResult, error) {
 	}
 	if opts.Stdout == nil {
 		opts.Stdout = io.Discard
+	}
+	if err := requireDialectCapability(dialect(opts.Dialect), kit.CapabilityRenderSQL); err != nil {
+		return nil, err
 	}
 
 	root, err := ResolveRoot(opts.Root)
@@ -148,6 +153,9 @@ func Snapshot(opts SnapshotOptions) (*SnapshotResult, error) {
 	}
 	if opts.Stdout == nil {
 		opts.Stdout = io.Discard
+	}
+	if err := requireDialectCapability(dialect(opts.Dialect), kit.CapabilitySnapshotJSON); err != nil {
+		return nil, err
 	}
 
 	root, err := ResolveRoot(opts.Root)
@@ -242,6 +250,10 @@ func SnapshotWithConfig(config *Config, opts SnapshotOptions) (*SnapshotResult, 
 }
 
 func renderSQLWithConfig(config *Config) (sql string, importPaths []string, err error) {
+	if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilityRenderSQL); err != nil {
+		return "", nil, err
+	}
+
 	importPaths, moduleDir, kitImportPath, err := resolveConfigProgram(config)
 	if err != nil {
 		return "", nil, err
@@ -261,6 +273,10 @@ func renderSQLWithConfig(config *Config) (sql string, importPaths []string, err 
 }
 
 func renderSnapshotWithConfig(config *Config, previousSnapshotID string) (snapshot string, importPaths []string, err error) {
+	if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilitySnapshotJSON); err != nil {
+		return "", nil, err
+	}
+
 	importPaths, moduleDir, kitImportPath, err := resolveConfigProgram(config)
 	if err != nil {
 		return "", nil, err

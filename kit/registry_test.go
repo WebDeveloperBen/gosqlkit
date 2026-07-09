@@ -17,8 +17,10 @@ func (fakeProvider) Dialect() kit.DialectInfo {
 		Name:    "fake-test",
 		Aliases: []string{"fake-test-alias"},
 		Capabilities: kit.Capabilities{
-			Tables:    true,
-			Snapshots: true,
+			Tables:       true,
+			Snapshots:    true,
+			RenderSQL:    true,
+			SnapshotJSON: true,
 		},
 	}
 }
@@ -78,8 +80,26 @@ func TestRegisterAliasAndInfo(t *testing.T) {
 	if len(info.Aliases) != 1 || info.Aliases[0] != "fake-test-alias" {
 		t.Fatalf("unexpected aliases %#v", info.Aliases)
 	}
-	if !info.Capabilities.Tables || !info.Capabilities.Snapshots {
+	if !info.Capabilities.Tables || !info.Capabilities.Snapshots ||
+		!info.Capabilities.RenderSQL || !info.Capabilities.SnapshotJSON {
 		t.Fatalf("unexpected capabilities %#v", info.Capabilities)
+	}
+}
+
+func TestRequireCapability(t *testing.T) {
+	registerFakeProvider()
+
+	info, err := kit.RequireCapability("fake-test-alias", kit.CapabilityRenderSQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Name != "fake-test" {
+		t.Fatalf("info name = %q", info.Name)
+	}
+
+	_, err = kit.RequireCapability("fake-test-alias", kit.CapabilityDriftCheck)
+	if err == nil || !strings.Contains(err.Error(), `dialect "fake-test" does not support drift checking`) {
+		t.Fatalf("expected unsupported capability error, got %v", err)
 	}
 }
 
