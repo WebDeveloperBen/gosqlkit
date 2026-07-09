@@ -467,9 +467,11 @@ SELECT n.nspname,
        COALESCE(CASE WHEN p.partrelid IS NULL THEN '' ELSE pg_get_partkeydef(c.oid) END, ''),
        COALESCE(pn.nspname, ''),
        COALESCE(pc.relname, ''),
-       COALESCE(CASE WHEN c.relispartition THEN pg_get_expr(c.relpartbound, c.oid) ELSE '' END, '')
+       COALESCE(CASE WHEN c.relispartition THEN pg_get_expr(c.relpartbound, c.oid) ELSE '' END, ''),
+       COALESCE(ts.spcname, '')
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_tablespace ts ON ts.oid = c.reltablespace
 LEFT JOIN pg_partitioned_table p ON p.partrelid = c.oid
 LEFT JOIN pg_inherits inh ON inh.inhrelid = c.oid
 LEFT JOIN pg_class pc ON pc.oid = inh.inhparent
@@ -487,7 +489,7 @@ ORDER BY n.nspname, c.relname`)
 	for rows.Next() {
 		var table pgschema.Table
 		var partitionDef, parentSchema, parentName, partitionBoundDef string
-		if err := rows.Scan(&table.Schema, &table.Name, &table.Comment, &table.RowLevelSecurity, &table.ForceRLS, &partitionDef, &parentSchema, &parentName, &partitionBoundDef); err != nil {
+		if err := rows.Scan(&table.Schema, &table.Name, &table.Comment, &table.RowLevelSecurity, &table.ForceRLS, &partitionDef, &parentSchema, &parentName, &partitionBoundDef, &table.Tablespace); err != nil {
 			return nil, fmt.Errorf("scan table: %w", err)
 		}
 		table.Schema = snapshotSchema(table.Schema)
@@ -650,6 +652,7 @@ SELECT n.nspname,
        am.amname,
        COALESCE(pg_get_expr(i.indpred, i.indrelid), ''),
        COALESCE(idx.reloptions, ARRAY[]::text[]),
+       COALESCE(ts.spcname, ''),
        keydef.def,
        keydef.is_expression,
        keydef.option
@@ -658,6 +661,7 @@ JOIN pg_class idx ON idx.oid = i.indexrelid
 JOIN pg_class c ON c.oid = i.indrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_am am ON am.oid = idx.relam
+LEFT JOIN pg_tablespace ts ON ts.oid = idx.reltablespace
 JOIN LATERAL (
   SELECT keys.ord,
          pg_get_indexdef(i.indexrelid, keys.ord::int, true) AS def,
@@ -683,11 +687,11 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 	var currentTable, currentName string
 	var current *pgschema.Index
 	for rows.Next() {
-		var schemaName, tableName, name, method, predicate, definition string
+		var schemaName, tableName, name, method, predicate, tablespace, definition string
 		var reloptions []string
 		var unique, expression bool
 		var option int
-		if err := rows.Scan(&schemaName, &tableName, &name, &unique, &method, &predicate, &reloptions, &definition, &expression, &option); err != nil {
+		if err := rows.Scan(&schemaName, &tableName, &name, &unique, &method, &predicate, &reloptions, &tablespace, &definition, &expression, &option); err != nil {
 			return fmt.Errorf("scan index: %w", err)
 		}
 		table := byKey[qualified(snapshotSchema(schemaName), tableName)]
@@ -702,9 +706,10 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 					Where:  stripOuterParens(predicate),
 					Unique: unique,
 				},
-				Method:  method,
-				With:    reloptionsMap(reloptions),
-				Columns: []pgschema.IndexColumn{},
+				Method:     method,
+				Tablespace: tablespace,
+				With:       reloptionsMap(reloptions),
+				Columns:    []pgschema.IndexColumn{},
 			})
 			current = &table.Indexes[len(table.Indexes)-1]
 			currentTable = key
@@ -727,9 +732,11 @@ SELECT n.nspname,
        COALESCE(obj_description(c.oid, 'pg_class'), ''),
        COALESCE(c.reloptions, ARRAY[]::text[]),
        c.relispopulated,
-       COALESCE(v.check_option, 'NONE')
+       COALESCE(v.check_option, 'NONE'),
+       COALESCE(ts.spcname, '')
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_tablespace ts ON ts.oid = c.reltablespace
 LEFT JOIN information_schema.views v ON v.table_schema = n.nspname AND v.table_name = c.relname
 WHERE c.relkind IN ('v', 'm')
   AND n.nspname NOT LIKE 'pg_%'
@@ -750,22 +757,23 @@ ORDER BY n.nspname, c.relname`)
 	var views []pgschema.View
 	var materializedViews []pgschema.MaterializedView
 	for rows.Next() {
-		var schemaName, name, kind, query, comment, checkOption string
+		var schemaName, name, kind, query, comment, checkOption, tablespace string
 		var reloptions []string
 		var populated bool
-		if err := rows.Scan(&schemaName, &name, &kind, &query, &comment, &reloptions, &populated, &checkOption); err != nil {
+		if err := rows.Scan(&schemaName, &name, &kind, &query, &comment, &reloptions, &populated, &checkOption, &tablespace); err != nil {
 			return nil, nil, fmt.Errorf("scan view: %w", err)
 		}
 		schemaName = snapshotSchema(schemaName)
 		options := reloptionsMap(reloptions)
 		if kind == "m" {
 			materializedViews = append(materializedViews, pgschema.MaterializedView{
-				Schema:  schemaName,
-				Name:    name,
-				Query:   normaliseDefinition(query),
-				Comment: comment,
-				With:    options,
-				NoData:  !populated,
+				Schema:     schemaName,
+				Name:       name,
+				Query:      normaliseDefinition(query),
+				Comment:    comment,
+				Tablespace: tablespace,
+				With:       options,
+				NoData:     !populated,
 			})
 			continue
 		}

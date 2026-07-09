@@ -256,6 +256,30 @@ func TestViewBuilderDSLRegistersQueries(t *testing.T) {
 	}
 }
 
+func TestTablespaceDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Table(
+		"bookings",
+		pg.UUID("id"),
+		pg.Index("bookings_id_idx", "id").Tablespace("pg_default"),
+	).Tablespace("pg_default")
+	pg.MaterializedView("booking_counts", "SELECT count(*) FROM bookings").
+		Tablespace("pg_default")
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 1 || schema.Tables[0].Tablespace != "pg_default" {
+		t.Fatalf("table tablespace = %#v", schema.Tables)
+	}
+	if len(schema.Tables[0].Indexes) != 1 || schema.Tables[0].Indexes[0].Tablespace != "pg_default" {
+		t.Fatalf("index tablespace = %#v", schema.Tables[0].Indexes)
+	}
+	if len(schema.MaterializedViews) != 1 || schema.MaterializedViews[0].Tablespace != "pg_default" {
+		t.Fatalf("materialized view tablespace = %#v", schema.MaterializedViews)
+	}
+}
+
 func TestTypedPostgresOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

@@ -317,6 +317,7 @@ func TestProjectDriftSchemaNormalisesPartitionMetadata(t *testing.T) {
 func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 	projected := projectDriftSchema(pgschema.Schema{
 		Tables: []pgschema.Table{{
+			Tablespace: "pg_default",
 			Table: ast.Table{
 				Name: "users",
 			},
@@ -325,7 +326,8 @@ func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 					Name:  "users_email_idx",
 					Where: "email IS NOT NULL::boolean",
 				},
-				Method: "btree",
+				Method:     "btree",
+				Tablespace: "pg_default",
 				Columns: []pgschema.IndexColumn{
 					{IndexColumn: ast.IndexColumn{Expression: "email", Order: "ASC"}, OpClass: "text_ops", Nulls: "LAST"},
 					{IndexColumn: ast.IndexColumn{Expression: "created_at", Order: "DESC"}, Nulls: "FIRST"},
@@ -338,7 +340,10 @@ func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 	})
 
 	index := projected.Tables[0].Indexes[0]
-	if index.Method != "" || index.Concurrently || index.Only || index.Where != "email IS NOT NULL" {
+	if projected.Tables[0].Tablespace != "" {
+		t.Fatalf("table tablespace normalisation = %#v", projected.Tables[0])
+	}
+	if index.Method != "" || index.Tablespace != "" || index.Concurrently || index.Only || index.Where != "email IS NOT NULL" {
 		t.Fatalf("index normalisation = %#v", index)
 	}
 	if index.Columns[0].OpClass != "" || index.Columns[0].Order != "" || index.Columns[0].Nulls != "" {
@@ -418,6 +423,7 @@ func TestProjectDriftSchemaNormalisesViewProjection(t *testing.T) {
 			Name:          "user_counts",
 			Query:         "SELECT count(*) FROM users",
 			Comment:       "User count.",
+			Tablespace:    "pg_default",
 			ColumnAliases: []string{"count"},
 			DependsOn:     []string{"public.users"},
 			With:          map[string]string{"fillfactor": "80"},
@@ -437,7 +443,7 @@ func TestProjectDriftSchemaNormalisesViewProjection(t *testing.T) {
 	if materializedView.PreviousName != "" || materializedView.Query != "" || materializedView.ColumnAliases != nil || materializedView.DependsOn != nil || materializedView.NoData {
 		t.Fatalf("materialized view authoring fields were retained: %#v", materializedView)
 	}
-	if materializedView.Comment != "User count." || materializedView.With["fillfactor"] != "80" {
+	if materializedView.Comment != "User count." || materializedView.Tablespace != "" || materializedView.With["fillfactor"] != "80" {
 		t.Fatalf("materialized view persistent metadata was dropped: %#v", materializedView)
 	}
 }

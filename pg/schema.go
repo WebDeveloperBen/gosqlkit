@@ -807,6 +807,11 @@ func (m *MaterializedViewDef) Comment(text string) *MaterializedViewDef {
 	return m
 }
 
+func (m *MaterializedViewDef) Tablespace(name string) *MaterializedViewDef {
+	m.def.Tablespace = name
+	return m
+}
+
 func (m *MaterializedViewDef) With(key, value string) *MaterializedViewDef {
 	if m.def.With == nil {
 		m.def.With = make(map[string]string)

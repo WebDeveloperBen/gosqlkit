@@ -512,6 +512,9 @@ func validateSchema(schema pgschema.Schema) error {
 		if err := validateIdentifier("materialized view", mv.Name); err != nil {
 			return err
 		}
+		if err := validateTablespace(mv.Tablespace); err != nil {
+			return fmt.Errorf("materialized view %q: %w", renderQualifiedName(mv.Schema, mv.Name), err)
+		}
 		key := qualifiedName(mv.Schema, mv.Name)
 		if _, ok := materializedViewNames[key]; ok {
 			return fmt.Errorf("duplicate materialized view %q", renderQualifiedName(mv.Schema, mv.Name))
@@ -552,6 +555,9 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 		if err := validateIdentifier("table", table.Name); err != nil {
 			return err
+		}
+		if err := validateTablespace(table.Tablespace); err != nil {
+			return fmt.Errorf("table %q: %w", table.Name, err)
 		}
 		if _, ok := tableNames[tableKey(table)]; ok {
 			return fmt.Errorf("duplicate table %q", renderTableName(table))
@@ -1154,13 +1160,14 @@ func renderMaterializedView(b *strings.Builder, mv pgschema.MaterializedView) {
 		b.WriteString(strings.Join(mv.ColumnAliases, ", "))
 		b.WriteString(")")
 	}
-	b.WriteString(" AS\n    ")
-	b.WriteString(mv.Query)
 	if len(mv.With) > 0 {
 		b.WriteString("\nWITH (")
 		b.WriteString(renderIndexWith(mv.With))
 		b.WriteString(")")
 	}
+	writeTablespace(b, mv.Tablespace)
+	b.WriteString(" AS\n    ")
+	b.WriteString(mv.Query)
 	if mv.NoData {
 		b.WriteString("\nWITH NO DATA")
 	}
@@ -1246,6 +1253,7 @@ func renderTable(b *strings.Builder, table pgschema.Table) error {
 			b.WriteString("\n")
 			b.WriteString(renderPartitioning(*table.Partitioning))
 		}
+		writeTablespace(b, table.Tablespace)
 		b.WriteString(";\n")
 		return nil
 	}
@@ -1350,8 +1358,16 @@ func renderTable(b *strings.Builder, table pgschema.Table) error {
 		b.WriteString("\n")
 		b.WriteString(renderPartitioning(*table.Partitioning))
 	}
+	writeTablespace(b, table.Tablespace)
 	b.WriteString(";\n")
 	return nil
+}
+
+func writeTablespace(b *strings.Builder, tablespace string) {
+	if tablespace != "" {
+		b.WriteString("\nTABLESPACE ")
+		b.WriteString(tablespace)
+	}
 }
 
 func renderPartitioning(partitioning pgschema.Partitioning) string {
@@ -1743,6 +1759,10 @@ func renderIndex(b *strings.Builder, tableName string, index pgschema.Index) err
 		line.WriteString(renderIndexWith(index.With))
 		line.WriteString(")")
 	}
+	if index.Tablespace != "" {
+		line.WriteString(" TABLESPACE ")
+		line.WriteString(index.Tablespace)
+	}
 	if index.Where != "" {
 		line.WriteString(" WHERE ")
 		line.WriteString(index.Where)
@@ -2020,6 +2040,13 @@ func validateRoleList(roleName, field string, roles []string) error {
 		seen[name] = struct{}{}
 	}
 	return nil
+}
+
+func validateTablespace(value string) error {
+	if value == "" {
+		return nil
+	}
+	return validateIdentifier("tablespace", value)
 }
 
 func validateGrant(grant pgschema.Grant, names map[string]struct{}, namespaceNames, relationNames, sequenceNames, typeNames map[string]struct{}, tableColumns map[string]map[string]struct{}) error {
@@ -2780,6 +2807,9 @@ func validateReferences(tables []pgschema.Table, tableColumns map[string]map[str
 func validateIndex(tableName string, index pgschema.Index, columnNames map[string]struct{}) error {
 	if err := validateIdentifier("index", index.Name); err != nil {
 		return err
+	}
+	if err := validateTablespace(index.Tablespace); err != nil {
+		return fmt.Errorf("index %q: %w", index.Name, err)
 	}
 	if index.Method != "" {
 		if err := validateIdentifier("index method", index.Method); err != nil {

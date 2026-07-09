@@ -164,6 +164,11 @@ func (i *IndexDef) With(key, value string) *IndexDef {
 	return i
 }
 
+func (i *IndexDef) Tablespace(name string) *IndexDef {
+	i.def.Tablespace = name
+	return i
+}
+
 func (c *IndexColumnDef) Asc() *IndexColumnDef {
 	c.def.Order = "ASC"
 	return c
@@ -461,6 +466,11 @@ func PartitionOf(parent string, bound *PartitionBoundDef) *PartitionOfDef {
 
 func (d *Definition) Comment(text string) *Definition {
 	d.def.Comment = text
+	return d
+}
+
+func (d *Definition) Tablespace(name string) *Definition {
+	d.def.Tablespace = name
 	return d
 }
 

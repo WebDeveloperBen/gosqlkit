@@ -83,7 +83,7 @@ Legend:
 - `[x]` Partitioned tables, partition children, and partition bounds.
 - `[x]` Explicit grants and column-level table privileges.
 - `[x]` Comments.
-- `[ ]` Tablespaces.
+- `[x]` Tablespace assignment for tables, indexes, and materialized views.
 - `[ ]` Collations.
 - `[ ]` Raw SQL schema blocks.
 
@@ -538,6 +538,7 @@ Other provider requirement:
 - `[x]` Drift diagnostics tests for top-level objects and table-nested objects.
 - `[x]` Partitioned table and partition-child render, diff, drift, and introspection tests.
 - `[x]` Grant render, diff, drift, and introspection coverage.
+- `[x]` Tablespace render, diff, drift projection, and introspection coverage.
 - `[x]` CLI table-rendering tests for drift diagnostics.
 - `[x]` CLI table-rendering tests for migration plan diagnostics.
 - `[x]` CLI flag validation tests for conflicting prompt-mode controls.
@@ -559,8 +560,8 @@ Other provider requirement:
 10. Add runner-compatible migration file generation and destructive-change guardrails.
 11. Add styled CLI summaries and interactive ambiguity resolution for migration
     authoring.
-12. Expand into remaining advanced PostgreSQL features such as tablespaces,
-    collations, and raw SQL schema blocks.
+12. Expand into remaining advanced PostgreSQL features such as collations,
+    raw SQL schema blocks, and the first non-PostgreSQL provider.
 
 ## Drizzle Reference Notes
 

@@ -69,6 +69,64 @@ func TestSnapshotDiffAddsTableAndColumn(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffAltersTableAndIndexTablespaces(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "bookings",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+			Indexes: []pgschema.Index{{
+				Index:   ast.Index{Name: "bookings_id_idx"},
+				Columns: []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "id"}}},
+			}},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Tablespace: "fastspace",
+			Table: ast.Table{
+				Name:    "bookings",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+			Indexes: []pgschema.Index{{
+				Tablespace: "fastspace",
+				Index:      ast.Index{Name: "bookings_id_idx"},
+				Columns:    []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "id"}}},
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(planned.Statements, "\n")
+	for _, want := range []string{
+		"ALTER TABLE bookings SET TABLESPACE fastspace;",
+		"ALTER INDEX bookings_id_idx SET TABLESPACE fastspace;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+	if len(planned.Changes) != 2 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	for _, change := range planned.Changes {
+		if !change.HasRisk(migrateplan.RiskLockHeavy) || !change.HasRisk(migrateplan.RiskRequiresDDLReview) {
+			t.Fatalf("tablespace change risks = %#v", change)
+		}
+		if !change.Reversible || len(change.ReverseStatements) != 1 || !strings.Contains(change.ReverseStatements[0].SQL, "SET TABLESPACE pg_default") {
+			t.Fatalf("reverse = %#v", change)
+		}
+	}
+}
+
 func TestSnapshotDiffCreatesPartitionedTable(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

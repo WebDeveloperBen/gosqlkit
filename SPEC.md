@@ -237,6 +237,7 @@ Current implementation status:
   - PostgreSQL domains
   - PostgreSQL partitioned tables
   - PostgreSQL grants
+  - PostgreSQL tablespace assignment for tables, indexes, and materialized views
   - Schema-qualified table rendering
   - Schema-qualified enum column types
   - Schema-qualified foreign key references
@@ -260,7 +261,7 @@ Current implementation status:
 
 Future versions may support:
 
-- Tablespaces
+- Cluster-level `CREATE TABLESPACE` / `DROP TABLESPACE`
 - Collations
 - Raw SQL schema blocks
 - Destructive-change guards
@@ -468,8 +469,8 @@ Deliverables:
 
 ### Phase 5: Advanced PostgreSQL support
 
-Add support for remaining advanced PostgreSQL objects such as tablespaces,
-collations, and raw SQL schema blocks.
+Add support for remaining advanced PostgreSQL objects such as collations, raw
+SQL schema blocks, and cluster-level tablespace management if it proves useful.
 
 ## Open questions
 

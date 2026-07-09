@@ -201,6 +201,7 @@
       "name": "cached_bookings",
       "query": "SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource",
       "comment": "Pre-aggregated booking counts.",
+      "tablespace": "pg_default",
       "dependsOn": [
         "bookings"
       ]
@@ -255,7 +256,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "65faf6bcd674cebc42b266a1ba2af34b8015e38146b47541280986d03ef993ef",
+  "snapshotId": "0d5f555d0ee89e3ff9884b65fa6d01ac2aef31a07d900fa50d05f1b6bf81f6da",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -275,6 +276,7 @@
             "fillfactor": "90"
           },
           "method": "btree",
+          "tablespace": "pg_default",
           "columns": [
             {
               "opClass": "text_ops",
@@ -410,6 +412,7 @@
       ]
     },
     {
+      "tablespace": "pg_default",
       "exclusions": [
         {
           "method": "gist",

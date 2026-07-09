@@ -74,7 +74,7 @@ CREATE TABLE billing.invoice_lines (
     CONSTRAINT invoice_lines_amount_cents_positive CHECK (amount_cents > 0)
 );
 
-CREATE INDEX CONCURRENTLY invoice_lines_description_idx ON billing.invoice_lines USING btree (description text_ops) WITH (fillfactor = 90);
+CREATE INDEX CONCURRENTLY invoice_lines_description_idx ON billing.invoice_lines USING btree (description text_ops) WITH (fillfactor = 90) TABLESPACE pg_default;
 
 CREATE TABLE bookings (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -82,7 +82,8 @@ CREATE TABLE bookings (
     owner text NOT NULL,
     during tstzrange NOT NULL,
     CONSTRAINT bookings_no_overlap EXCLUDE USING gist (during WITH &&)
-);
+)
+TABLESPACE pg_default;
 
 CREATE TABLE events (
     id integer GENERATED ALWAYS AS IDENTITY (SEQUENCE NAME events_id_seq INCREMENT 1 CACHE 20),
@@ -114,7 +115,8 @@ CREATE VIEW active_users AS
     SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL;
 COMMENT ON VIEW active_users IS 'Users who have logged in at least once.';
 
-CREATE MATERIALIZED VIEW cached_bookings AS
+CREATE MATERIALIZED VIEW cached_bookings
+TABLESPACE pg_default AS
     SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource;
 COMMENT ON MATERIALIZED VIEW cached_bookings IS 'Pre-aggregated booking counts.';
 

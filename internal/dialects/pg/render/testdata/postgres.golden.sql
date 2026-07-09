@@ -129,9 +129,9 @@ CREATE VIEW active_users AS
     SELECT id, email, display_name FROM users WHERE last_login_ip IS NOT NULL;
 COMMENT ON VIEW active_users IS 'Users who have logged in at least once.';
 
-CREATE MATERIALIZED VIEW cached_bookings AS
-    SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource
-WITH (fillfactor = 90);
+CREATE MATERIALIZED VIEW cached_bookings
+WITH (fillfactor = 90) AS
+    SELECT owner, resource, COUNT(*) AS booking_count FROM bookings GROUP BY owner, resource;
 COMMENT ON MATERIALIZED VIEW cached_bookings IS 'Pre-aggregated booking counts.';
 
 CREATE MATERIALIZED VIEW pending_events AS

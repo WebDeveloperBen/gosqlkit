@@ -9,6 +9,7 @@ import (
 type Table struct {
 	Partitioning *Partitioning         `json:"partitioning,omitempty"`
 	PartitionOf  *PartitionOf          `json:"partitionOf,omitempty"`
+	Tablespace   string                `json:"tablespace,omitempty"`
 	Indexes      []Index               `json:"indexes,omitempty"`
 	Exclusions   []ExclusionConstraint `json:"exclusions,omitempty"`
 	ast.Table

@@ -180,6 +180,7 @@ func (p planner) table(previous, current pgschema.Table) error {
 	if err := p.rls(previous, current); err != nil {
 		return err
 	}
+	p.tableTablespace(previous, current)
 	p.partitioning(previous, current)
 	p.partitionOf(previous, current)
 
@@ -205,6 +206,8 @@ func (p planner) table(previous, current pgschema.Table) error {
 	withoutColumnsCurrent.RowLevelSecurity = false
 	withoutColumnsPrevious.ForceRLS = false
 	withoutColumnsCurrent.ForceRLS = false
+	withoutColumnsPrevious.Tablespace = ""
+	withoutColumnsCurrent.Tablespace = ""
 	withoutColumnsPrevious.Partitioning = nil
 	withoutColumnsCurrent.Partitioning = nil
 	withoutColumnsPrevious.PartitionOf = nil
@@ -658,8 +661,15 @@ func (p planner) indexes(previous, current pgschema.Table) error {
 			)
 			continue
 		}
-		if !reflect.DeepEqual(old, index) {
+		oldWithoutTablespace := old
+		indexWithoutTablespace := index
+		oldWithoutTablespace.Tablespace = ""
+		indexWithoutTablespace.Tablespace = ""
+		if !reflect.DeepEqual(oldWithoutTablespace, indexWithoutTablespace) {
 			return unsupported("index modifications require semantic planning")
+		}
+		if old.Tablespace != index.Tablespace {
+			p.indexTablespace(current, old, index)
 		}
 		delete(prev, index.Name)
 	}
@@ -687,6 +697,47 @@ func (p planner) indexes(previous, current pgschema.Table) error {
 		}
 	}
 	return nil
+}
+
+func (p planner) tableTablespace(previous, current pgschema.Table) {
+	if previous.Tablespace == current.Tablespace {
+		return
+	}
+	key := tableKey(current)
+	p.addWith(
+		migrateplan.NewChange(
+			migrateplan.OperationAlter,
+			migrateplan.Ref(migrateplan.ObjectKindTable, key),
+			"set tablespace for table "+key,
+			migrateplan.SQL(renderSetTableTablespace(current, current.Tablespace)),
+		).WithDependencies(
+			migrateplan.Ref(migrateplan.ObjectKindTable, key),
+		).WithRisks(
+			migrateplan.RiskLockHeavy,
+			migrateplan.RiskRequiresDDLReview,
+		).WithReverse(
+			migrateplan.SQL(renderSetTableTablespace(current, previous.Tablespace)),
+		),
+	)
+}
+
+func (p planner) indexTablespace(table pgschema.Table, previous, current pgschema.Index) {
+	key := tableKey(table) + "." + current.Name
+	p.addWith(
+		migrateplan.NewChange(
+			migrateplan.OperationAlter,
+			migrateplan.Ref(migrateplan.ObjectKindIndex, key),
+			"set tablespace for index "+key,
+			migrateplan.SQL(renderSetIndexTablespace(table.Schema, current.Name, current.Tablespace)),
+		).WithDependencies(
+			migrateplan.Ref(migrateplan.ObjectKindTable, tableKey(table)),
+		).WithRisks(
+			migrateplan.RiskLockHeavy,
+			migrateplan.RiskRequiresDDLReview,
+		).WithReverse(
+			migrateplan.SQL(renderSetIndexTablespace(table.Schema, current.Name, previous.Tablespace)),
+		),
+	)
 }
 
 func (p planner) comments(previous, current pgschema.Table) error {

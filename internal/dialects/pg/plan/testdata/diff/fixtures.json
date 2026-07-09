@@ -2256,7 +2256,7 @@
   {
     "name": "add_materialized_view",
     "wantStatements": [
-      "CREATE MATERIALIZED VIEW user_counts (total) AS\n    SELECT count(*) AS total FROM users\nWITH (fillfactor = 80)\nWITH NO DATA;",
+      "CREATE MATERIALIZED VIEW user_counts (total)\nWITH (fillfactor = 80) AS\n    SELECT count(*) AS total FROM users\nWITH NO DATA;",
       "COMMENT ON MATERIALIZED VIEW user_counts IS 'Cached user count';"
     ],
     "previous": {

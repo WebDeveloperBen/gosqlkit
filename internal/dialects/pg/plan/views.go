@@ -157,8 +157,13 @@ func (p planner) materializedViews(previous, current []pgschema.MaterializedView
 		oldWithoutComment, currentWithoutComment := old, view
 		oldWithoutComment.Comment = ""
 		currentWithoutComment.Comment = ""
+		oldWithoutComment.Tablespace = ""
+		currentWithoutComment.Tablespace = ""
 		if !reflect.DeepEqual(oldWithoutComment, currentWithoutComment) {
 			return unsupported("materialized view modifications require semantic planning")
+		}
+		if old.Tablespace != view.Tablespace {
+			p.addWith(materializedViewTablespaceChange(old, view))
 		}
 		if old.Comment == "" && view.Comment != "" {
 			p.addWith(materializedViewCommentChange(view))
@@ -232,6 +237,23 @@ func materializedViewCommentChange(view pgschema.MaterializedView) migrateplan.C
 		migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
 	).WithReverse(
 		migrateplan.SQL("COMMENT ON MATERIALIZED VIEW " + renderQualified(view.Schema, view.Name) + " IS NULL;"),
+	)
+}
+
+func materializedViewTablespaceChange(previous, current pgschema.MaterializedView) migrateplan.Change {
+	key := materializedViewKey(current)
+	return migrateplan.NewChange(
+		migrateplan.OperationAlter,
+		migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
+		"set tablespace for materialized view "+key,
+		migrateplan.SQL(renderSetMaterializedViewTablespace(current, current.Tablespace)),
+	).WithDependencies(
+		migrateplan.Ref(migrateplan.ObjectKindMaterializedView, key),
+	).WithRisks(
+		migrateplan.RiskLockHeavy,
+		migrateplan.RiskRequiresDDLReview,
+	).WithReverse(
+		migrateplan.SQL(renderSetMaterializedViewTablespace(current, previous.Tablespace)),
 	)
 }
 

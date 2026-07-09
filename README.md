@@ -170,11 +170,12 @@ sqlc generate
   key actions, index methods, and view check options
 - PostgreSQL schemas/namespaces, extensions, enums, sequences, composite
   types, domains, partitioned tables with child bounds, roles, functions,
-  triggers, RLS policies, and explicit grants
+  triggers, RLS policies, explicit grants, and tablespace assignment for
+  tables, indexes, and materialized views
 - Builder-style function bodies, composite fields, views, and materialized
   views, while keeping raw SQL escape hatches
 - Views with column aliases, check options, and security options
-- Materialized views with storage parameters and `WITH NO DATA`
+- Materialized views with storage parameters, tablespaces, and `WITH NO DATA`
 - Schema-qualified rendering
 - Deterministic SQL and snapshot JSON output with stable snapshot IDs
 - Snapshot metadata maps (schema, table, column, view, role, function, trigger, policy) with
@@ -198,9 +199,9 @@ sqlc generate
 - PostgreSQL drift checking with `gosqlkit drift check --url ...` across the
   PostgreSQL snapshot model: namespaces, extensions, roles, enums, composite
   types, domains, sequences, functions, tables, columns, table constraints,
-  standalone indexes, comments, RLS flags, policies, triggers, grants, views, and
-  materialized views, with object-level diagnostics for missing, extra, and
-  changed objects in a styled terminal table and JSON output
+  standalone indexes, comments, RLS flags, policies, triggers, grants,
+  tablespaces, views, and materialized views, with object-level diagnostics for
+  missing, extra, and changed objects in a styled terminal table and JSON output
 - CI-friendly wrappers: `gosqlkit ci schema` checks committed generated SQL,
   snapshot JSON, and migration metadata; `gosqlkit ci database` checks live
   database drift

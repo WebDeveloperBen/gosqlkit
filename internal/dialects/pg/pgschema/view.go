@@ -22,6 +22,7 @@ type MaterializedView struct {
 	Name          string            `json:"name"`
 	Query         string            `json:"query"`
 	Comment       string            `json:"comment,omitempty"`
+	Tablespace    string            `json:"tablespace,omitempty"`
 	ColumnAliases []string          `json:"columnAliases,omitempty"`
 	DependsOn     []string          `json:"dependsOn,omitempty"`
 	NoData        bool              `json:"noData,omitempty"`

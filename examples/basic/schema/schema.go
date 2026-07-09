@@ -113,7 +113,7 @@ var InvoiceLines = pg.TableInSchema(
 	pg.IndexOn(
 		"invoice_lines_description_idx",
 		pg.IndexColumn("description").OpClass("text_ops"),
-	).Using(pg.BTree).Concurrently().With("fillfactor", "90"),
+	).Using(pg.BTree).Concurrently().With("fillfactor", "90").Tablespace("pg_default"),
 )
 
 var Events = pg.Table(
@@ -161,7 +161,7 @@ var Bookings = pg.Table(
 		"bookings_no_overlap",
 		pg.ExcludeWith("during", "&&"),
 	).Using(pg.GiST),
-)
+).Tablespace("pg_default")
 
 var ActiveUsers = pg.View("active_users").
 	As(pg.Select(
@@ -188,7 +188,8 @@ var CachedBookings = pg.MaterializedView("cached_bookings").
 		pg.CountAll().As("booking_count"),
 	).From("bookings").GroupBy(pg.Col("owner"), pg.Col("resource"))).
 	Comment("Pre-aggregated booking counts.").
-	DependsOn("bookings")
+	DependsOn("bookings").
+	Tablespace("pg_default")
 
 var ReaderUserGrant = pg.Grant(pg.PrivilegeSelect).
 	OnTable("users").

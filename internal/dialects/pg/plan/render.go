@@ -342,6 +342,25 @@ func renderTrigger(trigger pgschema.Trigger) string {
 	return b.String()
 }
 
+func renderSetTableTablespace(table pgschema.Table, tablespace string) string {
+	return "ALTER TABLE " + renderTableName(table) + " SET TABLESPACE " + renderTablespaceTarget(tablespace) + ";"
+}
+
+func renderSetIndexTablespace(schema, name, tablespace string) string {
+	return "ALTER INDEX " + renderQualified(schema, name) + " SET TABLESPACE " + renderTablespaceTarget(tablespace) + ";"
+}
+
+func renderSetMaterializedViewTablespace(view pgschema.MaterializedView, tablespace string) string {
+	return "ALTER MATERIALIZED VIEW " + renderQualified(view.Schema, view.Name) + " SET TABLESPACE " + renderTablespaceTarget(tablespace) + ";"
+}
+
+func renderTablespaceTarget(tablespace string) string {
+	if tablespace == "" {
+		return "pg_default"
+	}
+	return tablespace
+}
+
 func renderTriggerEvents(trigger pgschema.Trigger) string {
 	events := normalisedTriggerEvents(trigger.Events)
 	parts := make([]string, 0, len(events))
@@ -400,13 +419,14 @@ func renderMaterializedView(view pgschema.MaterializedView) string {
 		b.WriteString(strings.Join(view.ColumnAliases, ", "))
 		b.WriteString(")")
 	}
-	b.WriteString(" AS\n    ")
-	b.WriteString(view.Query)
 	if len(view.With) > 0 {
 		b.WriteString("\nWITH (")
 		b.WriteString(renderIndexWith(view.With))
 		b.WriteString(")")
 	}
+	writeTablespace(&b, view.Tablespace)
+	b.WriteString(" AS\n    ")
+	b.WriteString(view.Query)
 	if view.NoData {
 		b.WriteString("\nWITH NO DATA")
 	}
@@ -427,6 +447,7 @@ func renderCreateTable(table pgschema.Table) (string, error) {
 			b.WriteString("\n")
 			b.WriteString(renderPartitioning(*table.Partitioning))
 		}
+		writeTablespace(&b, table.Tablespace)
 		b.WriteString(";")
 		return b.String(), nil
 	}
@@ -461,8 +482,16 @@ func renderCreateTable(table pgschema.Table) (string, error) {
 		b.WriteString("\n")
 		b.WriteString(renderPartitioning(*table.Partitioning))
 	}
+	writeTablespace(&b, table.Tablespace)
 	b.WriteString(";")
 	return b.String(), nil
+}
+
+func writeTablespace(b *strings.Builder, tablespace string) {
+	if tablespace != "" {
+		b.WriteString("\nTABLESPACE ")
+		b.WriteString(tablespace)
+	}
 }
 
 func renderPartitioning(partitioning pgschema.Partitioning) string {
@@ -656,6 +685,10 @@ func renderIndex(table pgschema.Table, index pgschema.Index) (string, error) {
 		line.WriteString(" WITH (")
 		line.WriteString(renderIndexWith(index.With))
 		line.WriteString(")")
+	}
+	if index.Tablespace != "" {
+		line.WriteString(" TABLESPACE ")
+		line.WriteString(index.Tablespace)
 	}
 	if index.Where != "" {
 		line.WriteString(" WHERE ")

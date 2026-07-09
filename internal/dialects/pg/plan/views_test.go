@@ -66,6 +66,47 @@ func TestSnapshotDiffProducesViewDependencyAndReverse(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffAltersMaterializedViewTablespace(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		MaterializedViews: []pgschema.MaterializedView{{
+			Name:  "booking_counts",
+			Query: "SELECT count(*) FROM bookings",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		MaterializedViews: []pgschema.MaterializedView{{
+			Name:       "booking_counts",
+			Query:      "SELECT count(*) FROM bookings",
+			Tablespace: "fastspace",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 || len(planned.Statements) != 1 {
+		t.Fatalf("planned = %#v", planned)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationAlter || change.Object.Kind != migrateplan.ObjectKindMaterializedView {
+		t.Fatalf("change = %#v", change)
+	}
+	if planned.Statements[0] != "ALTER MATERIALIZED VIEW booking_counts SET TABLESPACE fastspace;" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if !change.HasRisk(migrateplan.RiskLockHeavy) || !change.HasRisk(migrateplan.RiskRequiresDDLReview) {
+		t.Fatalf("risks = %#v", change.Risks)
+	}
+	if !change.Reversible || change.ReverseStatements[0].SQL != "ALTER MATERIALIZED VIEW booking_counts SET TABLESPACE pg_default;" {
+		t.Fatalf("reverse = %#v", change)
+	}
+}
+
 func TestSnapshotDiffOrdersViewsByViewDependency(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

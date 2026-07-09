@@ -227,6 +227,7 @@ func projectDriftTable(table pgschema.Table) pgschema.Table {
 		columns = append(columns, column)
 	}
 	table.Columns = columns
+	table.Tablespace = normaliseDriftTablespace(table.Tablespace)
 	table.PrimaryKeys = clearPrimaryKeyPreviousNames(table.PrimaryKeys)
 	table.UniqueConstraints = clearUniquePreviousNames(table.UniqueConstraints)
 	table.ForeignKeys = clearForeignKeyPreviousNames(table.ForeignKeys)
@@ -383,6 +384,7 @@ func projectDriftMaterializedViews(items []pgschema.MaterializedView) []pgschema
 	out := append([]pgschema.MaterializedView(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].Tablespace = normaliseDriftTablespace(out[i].Tablespace)
 		out[i].ColumnAliases = nil
 		out[i].DependsOn = nil
 		out[i].NoData = false
@@ -492,6 +494,7 @@ func projectDriftIndexes(items []pgschema.Index) []pgschema.Index {
 		out[i].PreviousName = ""
 		out[i].Concurrently = false
 		out[i].Only = false
+		out[i].Tablespace = normaliseDriftTablespace(out[i].Tablespace)
 		if out[i].Method == "btree" {
 			out[i].Method = ""
 		}
@@ -513,6 +516,13 @@ func projectDriftIndexes(items []pgschema.Index) []pgschema.Index {
 		}
 	}
 	return out
+}
+
+func normaliseDriftTablespace(value string) string {
+	if value == "pg_default" {
+		return ""
+	}
+	return value
 }
 
 func canonicaliseInlineConstraints(table *pgschema.Table) {

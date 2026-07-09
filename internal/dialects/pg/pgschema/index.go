@@ -3,9 +3,10 @@ package pgschema
 import "github.com/webdeveloperben/gosqlkit/internal/ast"
 
 type Index struct {
-	With    map[string]string `json:"with,omitempty"`
-	Method  string            `json:"method,omitempty"`
-	Columns []IndexColumn     `json:"columns,omitempty"`
+	With       map[string]string `json:"with,omitempty"`
+	Method     string            `json:"method,omitempty"`
+	Tablespace string            `json:"tablespace,omitempty"`
+	Columns    []IndexColumn     `json:"columns,omitempty"`
 	ast.Index
 	Concurrently bool `json:"concurrently,omitempty"`
 	Only         bool `json:"only,omitempty"`

@@ -1132,6 +1132,57 @@ func TestPostgresRejectsGrantWithUnknownColumn(t *testing.T) {
 	}
 }
 
+func TestPostgresRendersTablespaces(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{{
+			Tablespace: "pg_default",
+			Table: ast.Table{
+				Name:    "bookings",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+			Indexes: []pgschema.Index{{
+				Tablespace: "pg_default",
+				Index: ast.Index{
+					Name: "bookings_id_idx",
+				},
+				Columns: []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "id"}}},
+			}},
+		}},
+		MaterializedViews: []pgschema.MaterializedView{{
+			Name:       "booking_counts",
+			Query:      "SELECT count(*) FROM bookings",
+			Tablespace: "pg_default",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"CREATE TABLE bookings (\n    id uuid\n)\nTABLESPACE pg_default;",
+		"CREATE INDEX bookings_id_idx ON bookings (id) TABLESPACE pg_default;",
+		"CREATE MATERIALIZED VIEW booking_counts\nTABLESPACE pg_default AS\n    SELECT count(*) FROM bookings;",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in\n%s", want, got)
+		}
+	}
+}
+
+func TestPostgresRejectsInvalidTablespace(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{{
+			Tablespace: "bad-name",
+			Table: ast.Table{
+				Name:    "bookings",
+				Columns: []ast.Column{{Name: "id", Type: "uuid"}},
+			},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "tablespace") {
+		t.Fatalf("expected tablespace validation error, got %v", err)
+	}
+}
+
 func TestPostgresRejectsDuplicateFunctionSignature(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
 		Functions: []pgschema.Function{
