@@ -233,6 +233,11 @@ func (c *Column) Default(expression string) *Column {
 	return c
 }
 
+func (c *Column) Collate(name string) *Column {
+	c.def.Collation = name
+	return c
+}
+
 func (c *Column) Array() *Column {
 	c.def.Type += "[]"
 	return c

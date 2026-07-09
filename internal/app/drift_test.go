@@ -121,11 +121,20 @@ func TestProjectDriftSchemaIgnoresMigrationRunnerTables(t *testing.T) {
 func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 	cache := int64(10)
 	start := int64(1000)
+	deterministic := true
 	schema := projectDriftSchema(pgschema.Schema{
 		Namespaces: []pgschema.Namespace{{Name: "billing", PreviousName: "old_billing"}},
 		Extensions: []pgschema.Extension{{
 			Name:         "pgcrypto",
 			PreviousName: "old_pgcrypto",
+		}},
+		Collations: []pgschema.Collation{{
+			Name:          "stable_text",
+			PreviousName:  "old_stable_text",
+			Provider:      "libc",
+			Locale:        "C",
+			Deterministic: &deterministic,
+			Version:       "2.36",
 		}},
 		Enums: []pgschema.Enum{{
 			Schema:       "billing",
@@ -179,6 +188,7 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 
 	if schema.Namespaces[0].PreviousName != "" ||
 		schema.Extensions[0].PreviousName != "" ||
+		schema.Collations[0].PreviousName != "" ||
 		schema.Enums[0].PreviousName != "" ||
 		schema.CompositeTypes[0].PreviousName != "" ||
 		schema.Domains[0].PreviousName != "" ||
@@ -188,8 +198,11 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 		schema.Tables[0].Indexes[0].PreviousName != "" {
 		t.Fatalf("projected schema retained rename metadata: %#v", schema)
 	}
-	if len(schema.CompositeTypes) != 1 || len(schema.Domains) != 1 || len(schema.Sequences) != 1 || len(schema.Tables[0].Indexes) != 1 {
+	if len(schema.Collations) != 1 || len(schema.CompositeTypes) != 1 || len(schema.Domains) != 1 || len(schema.Sequences) != 1 || len(schema.Tables[0].Indexes) != 1 {
 		t.Fatalf("projected schema dropped richer introspected objects: %#v", schema)
+	}
+	if schema.Collations[0].Provider != "" || schema.Collations[0].Version != "" || schema.Collations[0].Deterministic != nil {
+		t.Fatalf("projected collation retained default introspection fields: %#v", schema.Collations[0])
 	}
 	if schema.Tables[0].Indexes[0].Concurrently || schema.Tables[0].Indexes[0].Only {
 		t.Fatalf("projected index retained non-persistent authoring flags: %#v", schema.Tables[0].Indexes[0])

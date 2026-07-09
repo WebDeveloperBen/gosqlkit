@@ -144,6 +144,7 @@ func projectDriftDocument(doc pgschema.Document) pgschema.Schema {
 		Namespaces:        doc.Namespaces,
 		Extensions:        doc.Extensions,
 		Roles:             doc.Roles,
+		Collations:        doc.Collations,
 		Enums:             doc.Enums,
 		CompositeTypes:    doc.CompositeTypes,
 		Domains:           doc.Domains,
@@ -170,6 +171,7 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 		Namespaces:        clearNamespacePreviousNames(schema.Namespaces),
 		Extensions:        clearExtensionPreviousNames(schema.Extensions),
 		Roles:             projectDriftRoles(schema.Roles),
+		Collations:        projectDriftCollations(schema.Collations),
 		Enums:             clearEnumPreviousNames(schema.Enums),
 		CompositeTypes:    clearCompositeTypePreviousNames(schema.CompositeTypes),
 		Domains:           clearDomainPreviousNames(schema.Domains),
@@ -182,6 +184,21 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 		Policies:          projectDriftPolicies(schema.Policies),
 		Grants:            projectDriftGrants(schema.Grants),
 	}
+}
+
+func projectDriftCollations(items []pgschema.Collation) []pgschema.Collation {
+	out := append([]pgschema.Collation(nil), items...)
+	for i := range out {
+		out[i].PreviousName = ""
+		out[i].Version = ""
+		if out[i].Provider == "libc" {
+			out[i].Provider = ""
+		}
+		if out[i].Deterministic != nil && *out[i].Deterministic {
+			out[i].Deterministic = nil
+		}
+	}
+	return out
 }
 
 func isMigrationRunnerTable(table pgschema.Table) bool {

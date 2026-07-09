@@ -32,6 +32,9 @@ func driftDifferences(desired, database pgschema.Schema) []DriftDifference {
 	compareDriftCollection(&diffs, "role", desired.Roles, database.Roles, func(item pgschema.Role) string {
 		return item.Name
 	})
+	compareDriftCollection(&diffs, "collation", desired.Collations, database.Collations, func(item pgschema.Collation) string {
+		return driftQualified(item.Schema, item.Name)
+	})
 	compareDriftCollection(&diffs, "enum", desired.Enums, database.Enums, func(item pgschema.Enum) string {
 		return driftQualified(item.Schema, item.Name)
 	})

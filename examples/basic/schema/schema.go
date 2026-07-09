@@ -13,6 +13,8 @@ var AppWriter = pg.Role("app_writer").
 
 var Billing = pg.Namespace("billing")
 
+var StableText = pg.Collation("stable_text").Locale("C")
+
 var InvoiceStatus = pg.EnumTypeInSchema("billing", "invoice_status", "draft", "issued", "paid", "void")
 
 var OrderNumberSeq = pg.SequenceInSchema("billing", "order_number_seq", pg.SequenceOptions{
@@ -49,8 +51,8 @@ var Email = pg.Domain("email", "text").
 var Users = pg.Table(
 	"users",
 	pg.UUID("id").PrimaryKey().Default("gen_random_uuid()"),
-	pg.Text("email").NotNull(),
-	pg.Text("display_name"),
+	pg.Text("email").Collate("stable_text").NotNull(),
+	pg.Text("display_name").Collate("stable_text"),
 	pg.Inet("last_login_ip"),
 	pg.Text("tags").Array(),
 	pg.TimestampTZ("created_at").NotNull().Default("now()"),

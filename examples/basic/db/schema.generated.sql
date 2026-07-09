@@ -6,6 +6,10 @@ CREATE SCHEMA billing;
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE COLLATION stable_text (
+    LOCALE = 'C'
+);
+
 CREATE TYPE billing.invoice_status AS ENUM ('draft', 'issued', 'paid', 'void');
 
 CREATE TYPE billing.money AS (
@@ -39,8 +43,8 @@ $$;
 
 CREATE TABLE users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    email text NOT NULL,
-    display_name text,
+    email text COLLATE stable_text NOT NULL,
+    display_name text COLLATE stable_text,
     last_login_ip inet,
     tags text[],
     created_at timestamptz NOT NULL DEFAULT now(),

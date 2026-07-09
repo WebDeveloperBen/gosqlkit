@@ -32,6 +32,7 @@ type ObjectKind string
 const (
 	ObjectKindSchema           ObjectKind = "schema"
 	ObjectKindExtension        ObjectKind = "extension"
+	ObjectKindCollation        ObjectKind = "collation"
 	ObjectKindEnum             ObjectKind = "enum"
 	ObjectKindCompositeType    ObjectKind = "composite_type"
 	ObjectKindDomain           ObjectKind = "domain"

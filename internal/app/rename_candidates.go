@@ -124,6 +124,7 @@ func isRenameCandidateAddition(change migrateplan.Change) bool {
 func renameableKind(kind migrateplan.ObjectKind) bool {
 	switch kind {
 	case migrateplan.ObjectKindSchema,
+		migrateplan.ObjectKindCollation,
 		migrateplan.ObjectKindEnum,
 		migrateplan.ObjectKindCompositeType,
 		migrateplan.ObjectKindDomain,
@@ -260,6 +261,13 @@ func applyRenameCandidate(doc *pgschema.Document, candidate RenameCandidate) err
 		for i := range doc.Enums {
 			if qualifiedSnapshotName(doc.Enums[i].Schema, doc.Enums[i].Name) == candidate.ToKey {
 				doc.Enums[i].PreviousName = previousName
+				return nil
+			}
+		}
+	case migrateplan.ObjectKindCollation:
+		for i := range doc.Collations {
+			if qualifiedSnapshotName(doc.Collations[i].Schema, doc.Collations[i].Name) == candidate.ToKey {
+				doc.Collations[i].PreviousName = previousName
 				return nil
 			}
 		}

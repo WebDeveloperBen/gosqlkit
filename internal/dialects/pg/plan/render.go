@@ -157,6 +157,52 @@ func renderSequence(sequence pgschema.Sequence, includeOwnedBy bool) string {
 	return b.String()
 }
 
+func renderCollation(collation pgschema.Collation) (string, error) {
+	var b strings.Builder
+	b.WriteString("CREATE COLLATION ")
+	b.WriteString(renderQualified(collation.Schema, collation.Name))
+	if collation.From != "" {
+		b.WriteString(" FROM ")
+		b.WriteString(renderCollationReference(collation.From))
+		b.WriteString(";")
+		return b.String(), nil
+	}
+	options := renderCollationOptions(collation)
+	if len(options) == 0 {
+		return "", fmt.Errorf("collation %q must define options or copy from an existing collation", renderQualified(collation.Schema, collation.Name))
+	}
+	b.WriteString(" (\n")
+	b.WriteString(strings.Join(options, ",\n"))
+	b.WriteString("\n);")
+	return b.String(), nil
+}
+
+func renderCollationOptions(collation pgschema.Collation) []string {
+	options := []string{}
+	if collation.Locale != "" {
+		options = append(options, "    LOCALE = "+quoteSQL(collation.Locale))
+	}
+	if collation.LCCollate != "" {
+		options = append(options, "    LC_COLLATE = "+quoteSQL(collation.LCCollate))
+	}
+	if collation.LCType != "" {
+		options = append(options, "    LC_CTYPE = "+quoteSQL(collation.LCType))
+	}
+	if collation.Provider != "" {
+		options = append(options, "    PROVIDER = "+collation.Provider)
+	}
+	if collation.Deterministic != nil {
+		options = append(options, fmt.Sprintf("    DETERMINISTIC = %t", *collation.Deterministic))
+	}
+	if collation.Rules != "" {
+		options = append(options, "    RULES = "+quoteSQL(collation.Rules))
+	}
+	if collation.Version != "" {
+		options = append(options, "    VERSION = "+quoteSQL(collation.Version))
+	}
+	return options
+}
+
 func renderCompositeType(compositeType pgschema.CompositeType) (string, error) {
 	if len(compositeType.Attributes) == 0 {
 		return "", fmt.Errorf("composite type %q must have at least one attribute", renderQualified(compositeType.Schema, compositeType.Name))
@@ -526,6 +572,9 @@ func renderColumn(column ast.Column) (string, error) {
 		return "", fmt.Errorf("column %q must have a type", column.Name)
 	}
 	parts := []string{column.Name, column.Type}
+	if column.Collation != "" {
+		parts = append(parts, "COLLATE", renderCollationReference(column.Collation))
+	}
 	if column.Identity != nil {
 		parts = append(parts, renderIdentity(column.Identity))
 	} else {
@@ -792,6 +841,29 @@ func renderQualified(schema, name string) string {
 	return schema + "." + name
 }
 
+func renderQualifiedReference(name string) string {
+	parts := strings.Split(name, ".")
+	if len(parts) == 2 && parts[0] == "public" {
+		return parts[1]
+	}
+	return name
+}
+
+func renderCollationReference(name string) string {
+	switch name {
+	case "C":
+		return `"C"`
+	case "POSIX":
+		return `"POSIX"`
+	case "pg_catalog.C":
+		return `pg_catalog."C"`
+	case "pg_catalog.POSIX":
+		return `pg_catalog."POSIX"`
+	default:
+		return renderQualifiedReference(name)
+	}
+}
+
 func renderRenameTable(oldSchema, oldName, newName string) string {
 	return "ALTER TABLE " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
 }
@@ -838,6 +910,14 @@ func renderRenameSequence(oldSchema, oldName, newName string) string {
 
 func renderReverseRenameSequence(oldSchema, newName, oldName string) string {
 	return "ALTER SEQUENCE " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
+}
+
+func renderRenameCollation(oldSchema, oldName, newName string) string {
+	return "ALTER COLLATION " + renderQualified(oldSchema, oldName) + " RENAME TO " + newName + ";"
+}
+
+func renderReverseRenameCollation(oldSchema, newName, oldName string) string {
+	return "ALTER COLLATION " + renderQualified(oldSchema, newName) + " RENAME TO " + oldName + ";"
 }
 
 func renderRenameView(oldSchema, oldName, newName string) string {

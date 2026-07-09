@@ -32,7 +32,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, role := range roles {
 		renderRole(&b, role)
-		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
+		if i < len(roles)-1 || len(schema.Namespaces) > 0 || len(schema.Extensions) > 0 || len(schema.Collations) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -45,7 +45,7 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		b.WriteString("CREATE SCHEMA ")
 		b.WriteString(namespace.Name)
 		b.WriteString(";\n")
-		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
+		if i < len(namespaces)-1 || len(schema.Extensions) > 0 || len(schema.Collations) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -56,7 +56,20 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	})
 	for i, extension := range extensions {
 		renderExtension(&b, extension)
-		if i < len(extensions)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
+		if i < len(extensions)-1 || len(schema.Collations) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
+			b.WriteString("\n")
+		}
+	}
+
+	collations := append([]pgschema.Collation(nil), schema.Collations...)
+	sort.SliceStable(collations, func(i, j int) bool {
+		return qualifiedName(collations[i].Schema, collations[i].Name) < qualifiedName(collations[j].Schema, collations[j].Name)
+	})
+	for i, collation := range collations {
+		if err := renderCollation(&b, collation); err != nil {
+			return "", err
+		}
+		if i < len(collations)-1 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
 	}
@@ -467,6 +480,18 @@ func validateSchema(schema pgschema.Schema) error {
 		}
 	}
 
+	collationNames := map[string]struct{}{}
+	for _, collation := range schema.Collations {
+		if err := validateCollation(collation); err != nil {
+			return err
+		}
+		key := qualifiedName(collation.Schema, collation.Name)
+		if _, ok := collationNames[key]; ok {
+			return fmt.Errorf("duplicate collation %q", renderQualifiedName(collation.Schema, collation.Name))
+		}
+		collationNames[key] = struct{}{}
+	}
+
 	viewNames := map[string]struct{}{}
 	for _, view := range schema.Views {
 		if view.Schema != "" {
@@ -606,6 +631,18 @@ func validateSchema(schema pgschema.Schema) error {
 			if column.Default != "" {
 				if err := validateDefault(column); err != nil {
 					return fmt.Errorf("table %q column %q: %w", table.Name, column.Name, err)
+				}
+			}
+			if column.Collation != "" {
+				if isBuiltInCollationReference(column.Collation) {
+					continue
+				}
+				key, err := referenceKey(table.Schema, column.Collation)
+				if err != nil {
+					return fmt.Errorf("table %q column %q: %w", renderTableName(table), column.Name, err)
+				}
+				if _, ok := collationNames[key]; !ok {
+					return fmt.Errorf("table %q column %q references unknown collation %q", renderTableName(table), column.Name, renderCollationReference(column.Collation))
 				}
 			}
 		}
@@ -936,6 +973,51 @@ func renderSequence(b *strings.Builder, sequence pgschema.Sequence) {
 		b.WriteString(sequence.OwnedBy)
 	}
 	b.WriteString(";\n")
+}
+
+func renderCollation(b *strings.Builder, collation pgschema.Collation) error {
+	b.WriteString("CREATE COLLATION ")
+	b.WriteString(renderQualifiedName(collation.Schema, collation.Name))
+	if collation.From != "" {
+		b.WriteString(" FROM ")
+		b.WriteString(renderCollationReference(collation.From))
+		b.WriteString(";\n")
+		return nil
+	}
+	options := renderCollationOptions(collation)
+	if len(options) == 0 {
+		return fmt.Errorf("collation %q must define options or copy from an existing collation", renderQualifiedName(collation.Schema, collation.Name))
+	}
+	b.WriteString(" (\n")
+	b.WriteString(strings.Join(options, ",\n"))
+	b.WriteString("\n);\n")
+	return nil
+}
+
+func renderCollationOptions(collation pgschema.Collation) []string {
+	options := []string{}
+	if collation.Locale != "" {
+		options = append(options, "    LOCALE = "+quoteLiteral(collation.Locale))
+	}
+	if collation.LCCollate != "" {
+		options = append(options, "    LC_COLLATE = "+quoteLiteral(collation.LCCollate))
+	}
+	if collation.LCType != "" {
+		options = append(options, "    LC_CTYPE = "+quoteLiteral(collation.LCType))
+	}
+	if collation.Provider != "" {
+		options = append(options, "    PROVIDER = "+collation.Provider)
+	}
+	if collation.Deterministic != nil {
+		options = append(options, fmt.Sprintf("    DETERMINISTIC = %t", *collation.Deterministic))
+	}
+	if collation.Rules != "" {
+		options = append(options, "    RULES = "+quoteLiteral(collation.Rules))
+	}
+	if collation.Version != "" {
+		options = append(options, "    VERSION = "+quoteLiteral(collation.Version))
+	}
+	return options
 }
 
 func renderFunction(b *strings.Builder, function pgschema.Function) {
@@ -1406,6 +1488,9 @@ func renderColumn(column ast.Column) (string, error) {
 	}
 
 	parts := []string{column.Name, column.Type}
+	if column.Collation != "" {
+		parts = append(parts, "COLLATE", renderCollationReference(column.Collation))
+	}
 	if column.Identity != nil {
 		if err := validateIdentity(column); err != nil {
 			return "", fmt.Errorf("column %q: %w", column.Name, err)
@@ -1935,6 +2020,25 @@ func renderQualifiedName(schema, name string) string {
 	return schema + "." + name
 }
 
+func renderCollationReference(name string) string {
+	switch name {
+	case "pg_catalog.C":
+		return `pg_catalog."C"`
+	case "pg_catalog.POSIX":
+		return `pg_catalog."POSIX"`
+	}
+	parts := strings.Split(name, ".")
+	if len(parts) == 2 && parts[0] == "public" {
+		return parts[1]
+	}
+	switch name {
+	case "C", "POSIX":
+		return `"` + name + `"`
+	default:
+		return name
+	}
+}
+
 func qualifiedName(schema, name string) string {
 	if schema == "" {
 		schema = "public"
@@ -2047,6 +2151,63 @@ func validateTablespace(value string) error {
 		return nil
 	}
 	return validateIdentifier("tablespace", value)
+}
+
+func validateCollation(collation pgschema.Collation) error {
+	if collation.Schema != "" {
+		if err := validateIdentifier("collation schema", collation.Schema); err != nil {
+			return err
+		}
+	}
+	if err := validateIdentifier("collation", collation.Name); err != nil {
+		return err
+	}
+	if collation.From != "" {
+		if len(renderCollationOptions(collation)) > 0 {
+			return fmt.Errorf("collation %q cannot define options when copying from an existing collation", renderQualifiedName(collation.Schema, collation.Name))
+		}
+		if err := validateCollationReference(collation.From); err != nil {
+			return fmt.Errorf("collation %q: %w", renderQualifiedName(collation.Schema, collation.Name), err)
+		}
+		return nil
+	}
+	if collation.Locale == "" && collation.LCCollate == "" && collation.LCType == "" && collation.Provider == "" && collation.Deterministic == nil && collation.Rules == "" && collation.Version == "" {
+		return fmt.Errorf("collation %q must define options or copy from an existing collation", renderQualifiedName(collation.Schema, collation.Name))
+	}
+	if collation.Locale != "" && (collation.LCCollate != "" || collation.LCType != "") {
+		return fmt.Errorf("collation %q cannot combine LOCALE with LC_COLLATE or LC_CTYPE", renderQualifiedName(collation.Schema, collation.Name))
+	}
+	if collation.Provider != "" {
+		switch collation.Provider {
+		case "builtin", "icu", "libc":
+		default:
+			return fmt.Errorf("collation %q provider must be builtin, icu, or libc, got %q", renderQualifiedName(collation.Schema, collation.Name), collation.Provider)
+		}
+	}
+	if collation.Deterministic != nil && !*collation.Deterministic && collation.Provider != "icu" {
+		return fmt.Errorf("collation %q nondeterministic comparisons require provider icu", renderQualifiedName(collation.Schema, collation.Name))
+	}
+	if collation.Rules != "" && collation.Provider != "icu" {
+		return fmt.Errorf("collation %q rules require provider icu", renderQualifiedName(collation.Schema, collation.Name))
+	}
+	return nil
+}
+
+func validateCollationReference(name string) error {
+	if isBuiltInCollationReference(name) {
+		return nil
+	}
+	_, err := parseQualifiedIdentifier("collation", name)
+	return err
+}
+
+func isBuiltInCollationReference(name string) bool {
+	switch name {
+	case "C", "POSIX", "ucs_basic", "pg_catalog.C", "pg_catalog.POSIX", "pg_catalog.ucs_basic":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateGrant(grant pgschema.Grant, names map[string]struct{}, namespaceNames, relationNames, sequenceNames, typeNames map[string]struct{}, tableColumns map[string]map[string]struct{}) error {

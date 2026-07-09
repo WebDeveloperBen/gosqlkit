@@ -28,6 +28,7 @@ type Column struct {
 	PreviousName string      `json:"previousName,omitempty"`
 	Type         string      `json:"type"`
 	Default      string      `json:"default,omitempty"`
+	Collation    string      `json:"collation,omitempty"`
 	Comment      string      `json:"comment,omitempty"`
 	NotNull      bool        `json:"notNull,omitempty"`
 	PrimaryKey   bool        `json:"primaryKey,omitempty"`

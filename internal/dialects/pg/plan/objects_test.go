@@ -124,6 +124,120 @@ func TestSnapshotDiffProducesRoleReverse(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffProducesCollationReverse(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Collations: []pgschema.Collation{{
+			Name:   "stable_text",
+			Locale: "C",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Object.Kind != migrateplan.ObjectKindCollation || change.Object.Key != "public.stable_text" {
+		t.Fatalf("collation object = %#v", change.Object)
+	}
+	if len(change.Statements) != 1 || change.Statements[0].SQL != "CREATE COLLATION stable_text (\n    LOCALE = 'C'\n);" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "DROP COLLATION stable_text;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffEmitsRenameCollation(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Collations: []pgschema.Collation{{
+			Name:   "old_stable_text",
+			Locale: "C",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Collations: []pgschema.Collation{{
+			Name:         "stable_text",
+			PreviousName: "old_stable_text",
+			Locale:       "C",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationRename || change.Object.Kind != migrateplan.ObjectKindCollation || change.Object.Key != "public.stable_text" {
+		t.Fatalf("change = %#v", change)
+	}
+	if len(change.Statements) != 1 || change.Statements[0].SQL != "ALTER COLLATION old_stable_text RENAME TO stable_text;" {
+		t.Fatalf("statements = %#v", change.Statements)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "ALTER COLLATION stable_text RENAME TO old_stable_text;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffDetectsCollationReplacement(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Collations: []pgschema.Collation{{
+			Name:   "stable_text",
+			Locale: "C",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Collations: []pgschema.Collation{{
+			Name:   "stable_text",
+			Locale: "POSIX",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationReplace || change.Object.Kind != migrateplan.ObjectKindCollation {
+		t.Fatalf("change = %#v", change)
+	}
+	for _, risk := range []migrateplan.Risk{
+		migrateplan.RiskDestructive,
+		migrateplan.RiskManualReview,
+		migrateplan.RiskRequiresDDLReview,
+	} {
+		if !change.HasRisk(risk) {
+			t.Fatalf("expected risk %q in %#v", risk, change.Risks)
+		}
+	}
+	if len(change.Statements) != 0 || change.Reversible {
+		t.Fatalf("replacement should not emit automatic SQL: %#v", change)
+	}
+}
+
 func TestSnapshotDiffProducesGrantReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

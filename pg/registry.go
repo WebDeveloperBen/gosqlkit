@@ -12,6 +12,7 @@ var registry = struct {
 	namespaces        []pgschema.Namespace
 	extensions        []pgschema.Extension
 	roles             []*pgschema.Role
+	collations        []*pgschema.Collation
 	enums             []pgschema.Enum
 	sequences         []pgschema.Sequence
 	compositeTypes    []pgschema.CompositeType
@@ -78,6 +79,7 @@ func Schema() pgschema.Schema {
 	namespaces := append([]pgschema.Namespace(nil), registry.namespaces...)
 	extensions := append([]pgschema.Extension(nil), registry.extensions...)
 	roles := make([]pgschema.Role, 0, len(registry.roles))
+	collations := make([]pgschema.Collation, 0, len(registry.collations))
 	enums := append([]pgschema.Enum(nil), registry.enums...)
 	sequences := append([]pgschema.Sequence(nil), registry.sequences...)
 	compositeTypes := append([]pgschema.CompositeType(nil), registry.compositeTypes...)
@@ -86,6 +88,10 @@ func Schema() pgschema.Schema {
 
 	for _, role := range registry.roles {
 		roles = append(roles, *role)
+	}
+
+	for _, collation := range registry.collations {
+		collations = append(collations, *collation)
 	}
 
 	for _, domain := range registry.domains {
@@ -131,6 +137,7 @@ func Schema() pgschema.Schema {
 		Namespaces:        namespaces,
 		Extensions:        extensions,
 		Roles:             roles,
+		Collations:        collations,
 		Enums:             enums,
 		Sequences:         sequences,
 		CompositeTypes:    compositeTypes,
@@ -175,6 +182,7 @@ func Reset() {
 	registry.namespaces = nil
 	registry.extensions = nil
 	registry.roles = nil
+	registry.collations = nil
 	registry.enums = nil
 	registry.sequences = nil
 	registry.compositeTypes = nil
@@ -213,6 +221,13 @@ func registerRole(role *pgschema.Role) {
 	defer registry.Unlock()
 
 	registry.roles = append(registry.roles, role)
+}
+
+func registerCollation(collation *pgschema.Collation) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.collations = append(registry.collations, collation)
 }
 
 func registerEnum(enum pgschema.Enum) {

@@ -18,6 +18,10 @@ type RoleDef struct {
 	def *pgschema.Role
 }
 
+type CollationDef struct {
+	def *pgschema.Collation
+}
+
 type EnumDef struct {
 	def pgschema.Enum
 }
@@ -60,6 +64,8 @@ type GrantDef struct {
 
 type Privilege string
 
+type CollationProvider string
+
 const (
 	PrivilegeAll        Privilege = "ALL PRIVILEGES"
 	PrivilegeSelect     Privilege = "SELECT"
@@ -75,6 +81,12 @@ const (
 	PrivilegeConnect    Privilege = "CONNECT"
 	PrivilegeCreate     Privilege = "CREATE"
 	PrivilegeTemporary  Privilege = "TEMPORARY"
+)
+
+const (
+	CollationProviderBuiltin CollationProvider = "builtin"
+	CollationProviderICU     CollationProvider = "icu"
+	CollationProviderLibc    CollationProvider = "libc"
 )
 
 func Namespace(name string) *NamespaceDef {
@@ -192,6 +204,66 @@ func (r *RoleDef) AdminOf(roles ...string) *RoleDef {
 func (r *RoleDef) PreviousName(name string) *RoleDef {
 	r.def.PreviousName = name
 	return r
+}
+
+func Collation(name string) *CollationDef {
+	return CollationInSchema("", name)
+}
+
+func CollationInSchema(schema, name string) *CollationDef {
+	collation := &pgschema.Collation{Schema: schema, Name: name}
+	registerCollation(collation)
+	return &CollationDef{def: collation}
+}
+
+func CollationFrom(name, existing string) *CollationDef {
+	return CollationFromInSchema("", name, existing)
+}
+
+func CollationFromInSchema(schema, name, existing string) *CollationDef {
+	collation := &pgschema.Collation{Schema: schema, Name: name, From: existing}
+	registerCollation(collation)
+	return &CollationDef{def: collation}
+}
+
+func (c *CollationDef) Provider(provider CollationProvider) *CollationDef {
+	c.def.Provider = string(provider)
+	return c
+}
+
+func (c *CollationDef) Locale(locale string) *CollationDef {
+	c.def.Locale = locale
+	return c
+}
+
+func (c *CollationDef) LCCollate(locale string) *CollationDef {
+	c.def.LCCollate = locale
+	return c
+}
+
+func (c *CollationDef) LCType(locale string) *CollationDef {
+	c.def.LCType = locale
+	return c
+}
+
+func (c *CollationDef) Deterministic(value bool) *CollationDef {
+	c.def.Deterministic = &value
+	return c
+}
+
+func (c *CollationDef) Rules(rules string) *CollationDef {
+	c.def.Rules = rules
+	return c
+}
+
+func (c *CollationDef) Version(version string) *CollationDef {
+	c.def.Version = version
+	return c
+}
+
+func (c *CollationDef) PreviousName(name string) *CollationDef {
+	c.def.PreviousName = name
+	return c
 }
 
 func Grant(privileges ...Privilege) *GrantDef {

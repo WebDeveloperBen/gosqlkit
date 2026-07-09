@@ -84,7 +84,7 @@ Legend:
 - `[x]` Explicit grants and column-level table privileges.
 - `[x]` Comments.
 - `[x]` Tablespace assignment for tables, indexes, and materialized views.
-- `[ ]` Collations.
+- `[x]` Collations.
 - `[ ]` Raw SQL schema blocks.
 
 ## Columns
@@ -101,7 +101,7 @@ Legend:
 - `[x]` Identity columns.
 - `[x]` Array columns.
 - `[x]` Column comments.
-- `[ ]` Column-level collation.
+- `[x]` Column-level collation.
 - `[x]` Type schema qualification, for example enum types in non-public schemas.
 - `[x]` Rename metadata.
 
@@ -539,6 +539,7 @@ Other provider requirement:
 - `[x]` Partitioned table and partition-child render, diff, drift, and introspection tests.
 - `[x]` Grant render, diff, drift, and introspection coverage.
 - `[x]` Tablespace render, diff, drift projection, and introspection coverage.
+- `[x]` Collation and column-level collation render, diff, drift projection, and introspection coverage.
 - `[x]` CLI table-rendering tests for drift diagnostics.
 - `[x]` CLI table-rendering tests for migration plan diagnostics.
 - `[x]` CLI flag validation tests for conflicting prompt-mode controls.
@@ -560,8 +561,8 @@ Other provider requirement:
 10. Add runner-compatible migration file generation and destructive-change guardrails.
 11. Add styled CLI summaries and interactive ambiguity resolution for migration
     authoring.
-12. Expand into remaining advanced PostgreSQL features such as collations,
-    raw SQL schema blocks, and the first non-PostgreSQL provider.
+12. Expand into remaining advanced PostgreSQL features such as raw SQL schema
+    blocks and the first non-PostgreSQL provider.
 
 ## Drizzle Reference Notes
 

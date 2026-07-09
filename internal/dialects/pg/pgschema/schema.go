@@ -10,6 +10,7 @@ type Schema struct {
 	Namespaces        []Namespace        `json:"namespaces,omitempty"`
 	Extensions        []Extension        `json:"extensions,omitempty"`
 	Roles             []Role             `json:"roles,omitempty"`
+	Collations        []Collation        `json:"collations,omitempty"`
 	Enums             []Enum             `json:"enums,omitempty"`
 	CompositeTypes    []CompositeType    `json:"compositeTypes,omitempty"`
 	Domains           []Domain           `json:"domains,omitempty"`
@@ -38,6 +39,7 @@ type Document struct {
 	Namespaces         []Namespace                 `json:"namespaces,omitempty"`
 	Extensions         []Extension                 `json:"extensions,omitempty"`
 	Roles              []Role                      `json:"roles,omitempty"`
+	Collations         []Collation                 `json:"collations,omitempty"`
 	Enums              []Enum                      `json:"enums,omitempty"`
 	CompositeTypes     []CompositeType             `json:"compositeTypes,omitempty"`
 	Domains            []Domain                    `json:"domains,omitempty"`
@@ -59,6 +61,7 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		Namespaces:        sortedNamespaces(schema.Namespaces),
 		Extensions:        sortedExtensions(schema.Extensions),
 		Roles:             sortedRoles(schema.Roles),
+		Collations:        sortedCollations(schema.Collations),
 		Enums:             sortedEnums(schema.Enums),
 		CompositeTypes:    sortedCompositeTypes(schema.CompositeTypes),
 		Domains:           sortedDomains(schema.Domains),

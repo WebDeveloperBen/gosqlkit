@@ -85,6 +85,35 @@ func TestGrantDSLRegistersOptions(t *testing.T) {
 	}
 }
 
+func TestCollationDSLRegistersOptions(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.CollationInSchema("billing", "stable_text").
+		Provider(pg.CollationProviderLibc).
+		Locale("C").
+		Version("1").
+		PreviousName("old_stable_text")
+	pg.CollationFrom("copied_text", "stable_text")
+	pg.Table("users", pg.Text("email").Collate("stable_text"))
+
+	schema := pg.Schema()
+	if len(schema.Collations) != 2 {
+		t.Fatalf("collations len = %d, want 2", len(schema.Collations))
+	}
+	if schema.Collations[0].Schema != "billing" || schema.Collations[0].Name != "stable_text" ||
+		schema.Collations[0].Provider != "libc" || schema.Collations[0].Locale != "C" ||
+		schema.Collations[0].Version != "1" || schema.Collations[0].PreviousName != "old_stable_text" {
+		t.Fatalf("unexpected collation %#v", schema.Collations[0])
+	}
+	if schema.Collations[1].Name != "copied_text" || schema.Collations[1].From != "stable_text" {
+		t.Fatalf("unexpected copied collation %#v", schema.Collations[1])
+	}
+	if len(schema.Tables) != 1 || len(schema.Tables[0].Columns) != 1 || schema.Tables[0].Columns[0].Collation != "stable_text" {
+		t.Fatalf("unexpected column collation %#v", schema.Tables)
+	}
+}
+
 func TestFunctionDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

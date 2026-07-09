@@ -1310,3 +1310,61 @@ func TestPostgresRejectsSelectPolicyWithCheckExpression(t *testing.T) {
 		t.Fatalf("expected SELECT WITH CHECK policy error, got %v", err)
 	}
 }
+
+func TestPostgresRendersCollations(t *testing.T) {
+	deterministic := false
+	sql, err := render.Postgres(pgschema.Schema{
+		Collations: []pgschema.Collation{
+			{
+				Name:          "case_insensitive",
+				Provider:      "icu",
+				Locale:        "und-u-ks-level2",
+				Deterministic: &deterministic,
+			},
+			{
+				Name: "stable_text",
+				From: "case_insensitive",
+			},
+		},
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "email", Type: "text", Collation: "case_insensitive"}}}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"CREATE COLLATION case_insensitive (\n    LOCALE = 'und-u-ks-level2',\n    PROVIDER = icu,\n    DETERMINISTIC = false\n);",
+		"CREATE COLLATION stable_text FROM case_insensitive;",
+		"email text COLLATE case_insensitive",
+	} {
+		if !strings.Contains(sql, want) {
+			t.Fatalf("expected SQL to contain %q, got:\n%s", want, sql)
+		}
+	}
+}
+
+func TestPostgresRejectsInvalidCollation(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Collations: []pgschema.Collation{{
+			Name:      "bad_collation",
+			Provider:  "libc",
+			Locale:    "C",
+			LCCollate: "C",
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "cannot combine LOCALE") {
+		t.Fatalf("expected invalid collation error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsUnknownColumnCollation(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{
+			{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "email", Type: "text", Collation: "missing_collation"}}}},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), `references unknown collation "missing_collation"`) {
+		t.Fatalf("expected unknown collation error, got %v", err)
+	}
+}

@@ -28,6 +28,9 @@ func Introspect(ctx context.Context, queryer Queryer) (pgschema.Schema, error) {
 	if schema.Roles, err = introspectRoles(ctx, queryer); err != nil {
 		return pgschema.Schema{}, err
 	}
+	if schema.Collations, err = introspectCollations(ctx, queryer); err != nil {
+		return pgschema.Schema{}, err
+	}
 	if schema.Enums, err = introspectEnums(ctx, queryer); err != nil {
 		return pgschema.Schema{}, err
 	}
@@ -213,6 +216,76 @@ ORDER BY member.rolname, parent.rolname`)
 		return fmt.Errorf("introspect role memberships: %w", err)
 	}
 	return nil
+}
+
+func introspectCollations(ctx context.Context, queryer Queryer) ([]pgschema.Collation, error) {
+	rulesSelect := "''"
+	hasRules, err := hasCatalogColumn(ctx, queryer, "pg_catalog", "pg_collation", "collicurules")
+	if err != nil {
+		return nil, err
+	}
+	if hasRules {
+		rulesSelect = "COALESCE(c.collicurules, '')"
+	}
+
+	rows, err := queryer.Query(ctx, fmt.Sprintf(`
+SELECT n.nspname,
+       c.collname,
+       c.collprovider::text,
+       c.collisdeterministic,
+       COALESCE(c.colliculocale, ''),
+       COALESCE(c.collcollate, ''),
+       COALESCE(c.collctype, ''),
+       %s,
+       COALESCE(c.collversion, '')
+FROM pg_collation c
+JOIN pg_namespace n ON n.oid = c.collnamespace
+WHERE n.nspname NOT LIKE 'pg_%%'
+  AND n.nspname <> 'information_schema'
+  AND c.collencoding IN (-1, pg_char_to_encoding(current_setting('server_encoding')))
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_depend dep
+    WHERE dep.classid = 'pg_collation'::regclass
+      AND dep.objid = c.oid
+      AND dep.deptype = 'e'
+  )
+ORDER BY n.nspname, c.collname`, rulesSelect))
+	if err != nil {
+		return nil, fmt.Errorf("introspect collations: %w", err)
+	}
+	defer rows.Close()
+
+	var out []pgschema.Collation
+	for rows.Next() {
+		var item pgschema.Collation
+		var provider, icuLocale, lcCollate, lcType string
+		var deterministic bool
+		if err := rows.Scan(&item.Schema, &item.Name, &provider, &deterministic, &icuLocale, &lcCollate, &lcType, &item.Rules, &item.Version); err != nil {
+			return nil, fmt.Errorf("scan collation: %w", err)
+		}
+		item.Schema = snapshotSchema(item.Schema)
+		item.Provider = collationProvider(provider)
+		if !deterministic {
+			item.Deterministic = new(false)
+		}
+		switch item.Provider {
+		case "icu", "builtin":
+			item.Locale = firstNonEmpty(icuLocale, lcCollate)
+		default:
+			if lcCollate != "" && lcCollate == lcType {
+				item.Locale = lcCollate
+			} else {
+				item.LCCollate = lcCollate
+				item.LCType = lcType
+			}
+		}
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("introspect collations: %w", err)
+	}
+	return out, nil
 }
 
 func introspectEnums(ctx context.Context, queryer Queryer) ([]pgschema.Enum, error) {
@@ -529,11 +602,16 @@ SELECT n.nspname,
        COALESCE(pg_get_expr(ad.adbin, ad.adrelid), ''),
        COALESCE(col_description(a.attrelid, a.attnum), ''),
        CASE a.attidentity WHEN 'a' THEN 'a' WHEN 'd' THEN 'd' ELSE '' END,
-       CASE a.attgenerated WHEN 's' THEN 's' ELSE '' END
+       CASE a.attgenerated WHEN 's' THEN 's' ELSE '' END,
+       CASE WHEN a.attcollation <> t.typcollation THEN COALESCE(cn.nspname, '') ELSE '' END,
+       CASE WHEN a.attcollation <> t.typcollation THEN COALESCE(coll.collname, '') ELSE '' END
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_type t ON t.oid = a.atttypid
 LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+LEFT JOIN pg_collation coll ON coll.oid = a.attcollation
+LEFT JOIN pg_namespace cn ON cn.oid = coll.collnamespace
 WHERE c.relkind IN ('r', 'p')
   AND n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
@@ -547,9 +625,9 @@ ORDER BY n.nspname, c.relname, a.attnum`)
 	defer rows.Close()
 
 	for rows.Next() {
-		var schemaName, tableName, identity, generated string
+		var schemaName, tableName, identity, generated, collationSchema, collationName string
 		var column ast.Column
-		if err := rows.Scan(&schemaName, &tableName, &column.Name, &column.Type, &column.NotNull, &column.Default, &column.Comment, &identity, &generated); err != nil {
+		if err := rows.Scan(&schemaName, &tableName, &column.Name, &column.Type, &column.NotNull, &column.Default, &column.Comment, &identity, &generated, &collationSchema, &collationName); err != nil {
 			return fmt.Errorf("scan column: %w", err)
 		}
 		table := byKey[qualified(snapshotSchema(schemaName), tableName)]
@@ -566,6 +644,9 @@ ORDER BY n.nspname, c.relname, a.attnum`)
 		if identity != "" {
 			column.Identity = &ast.Identity{Type: identityType(identity)}
 			column.Default = ""
+		}
+		if collationName != "" {
+			column.Collation = renderCollationReference(snapshotSchema(collationSchema), collationName)
 		}
 		table.Columns = append(table.Columns, column)
 	}
@@ -1192,6 +1273,33 @@ func tablePointers(tables []pgschema.Table) map[string]*pgschema.Table {
 	return out
 }
 
+func hasCatalogColumn(ctx context.Context, queryer Queryer, schema, table, column string) (bool, error) {
+	rows, err := queryer.Query(ctx, `
+SELECT EXISTS (
+  SELECT 1
+  FROM information_schema.columns
+  WHERE table_schema = $1
+    AND table_name = $2
+    AND column_name = $3
+)`, schema, table, column)
+	if err != nil {
+		return false, fmt.Errorf("inspect catalogue column %s.%s.%s: %w", schema, table, column, err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return false, fmt.Errorf("inspect catalogue column %s.%s.%s: no result", schema, table, column)
+	}
+	var exists bool
+	if err := rows.Scan(&exists); err != nil {
+		return false, fmt.Errorf("scan catalogue column %s.%s.%s: %w", schema, table, column, err)
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("inspect catalogue column %s.%s.%s: %w", schema, table, column, err)
+	}
+	return exists, nil
+}
+
 func parseFunctionArguments(value string) []pgschema.FunctionArgument {
 	parts := splitComma(value)
 	args := make([]pgschema.FunctionArgument, 0, len(parts))
@@ -1503,6 +1611,35 @@ func renderReference(schema, table string) string {
 		return "public." + table
 	}
 	return schema + "." + table
+}
+
+func renderCollationReference(schema, name string) string {
+	if schema == "" || schema == "public" {
+		return name
+	}
+	return schema + "." + name
+}
+
+func collationProvider(value string) string {
+	switch value {
+	case "b":
+		return "builtin"
+	case "i":
+		return "icu"
+	case "c":
+		return "libc"
+	default:
+		return ""
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func identityType(value string) string {

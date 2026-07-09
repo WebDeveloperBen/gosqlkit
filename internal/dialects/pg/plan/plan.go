@@ -37,6 +37,9 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.extensions(previous.Extensions, current.Extensions); err != nil {
 		return nil, err
 	}
+	if err := planner.collations(previous.Collations, current.Collations); err != nil {
+		return nil, err
+	}
 	if err := planner.enums(previous.Enums, current.Enums); err != nil {
 		return nil, err
 	}

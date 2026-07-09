@@ -1,4 +1,10 @@
 {
+  "collations": [
+    {
+      "name": "stable_text",
+      "locale": "C"
+    }
+  ],
   "columnMetadata": {
     "billing.invoice_lines.amount_cents": {},
     "billing.invoice_lines.description": {},
@@ -256,7 +262,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "0d5f555d0ee89e3ff9884b65fa6d01ac2aef31a07d900fa50d05f1b6bf81f6da",
+  "snapshotId": "30c360daaa35062c6a403621a46c390de15fb24ca537b36e7f30a8303cf69d11",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},
@@ -563,11 +569,13 @@
         {
           "name": "email",
           "type": "text",
+          "collation": "stable_text",
           "notNull": true
         },
         {
           "name": "display_name",
-          "type": "text"
+          "type": "text",
+          "collation": "stable_text"
         },
         {
           "name": "last_login_ip",

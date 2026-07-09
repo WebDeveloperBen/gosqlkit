@@ -144,6 +144,9 @@ func occupiedSchemas(doc pgschema.Document) map[string]bool {
 	for _, domain := range doc.Domains {
 		mark(domain.Schema)
 	}
+	for _, collation := range doc.Collations {
+		mark(collation.Schema)
+	}
 	for _, sequence := range doc.Sequences {
 		mark(sequence.Schema)
 	}
@@ -282,6 +285,90 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 					migrateplan.RiskDestructive,
 				).WithReverse(
 					migrateplan.SQL(stmt + ";"),
+				),
+			)
+		}
+	}
+	return nil
+}
+
+func (p planner) collations(previous, current []pgschema.Collation) error {
+	prev := mapBy(previous, func(item pgschema.Collation) string { return qualified(item.Schema, item.Name) })
+	for _, collation := range sortedBy(current, func(item pgschema.Collation) string { return qualified(item.Schema, item.Name) }) {
+		key := qualified(collation.Schema, collation.Name)
+		old, ok := prev[key]
+		if !ok {
+			if collation.PreviousName != "" {
+				oldCollation, hasOld := prev[qualified(collation.Schema, collation.PreviousName)]
+				if hasOld {
+					if err := ensureRenameOnlyCollation(collation, oldCollation); err != nil {
+						return err
+					}
+					oldKey := qualified(collation.Schema, collation.PreviousName)
+					p.addWith(
+						migrateplan.NewChange(
+							migrateplan.OperationRename,
+							migrateplan.Ref(migrateplan.ObjectKindCollation, key),
+							"rename collation "+oldKey+" to "+key,
+							migrateplan.SQL(renderRenameCollation(collation.Schema, collation.PreviousName, collation.Name)),
+						).WithReverse(
+							migrateplan.SQL(renderReverseRenameCollation(collation.Schema, collation.Name, collation.PreviousName)),
+						),
+					)
+					delete(prev, oldKey)
+					continue
+				}
+				return unsupported("collation " + key + " previousName " + collation.PreviousName + " does not match any collation in the previous snapshot")
+			}
+			stmt, err := renderCollation(collation)
+			if err != nil {
+				return err
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationCreate,
+					migrateplan.Ref(migrateplan.ObjectKindCollation, key),
+					"create collation "+key,
+					migrateplan.SQL(stmt),
+				).WithReverse(
+					migrateplan.SQL("DROP COLLATION " + renderQualified(collation.Schema, collation.Name) + ";"),
+				),
+			)
+			continue
+		}
+		if !reflect.DeepEqual(old, collation) {
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationReplace,
+					migrateplan.Ref(migrateplan.ObjectKindCollation, key),
+					"replace collation "+key,
+				).WithRisks(
+					migrateplan.RiskDestructive,
+					migrateplan.RiskManualReview,
+					migrateplan.RiskRequiresDDLReview,
+				),
+			)
+		}
+		delete(prev, key)
+	}
+	if len(prev) > 0 {
+		for _, key := range sortedStrings(removedNames(prev)) {
+			collation := prev[key]
+			stmt, err := renderCollation(collation)
+			if err != nil {
+				return err
+			}
+			p.addWith(
+				migrateplan.NewChange(
+					migrateplan.OperationDrop,
+					migrateplan.Ref(migrateplan.ObjectKindCollation, key),
+					"drop collation "+key,
+					migrateplan.SQL("DROP COLLATION "+renderQualified(collation.Schema, collation.Name)+";"),
+				).WithRisks(
+					migrateplan.RiskDestructive,
+					migrateplan.RiskDataLoss,
+				).WithReverse(
+					migrateplan.SQL(stmt),
 				),
 			)
 		}
@@ -805,6 +892,18 @@ func ensureRenameOnlyEnum(item, old pgschema.Enum) error {
 	current.PreviousName = ""
 	if !reflect.DeepEqual(renamed, current) {
 		return unsupported("enum " + qualified(item.Schema, item.Name) + " rename from " + qualified(old.Schema, old.Name) + " combined with other modifications requires semantic planning")
+	}
+	return nil
+}
+
+func ensureRenameOnlyCollation(item, old pgschema.Collation) error {
+	renamed := old
+	renamed.Name = item.Name
+	renamed.PreviousName = ""
+	current := item
+	current.PreviousName = ""
+	if !reflect.DeepEqual(renamed, current) {
+		return unsupported("collation " + qualified(item.Schema, item.Name) + " rename from " + qualified(old.Schema, old.Name) + " combined with other modifications requires semantic planning")
 	}
 	return nil
 }
