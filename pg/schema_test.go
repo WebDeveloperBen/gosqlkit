@@ -118,14 +118,15 @@ func TestExtensionDSLRegistersVersion(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)
 
-	pg.ExtensionInSchema("public", "pgcrypto").Version("1.3").Cascade()
+	pg.ExtensionInSchema("public", "pgcrypto").Version("1.3").Cascade().Comment("Cryptographic functions")
 
 	schema := pg.Schema()
 	if len(schema.Extensions) != 1 {
 		t.Fatalf("extensions len = %d, want 1", len(schema.Extensions))
 	}
 	if schema.Extensions[0].Schema != "public" || schema.Extensions[0].Name != "pgcrypto" ||
-		schema.Extensions[0].Version != "1.3" || !schema.Extensions[0].Cascade {
+		schema.Extensions[0].Version != "1.3" || !schema.Extensions[0].Cascade ||
+		schema.Extensions[0].Comment != "Cryptographic functions" {
 		t.Fatalf("unexpected extension %#v", schema.Extensions[0])
 	}
 }

@@ -50,7 +50,7 @@ func TestPostgresRender(t *testing.T) {
 			{Name: "billing"},
 		},
 		Extensions: []pgschema.Extension{
-			{Name: "pgcrypto", Version: "1.3", Cascade: true},
+			{Name: "pgcrypto", Version: "1.3", Cascade: true, Comment: "Cryptographic functions for UUID defaults."},
 		},
 		Enums: []pgschema.Enum{
 			{Schema: "billing", Name: "invoice_status", Values: []string{"draft", "issued", "paid", "void"}},
@@ -399,14 +399,14 @@ func TestPostgresAllowsHyphenatedExtensionNames(t *testing.T) {
 func TestPostgresRendersExtensionVersion(t *testing.T) {
 	got, err := render.Postgres(pgschema.Schema{
 		Extensions: []pgschema.Extension{
-			{Name: "pgcrypto", Version: "1.3"},
+			{Name: "pgcrypto", Version: "1.3", Comment: "Cryptographic functions"},
 			{Name: "postgis", Schema: "public", Version: "3.5.0'quoted", Cascade: true},
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\" VERSION '1.3';\n\nCREATE EXTENSION IF NOT EXISTS \"postgis\" WITH SCHEMA public VERSION '3.5.0''quoted' CASCADE;\n"
+	want := "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\" VERSION '1.3';\nCOMMENT ON EXTENSION \"pgcrypto\" IS 'Cryptographic functions';\n\nCREATE EXTENSION IF NOT EXISTS \"postgis\" WITH SCHEMA public VERSION '3.5.0''quoted' CASCADE;\n"
 	if got != want {
 		t.Fatalf("unexpected extension SQL:\n%s", got)
 	}

@@ -464,6 +464,105 @@ func TestSnapshotDiffProducesExtensionCascadeSQL(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffProducesExtensionComment(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name: "pgcrypto",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Comment: "Cryptographic functions",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "COMMENT ON EXTENSION pgcrypto IS 'Cryptographic functions';" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Object.Kind != migrateplan.ObjectKindExtension || change.Object.Key != "public.pgcrypto" {
+		t.Fatalf("change object = %#v", change.Object)
+	}
+	if len(change.Dependencies) != 1 || change.Dependencies[0].Kind != migrateplan.ObjectKindExtension || change.Dependencies[0].Key != "public.pgcrypto" {
+		t.Fatalf("dependencies = %#v", change.Dependencies)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "COMMENT ON EXTENSION pgcrypto IS NULL;" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffDropsExtensionComment(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Comment: "Cryptographic functions",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name: "pgcrypto",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "COMMENT ON EXTENSION pgcrypto IS NULL;" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if !change.HasRisk(migrateplan.RiskDestructive) || !change.HasRisk(migrateplan.RiskDataLoss) {
+		t.Fatalf("risks = %#v", change.Risks)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "COMMENT ON EXTENSION pgcrypto IS 'Cryptographic functions';" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffRejectsExtensionCommentModification(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Comment: "Cryptographic functions",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Comment: "Crypto helpers",
+		}},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil || !strings.Contains(err.Error(), "extension comment modifications require semantic planning") {
+		t.Fatalf("expected unsupported extension comment modification error, got %v", err)
+	}
+}
+
 func TestSnapshotDiffDropsExtensionWithCascade(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
@@ -472,6 +571,7 @@ func TestSnapshotDiffDropsExtensionWithCascade(t *testing.T) {
 			Name:    "postgis",
 			Version: "3.5.0",
 			Cascade: true,
+			Comment: "Spatial objects",
 		}},
 	})
 	current := snapshot(t, pgschema.Document{
@@ -486,7 +586,9 @@ func TestSnapshotDiffDropsExtensionWithCascade(t *testing.T) {
 	if len(planned.Statements) != 1 || planned.Statements[0] != "DROP EXTENSION postgis CASCADE;" {
 		t.Fatalf("statements = %#v", planned.Statements)
 	}
-	if len(planned.Changes) != 1 || len(planned.Changes[0].ReverseStatements) != 1 || planned.Changes[0].ReverseStatements[0].SQL != "CREATE EXTENSION postgis VERSION '3.5.0' CASCADE;" {
+	if len(planned.Changes) != 1 || len(planned.Changes[0].ReverseStatements) != 2 ||
+		planned.Changes[0].ReverseStatements[0].SQL != "CREATE EXTENSION postgis VERSION '3.5.0' CASCADE;" ||
+		planned.Changes[0].ReverseStatements[1].SQL != "COMMENT ON EXTENSION postgis IS 'Spatial objects';" {
 		t.Fatalf("change = %#v", planned.Changes)
 	}
 }

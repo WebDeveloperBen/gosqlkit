@@ -79,6 +79,31 @@
     }
   },
   {
+    "name": "add_extension_comment",
+    "wantStatements": [
+      "COMMENT ON EXTENSION pgcrypto IS 'Cryptographic functions';"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "extensions": [
+        {
+          "name": "pgcrypto"
+        }
+      ],
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "extensions": [
+        {
+          "name": "pgcrypto",
+          "comment": "Cryptographic functions"
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
     "name": "update_extension_version",
     "wantStatements": [
       "ALTER EXTENSION pgcrypto UPDATE TO '1.3';"

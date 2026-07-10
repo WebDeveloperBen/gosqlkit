@@ -141,6 +141,11 @@ func (e *ExtensionDef) Cascade() *ExtensionDef {
 	return e
 }
 
+func (e *ExtensionDef) Comment(text string) *ExtensionDef {
+	e.def.Comment = text
+	return e
+}
+
 func Role(name string) *RoleDef {
 	role := &pgschema.Role{Name: name}
 	registerRole(role)

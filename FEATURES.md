@@ -107,7 +107,7 @@ after raw SQL schema blocks.
 - `[x]` Version upgrades in the planner (`ALTER EXTENSION ... UPDATE TO '<v>'`)
   with manual-review and DDL-review risk flags.
 - `[x]` `CASCADE` on create and drop.
-- `[ ]` Extension comments.
+- `[x]` Extension comments.
 - `[x]` Introspect and diff extension version (`pg_extension.extversion`);
   version pin removals fail closed because PostgreSQL has no unpin operation.
 - `[ ]` Recognise extension-provided types (e.g. pgvector `vector`, PostGIS

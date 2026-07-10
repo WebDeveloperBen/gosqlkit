@@ -68,6 +68,7 @@ func renderStructuredSchema(schema pgschema.Schema) (string, error) {
 	})
 	for i, extension := range extensions {
 		renderExtension(&b, extension)
+		renderExtensionComment(&b, extension)
 		if i < len(extensions)-1 || len(schema.Collations) > 0 || len(schema.Enums) > 0 || len(schema.CompositeTypes) > 0 || len(schema.Domains) > 0 || len(schema.Sequences) > 0 || len(schema.Functions) > 0 || len(tables) > 0 || len(schema.Policies) > 0 || len(schema.Views) > 0 || len(schema.MaterializedViews) > 0 || len(schema.Triggers) > 0 || len(schema.Grants) > 0 {
 			b.WriteString("\n")
 		}
@@ -996,6 +997,12 @@ func renderExtension(b *strings.Builder, extension pgschema.Extension) {
 		b.WriteString(" CASCADE")
 	}
 	b.WriteString(";\n")
+}
+
+func renderExtensionComment(b *strings.Builder, extension pgschema.Extension) {
+	if extension.Comment != "" {
+		fmt.Fprintf(b, "COMMENT ON EXTENSION %s IS %s;\n", quoteIdentifier(extension.Name), quoteLiteral(extension.Comment))
+	}
 }
 
 func renderEnum(b *strings.Builder, enum pgschema.Enum) {

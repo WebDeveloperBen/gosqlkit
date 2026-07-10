@@ -129,6 +129,7 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 			PreviousName: "old_pgcrypto",
 			Version:      "1.3",
 			Cascade:      true,
+			Comment:      "Cryptographic functions",
 		}},
 		Collations: []pgschema.Collation{{
 			Name:          "stable_text",
@@ -205,6 +206,9 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 	}
 	if schema.Extensions[0].Version != "1.3" {
 		t.Fatalf("projected extension dropped version: %#v", schema.Extensions[0])
+	}
+	if schema.Extensions[0].Comment != "Cryptographic functions" {
+		t.Fatalf("projected extension dropped comment: %#v", schema.Extensions[0])
 	}
 	if schema.Extensions[0].Cascade {
 		t.Fatalf("projected extension retained authoring-only cascade metadata: %#v", schema.Extensions[0])

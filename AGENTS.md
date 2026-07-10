@@ -583,9 +583,9 @@ update of this file:
   scalar types + arrays + identity + generated), constraints (PK, unique
   with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
   (full advanced surface), schemas, extensions with version pinning, cascade,
-  and upgrade planning, enums, sequences, composite types, domains, partitioned
-  tables with partition children and bounds, roles, functions, triggers, RLS
-  policies, views, materialized views, comments, safe
+  comments, and upgrade planning, enums, sequences, composite types, domains,
+  partitioned tables with partition children and bounds, roles, functions,
+  triggers, RLS policies, views, materialized views, comments, safe
   default helpers, custom-type escape hatch, and raw SQL schema blocks
   (`pg.RawSQL`, rendered before/after the structured schema, additive-only in
   the planner).
@@ -643,8 +643,8 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: extension comments, remaining extension-provided PostgreSQL
-  types, and the first non-PostgreSQL provider.
+- **Next tracks**: extension-provided PostgreSQL types, extension-owned type
+  attribution, and the first non-PostgreSQL provider.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

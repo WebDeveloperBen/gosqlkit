@@ -5,6 +5,7 @@ CREATE ROLE app_writer WITH LOGIN CONNECTION LIMIT 20 IN ROLE app_reader;
 CREATE SCHEMA billing;
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" VERSION '1.3' CASCADE;
+COMMENT ON EXTENSION "pgcrypto" IS 'Cryptographic functions for UUID defaults.';
 
 CREATE COLLATION stable_text (
     LOCALE = 'C'

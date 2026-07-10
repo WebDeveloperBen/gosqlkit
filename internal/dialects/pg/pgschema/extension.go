@@ -5,6 +5,7 @@ import "sort"
 type Extension struct {
 	PreviousName string `json:"previousName,omitempty"`
 	Version      string `json:"version,omitempty"`
+	Comment      string `json:"comment,omitempty"`
 	Name         string `json:"name"`
 	Schema       string `json:"schema,omitempty"`
 	Cascade      bool   `json:"cascade,omitempty"`

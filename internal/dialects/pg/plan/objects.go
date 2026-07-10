@@ -261,6 +261,9 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 					migrateplan.SQL(renderDropExtension(item) + ";"),
 				),
 			)
+			if item.Comment != "" {
+				p.addWith(extensionCommentChange(item))
+			}
 			continue
 		}
 		previousItem := prev[key]
@@ -287,12 +290,19 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 			}
 			p.addWith(change)
 		}
+		if err := p.extensionComment(previousItem, item); err != nil {
+			return err
+		}
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
 		for _, key := range sortedStrings(removedNames(prev)) {
 			extension := prev[key]
 			stmt := renderCreateExtension(extension)
+			reverse := []migrateplan.Statement{migrateplan.SQL(stmt + ";")}
+			if extension.Comment != "" {
+				reverse = append(reverse, migrateplan.SQL(renderExtensionComment(extension)+";"))
+			}
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationDrop,
@@ -301,13 +311,54 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 					migrateplan.SQL(renderDropExtension(extension)+";"),
 				).WithRisks(
 					migrateplan.RiskDestructive,
-				).WithReverse(
-					migrateplan.SQL(stmt + ";"),
-				),
+				).WithReverse(reverse...),
 			)
 		}
 	}
 	return nil
+}
+
+func (p planner) extensionComment(previous, current pgschema.Extension) error {
+	if previous.Comment == current.Comment {
+		return nil
+	}
+	key := qualified(current.Schema, current.Name)
+	switch {
+	case previous.Comment == "" && current.Comment != "":
+		p.addWith(extensionCommentChange(current))
+	case current.Comment == "":
+		p.addWith(
+			migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+				"drop comment from extension "+key,
+				migrateplan.SQL("COMMENT ON EXTENSION "+current.Name+" IS NULL;"),
+			).WithDependencies(
+				migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+			).WithRisks(
+				migrateplan.RiskDestructive, migrateplan.RiskDataLoss,
+			).WithReverse(
+				migrateplan.SQL(renderExtensionComment(previous) + ";"),
+			),
+		)
+	default:
+		return unsupported("extension comment modifications require semantic planning")
+	}
+	return nil
+}
+
+func extensionCommentChange(extension pgschema.Extension) migrateplan.Change {
+	key := qualified(extension.Schema, extension.Name)
+	return migrateplan.NewChange(
+		migrateplan.OperationAlter,
+		migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+		"comment on extension "+key,
+		migrateplan.SQL(renderExtensionComment(extension)+";"),
+	).WithDependencies(
+		migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+	).WithReverse(
+		migrateplan.SQL("COMMENT ON EXTENSION " + extension.Name + " IS NULL;"),
+	)
 }
 
 func renderCreateExtension(extension pgschema.Extension) string {
@@ -322,6 +373,10 @@ func renderCreateExtension(extension pgschema.Extension) string {
 		stmt += " CASCADE"
 	}
 	return stmt
+}
+
+func renderExtensionComment(extension pgschema.Extension) string {
+	return "COMMENT ON EXTENSION " + extension.Name + " IS " + quoteSQL(extension.Comment)
 }
 
 func renderDropExtension(extension pgschema.Extension) string {
