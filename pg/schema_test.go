@@ -131,6 +131,111 @@ func TestExtensionDSLRegistersVersion(t *testing.T) {
 	}
 }
 
+func TestPgVectorDSLRegistersTypes(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Extension("vector")
+	pg.Table(
+		"documents",
+		pg.UUID("id").PrimaryKey(),
+		pg.Vector("embedding", 1536).NotNull(),
+		pg.HalfVec("summary_embedding", 768),
+		pg.SparseVec("sparse_embedding", 2048),
+		pg.Bit("binary_embedding", 256),
+		pg.IndexOn("documents_embedding_hnsw_idx", pg.IndexColumn("embedding").OpClass(pg.VectorCosineOps)).
+			Using(pg.HNSW).
+			With("m", "16").
+			With("ef_construction", "64"),
+		pg.IndexOn("documents_embedding_ivfflat_idx", pg.IndexColumn("embedding").OpClass(pg.VectorL2Ops)).
+			Using(pg.IVFFlat).
+			With("lists", "1"),
+		pg.IndexOn("documents_summary_embedding_hnsw_idx", pg.IndexColumn("summary_embedding").OpClass(pg.HalfVecL2Ops)).
+			Using(pg.HNSW),
+		pg.IndexOn("documents_sparse_embedding_hnsw_idx", pg.IndexColumn("sparse_embedding").OpClass(pg.SparseVecL2Ops)).
+			Using(pg.HNSW),
+		pg.IndexOn("documents_binary_embedding_hnsw_idx", pg.IndexColumn("binary_embedding").OpClass(pg.BitJaccardOps)).
+			Using(pg.HNSW),
+	)
+	pg.SQLFunction("score_embedding").
+		Returns(pg.IntegerType()).
+		Args(
+			pg.FunctionArg("embedding", pg.VectorType(1536)),
+			pg.FunctionArg("summary_embedding", pg.HalfVecType(768)),
+			pg.FunctionArg("sparse_embedding", pg.SparseVecType(2048)),
+			pg.FunctionArg("binary_embedding", pg.BitType(256)),
+		).
+		Body(pg.Expr("SELECT 1"))
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 1 || len(schema.Tables[0].Columns) != 5 {
+		t.Fatalf("unexpected tables %#v", schema.Tables)
+	}
+	wantColumnTypes := []string{"uuid", "vector(1536)", "halfvec(768)", "sparsevec(2048)", "bit(256)"}
+	for i, want := range wantColumnTypes {
+		if schema.Tables[0].Columns[i].Type != want {
+			t.Fatalf("column %d type = %q, want %q", i, schema.Tables[0].Columns[i].Type, want)
+		}
+	}
+	if len(schema.Tables[0].Indexes) != 5 {
+		t.Fatalf("indexes len = %d, want 5", len(schema.Tables[0].Indexes))
+	}
+	wantIndexes := []struct {
+		method  string
+		opClass string
+	}{
+		{method: "hnsw", opClass: "vector_cosine_ops"},
+		{method: "ivfflat", opClass: "vector_l2_ops"},
+		{method: "hnsw", opClass: "halfvec_l2_ops"},
+		{method: "hnsw", opClass: "sparsevec_l2_ops"},
+		{method: "hnsw", opClass: "bit_jaccard_ops"},
+	}
+	for i, want := range wantIndexes {
+		index := schema.Tables[0].Indexes[i]
+		if index.Method != want.method || len(index.Columns) != 1 || index.Columns[0].OpClass != want.opClass {
+			t.Fatalf("index %d = %#v, want method %q opclass %q", i, index, want.method, want.opClass)
+		}
+	}
+	if len(schema.Functions) != 1 || len(schema.Functions[0].Arguments) != 4 {
+		t.Fatalf("unexpected vector function argument %#v", schema.Functions)
+	}
+	wantArgTypes := []string{"vector(1536)", "halfvec(768)", "sparsevec(2048)", "bit(256)"}
+	for i, want := range wantArgTypes {
+		if schema.Functions[0].Arguments[i].Type != want {
+			t.Fatalf("argument %d type = %q, want %q", i, schema.Functions[0].Arguments[i].Type, want)
+		}
+	}
+}
+
+func TestPgVectorRejectsInvalidOptions(t *testing.T) {
+	tests := []struct {
+		run  func()
+		name string
+	}{
+		{name: "vector", run: func() { pg.Vector("embedding", 0) }},
+		{name: "halfvec", run: func() { pg.HalfVec("embedding", 0) }},
+		{name: "sparsevec", run: func() { pg.SparseVec("embedding", 0) }},
+		{name: "bit", run: func() { pg.Bit("embedding", 0) }},
+		{name: "vector type", run: func() { pg.VectorType(0) }},
+		{name: "halfvec type", run: func() { pg.HalfVecType(0) }},
+		{name: "sparsevec type", run: func() { pg.SparseVecType(0) }},
+		{name: "bit type", run: func() { pg.BitType(0) }},
+		{name: "custom index opclass", run: func() { pg.CustomIndexOpClass("") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("expected dimensions panic")
+				}
+			}()
+
+			tt.run()
+		})
+	}
+}
+
 func TestFunctionDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

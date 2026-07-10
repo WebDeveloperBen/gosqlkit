@@ -59,6 +59,22 @@ func CharType(length int) SQLType {
 	return sqlType(fmt.Sprintf("char(%d)", length))
 }
 
+func VectorType(dimensions int) SQLType {
+	return sqlType(vectorType("vector", dimensions))
+}
+
+func HalfVecType(dimensions int) SQLType {
+	return sqlType(vectorType("halfvec", dimensions))
+}
+
+func SparseVecType(dimensions int) SQLType {
+	return sqlType(vectorType("sparsevec", dimensions))
+}
+
+func BitType(dimensions int) SQLType {
+	return sqlType(vectorType("bit", dimensions))
+}
+
 func CustomSQLType(sql string) SQLType {
 	if strings.TrimSpace(sql) == "" {
 		panic("custom SQL type must not be empty")

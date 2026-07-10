@@ -360,11 +360,25 @@ func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 				},
 				Concurrently: true,
 				Only:         true,
+			}, {
+				Index:  ast.Index{Name: "users_embedding_default_idx"},
+				Method: "hnsw",
+				Columns: []pgschema.IndexColumn{
+					{IndexColumn: ast.IndexColumn{Expression: "embedding"}, OpClass: "vector_l2_ops"},
+				},
+			}, {
+				Index:  ast.Index{Name: "users_embedding_cosine_idx"},
+				Method: "hnsw",
+				Columns: []pgschema.IndexColumn{
+					{IndexColumn: ast.IndexColumn{Expression: "embedding"}, OpClass: "vector_cosine_ops"},
+				},
 			}},
 		}},
 	})
 
 	index := projected.Tables[0].Indexes[0]
+	defaultVectorIndex := projected.Tables[0].Indexes[1]
+	cosineVectorIndex := projected.Tables[0].Indexes[2]
 	if projected.Tables[0].Tablespace != "" {
 		t.Fatalf("table tablespace normalisation = %#v", projected.Tables[0])
 	}
@@ -379,6 +393,12 @@ func TestProjectDriftSchemaNormalisesIndexes(t *testing.T) {
 	}
 	if index.Columns[2].Order != "DESC" || index.Columns[2].Nulls != "LAST" {
 		t.Fatalf("explicit desc nulls last should be retained = %#v", index.Columns[2])
+	}
+	if defaultVectorIndex.Columns[0].OpClass != "" {
+		t.Fatalf("default pgvector opclass should be normalised = %#v", defaultVectorIndex.Columns[0])
+	}
+	if cosineVectorIndex.Columns[0].OpClass != "vector_cosine_ops" {
+		t.Fatalf("non-default pgvector opclass should be retained = %#v", cosineVectorIndex.Columns[0])
 	}
 }
 

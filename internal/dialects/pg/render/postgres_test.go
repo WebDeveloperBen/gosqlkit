@@ -412,6 +412,53 @@ func TestPostgresRendersExtensionVersion(t *testing.T) {
 	}
 }
 
+func TestPostgresRendersPgVectorColumns(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Extensions: []pgschema.Extension{
+			{Name: "vector"},
+		},
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "documents",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid", PrimaryKey: true},
+						{Name: "embedding", Type: "vector(1536)", NotNull: true},
+						{Name: "summary_embedding", Type: "halfvec(768)"},
+						{Name: "sparse_embedding", Type: "sparsevec(2048)"},
+						{Name: "binary_embedding", Type: "bit(256)"},
+					},
+				},
+				Indexes: []pgschema.Index{
+					{
+						Index:  ast.Index{Name: "documents_embedding_hnsw_idx"},
+						Method: "hnsw",
+						Columns: []pgschema.IndexColumn{
+							{IndexColumn: ast.IndexColumn{Expression: "embedding"}, OpClass: "vector_cosine_ops"},
+						},
+						With: map[string]string{"ef_construction": "64", "m": "16"},
+					},
+					{
+						Index:  ast.Index{Name: "documents_embedding_ivfflat_idx"},
+						Method: "ivfflat",
+						Columns: []pgschema.IndexColumn{
+							{IndexColumn: ast.IndexColumn{Expression: "embedding"}, OpClass: "vector_l2_ops"},
+						},
+						With: map[string]string{"lists": "1"},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "CREATE EXTENSION IF NOT EXISTS \"vector\";\n\nCREATE TABLE documents (\n    id uuid PRIMARY KEY,\n    embedding vector(1536) NOT NULL,\n    summary_embedding halfvec(768),\n    sparse_embedding sparsevec(2048),\n    binary_embedding bit(256)\n);\n\nCREATE INDEX documents_embedding_hnsw_idx ON documents USING hnsw (embedding vector_cosine_ops) WITH (ef_construction = 64, m = 16);\n\nCREATE INDEX documents_embedding_ivfflat_idx ON documents USING ivfflat (embedding vector_l2_ops) WITH (lists = 1);\n"
+	if got != want {
+		t.Fatalf("unexpected vector SQL:\n%s", got)
+	}
+}
+
 func TestPostgresRejectsIndexWithUnknownColumn(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
 		Tables: []pgschema.Table{

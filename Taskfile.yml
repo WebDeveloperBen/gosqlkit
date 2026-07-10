@@ -47,6 +47,11 @@ tasks:
           GOSQLKIT_INTEGRATION=1 GOSQLKIT_POSTGRES_IMAGE="$image" go test ./internal/app -run TestPostgresIntegration -count=1
         done
 
+  integration:postgres:pgvector:
+    desc: Run PostgreSQL integration tests against a pgvector image
+    cmds:
+      - GOSQLKIT_INTEGRATION=1 GOSQLKIT_POSTGRES_IMAGE="${GOSQLKIT_PGVECTOR_IMAGE:-pgvector/pgvector:pg16}" go test ./internal/app -run TestPostgresIntegrationPgVectorTypes -count=1
+
   generate:
     desc: Regenerate the checked-in example schema SQL
     cmds:

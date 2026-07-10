@@ -148,6 +148,22 @@ func Line(name string) *Column {
 	return column(name, "line")
 }
 
+func Vector(name string, dimensions int) *Column {
+	return column(name, vectorType("vector", dimensions))
+}
+
+func HalfVec(name string, dimensions int) *Column {
+	return column(name, vectorType("halfvec", dimensions))
+}
+
+func SparseVec(name string, dimensions int) *Column {
+	return column(name, vectorType("sparsevec", dimensions))
+}
+
+func Bit(name string, dimensions int) *Column {
+	return column(name, vectorType("bit", dimensions))
+}
+
 type IntervalConfig struct {
 	Fields    string
 	Precision int
@@ -211,6 +227,13 @@ func intervalType(config IntervalConfig) string {
 		fmt.Fprintf(&b, " (%d)", config.Precision)
 	}
 	return b.String()
+}
+
+func vectorType(name string, dimensions int) string {
+	if dimensions <= 0 {
+		panic(name + " dimensions must be greater than zero")
+	}
+	return fmt.Sprintf("%s(%d)", name, dimensions)
 }
 
 func (c *Column) PrimaryKey() *Column {

@@ -189,8 +189,8 @@ func (c *IndexColumnDef) NullsLast() *IndexColumnDef {
 	return c
 }
 
-func (c *IndexColumnDef) OpClass(opClass string) *IndexColumnDef {
-	c.def.OpClass = opClass
+func (c *IndexColumnDef) OpClass(opClass IndexOpClass) *IndexColumnDef {
+	c.def.OpClass = string(opClass)
 	return c
 }
 
@@ -303,8 +303,8 @@ func ExcludeWith(expression, operator string) *ExclusionElementDef {
 	}
 }
 
-func (e *ExclusionElementDef) OpClass(opClass string) *ExclusionElementDef {
-	e.def.OpClass = opClass
+func (e *ExclusionElementDef) OpClass(opClass IndexOpClass) *ExclusionElementDef {
+	e.def.OpClass = string(opClass)
 	return e
 }
 

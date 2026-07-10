@@ -169,10 +169,10 @@ Missing common PostgreSQL types:
 - `[x]` `point`
 - `[x]` `line`
 - `[ ]` PostGIS `geometry`
-- `[ ]` pgvector `vector`
-- `[ ]` pgvector `halfvec`
-- `[ ]` pgvector `sparsevec`
-- `[ ]` pgvector `bit`
+- `[x]` pgvector `vector`
+- `[x]` pgvector `halfvec`
+- `[x]` pgvector `sparsevec`
+- `[x]` pgvector `bit`
 - `[x]` Custom type escape hatch.
 
 ## Constraints
@@ -202,6 +202,8 @@ Missing common PostgreSQL types:
 - `[x]` Named auto-generation helpers.
 - `[x]` Index methods: `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`.
 - `[x]` Extension index methods: `hnsw`, `ivfflat`, and custom methods.
+- `[x]` pgvector index operator class helpers for vector, halfvec, sparsevec,
+  and bit distance families.
 - `[x]` Per-column sort direction.
 - `[x]` Per-column `NULLS FIRST` / `NULLS LAST`.
 - `[x]` Per-column operator class.
@@ -572,6 +574,8 @@ Other provider requirement:
 - `[x]` Testcontainers replay/apply tests for generated `golang-migrate` baseline and diff migrations.
 - `[x]` Dockerised external `golang-migrate` CLI compatibility test for generated PostgreSQL migrations, including split single-statement files that preserve `CREATE INDEX CONCURRENTLY`.
 - `[x]` PostgreSQL version matrix for Testcontainers integration, at least PostgreSQL 15, 16, and 17 where CI time allows.
+- `[x]` pgvector image Testcontainers integration covering extension create,
+  vector type DDL, inserts, introspection, and drift comparison.
 - `[x]` Extension-owned object filtering tests.
 - `[x]` View and materialized-view drift projection tests documenting query-text normalisation and persisted metadata.
 - `[x]` Drift diagnostics tests for top-level objects and table-nested objects.

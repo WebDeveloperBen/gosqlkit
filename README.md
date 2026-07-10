@@ -84,6 +84,7 @@ render/apply/introspect/drift/replay path checked against a real engine:
 ```bash
 task integration
 task integration:postgres:matrix
+task integration:postgres:pgvector
 ```
 
 Create a baseline runner-compatible migration from the current schema when
@@ -167,15 +168,17 @@ sqlc generate
   bigint, serial, smallserial, bigserial, real, double precision, boolean,
   numeric, char, date, time, timetz, timestamp, timestamptz, interval, json,
   jsonb, bytea, inet, cidr, macaddr, macaddr8, point, line)
-- Array columns and custom type escape hatch
+- Array columns, pgvector `vector(n)` / `halfvec(n)` / `sparsevec(n)` /
+  `bit(n)`, and custom type escape hatch
 - Identity columns with sequence options
 - Generated stored columns
 - Column and table comments
 - Safe default helpers for strings, ints, bools, JSON, arrays, and dates
 - Primary keys, unique constraints (with `NULLS NOT DISTINCT`), foreign keys
   (with deferrable), check constraints, exclusion constraints
-- Advanced indexes (methods, opclass, order, nulls, partial predicates,
-  `CONCURRENTLY`, `ONLY`, `WITH (...)`, named auto-generation)
+- Advanced indexes (methods, opclass, pgvector `hnsw` / `ivfflat` indexes,
+  order, nulls, partial predicates, `CONCURRENTLY`, `ONLY`, `WITH (...)`,
+  named auto-generation)
 - Strongly typed option helpers for finite PostgreSQL choices such as foreign
   key actions, index methods, and view check options
 - PostgreSQL schemas/namespaces, extensions with version pinning, cascade,

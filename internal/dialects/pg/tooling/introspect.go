@@ -736,6 +736,7 @@ SELECT n.nspname,
        COALESCE(ts.spcname, ''),
        keydef.def,
        keydef.is_expression,
+       keydef.opclass,
        keydef.option
 FROM pg_index i
 JOIN pg_class idx ON idx.oid = i.indexrelid
@@ -747,8 +748,10 @@ JOIN LATERAL (
   SELECT keys.ord,
          pg_get_indexdef(i.indexrelid, keys.ord::int, true) AS def,
          keys.attnum = 0 AS is_expression,
+         COALESCE(opc.opcname, '') AS opclass,
          i.indoption[keys.ord::int - 1] AS option
   FROM unnest(i.indkey) WITH ORDINALITY AS keys(attnum, ord)
+  LEFT JOIN pg_opclass opc ON opc.oid = i.indclass[keys.ord::int - 1]
   WHERE keys.ord <= i.indnkeyatts
 ) keydef ON true
 WHERE n.nspname NOT LIKE 'pg_%'
@@ -768,11 +771,11 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 	var currentTable, currentName string
 	var current *pgschema.Index
 	for rows.Next() {
-		var schemaName, tableName, name, method, predicate, tablespace, definition string
+		var schemaName, tableName, name, method, predicate, tablespace, definition, opClass string
 		var reloptions []string
 		var unique, expression bool
 		var option int
-		if err := rows.Scan(&schemaName, &tableName, &name, &unique, &method, &predicate, &reloptions, &tablespace, &definition, &expression, &option); err != nil {
+		if err := rows.Scan(&schemaName, &tableName, &name, &unique, &method, &predicate, &reloptions, &tablespace, &definition, &expression, &opClass, &option); err != nil {
 			return fmt.Errorf("scan index: %w", err)
 		}
 		table := byKey[qualified(snapshotSchema(schemaName), tableName)]
@@ -796,12 +799,25 @@ ORDER BY n.nspname, c.relname, idx.relname, keydef.ord`)
 			currentTable = key
 			currentName = name
 		}
-		current.Columns = append(current.Columns, parseIndexColumn(definition, expression, option))
+		column := parseIndexColumn(definition, expression, option)
+		if column.OpClass == "" && isPgVectorIndexMethod(method) {
+			column.OpClass = opClass
+		}
+		current.Columns = append(current.Columns, column)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("introspect indexes: %w", err)
 	}
 	return nil
+}
+
+func isPgVectorIndexMethod(method string) bool {
+	switch method {
+	case "hnsw", "ivfflat":
+		return true
+	default:
+		return false
+	}
 }
 
 func introspectViews(ctx context.Context, queryer Queryer) ([]pgschema.View, []pgschema.MaterializedView, error) {

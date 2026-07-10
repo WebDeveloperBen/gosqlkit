@@ -519,7 +519,7 @@ func projectDriftIndexes(items []pgschema.Index) []pgschema.Index {
 		out[i].Where = normaliseDriftExpression(out[i].Where)
 		for j := range out[i].Columns {
 			out[i].Columns[j].Expression = normaliseDriftExpression(out[i].Columns[j].Expression)
-			if out[i].Columns[j].OpClass == "text_ops" {
+			if isDefaultDriftIndexOpClass(out[i].Method, out[i].Columns[j].OpClass) {
 				out[i].Columns[j].OpClass = ""
 			}
 			if out[i].Columns[j].Order == "ASC" {
@@ -534,6 +534,17 @@ func projectDriftIndexes(items []pgschema.Index) []pgschema.Index {
 		}
 	}
 	return out
+}
+
+func isDefaultDriftIndexOpClass(method, opClass string) bool {
+	switch opClass {
+	case "text_ops":
+		return true
+	case "vector_l2_ops", "halfvec_l2_ops", "sparsevec_l2_ops", "bit_hamming_ops":
+		return method == "hnsw" || method == "ivfflat"
+	default:
+		return false
+	}
 }
 
 func normaliseDriftTablespace(value string) string {

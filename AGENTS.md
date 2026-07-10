@@ -385,6 +385,7 @@ task vuln             # govulncheck ./...
 task sqlc:check       # run sqlc generate in a temp copy of examples/basic
 task integration      # opt-in Docker-backed PostgreSQL integration tests
 task integration:postgres:matrix  # opt-in PostgreSQL 15/16/17 integration matrix
+task integration:postgres:pgvector  # opt-in pgvector image integration test
 task verify:cli       # smoke-test the CLI (--help, version, generate, snapshot)
 task modernize        # apply Go modernization fixes
 task fix:fieldalignment  # reorder struct fields to reduce padding
@@ -397,7 +398,9 @@ is available or in CI jobs that explicitly enable real PostgreSQL tests.
 `task integration:postgres:matrix` runs the app integration suite against
 PostgreSQL 15, 16, and 17 by default. Override images with
 `GOSQLKIT_POSTGRES_IMAGES` or a single normal integration image with
-`GOSQLKIT_POSTGRES_IMAGE`.
+`GOSQLKIT_POSTGRES_IMAGE`. `task integration:postgres:pgvector` runs the
+pgvector type integration test against `pgvector/pgvector:pg16` by default;
+override it with `GOSQLKIT_PGVECTOR_IMAGE`.
 
 **Before declaring any task done, run `task verify` and ensure it passes
 locally.** If `sqlc` or `golangci-lint` aren't installed, the relevant tasks
@@ -580,9 +583,9 @@ update of this file:
 
 - **Landed**: Phase 1 (schema DSL + SQL generation) and Phase 2 (sqlc
   compatibility) are complete. The DSL covers tables, columns (all common PG
-  scalar types + arrays + identity + generated), constraints (PK, unique
+  scalar types + arrays + pgvector vector types + identity + generated), constraints (PK, unique
   with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
-  (full advanced surface), schemas, extensions with version pinning, cascade,
+  (full advanced surface, including pgvector methods and opclasses), schemas, extensions with version pinning, cascade,
   comments, and upgrade planning, enums, sequences, composite types, domains,
   partitioned tables with partition children and bounds, roles, functions,
   triggers, RLS policies, views, materialized views, comments, safe
@@ -638,13 +641,16 @@ update of this file:
   and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
   Testcontainers suite for generated schema apply, catalogue introspection,
   drift detection, sandbox replay, and `migrate apply` version tracking.
+  `task integration:postgres:pgvector` runs the pgvector type apply,
+  insertion, introspection, and drift comparison path against a pgvector image.
   Drift check results include object-level diagnostics for missing, extra, and
   changed schema objects, including table-nested columns, constraints, and
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: extension-provided PostgreSQL types, extension-owned type
-  attribution, and the first non-PostgreSQL provider.
+- **Next tracks**: remaining extension-provided PostgreSQL types such as
+  PostGIS `geometry`, extension-owned type attribution, and the first
+  non-PostgreSQL provider.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.
