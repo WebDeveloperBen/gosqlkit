@@ -607,10 +607,11 @@ update of this file:
   annotations (previousName on all objects).
   Migration planner emits structured changes with per-change risk flags
   (`destructive`, `data-loss`, `lock-heavy`, `manual-review`,
-  `requires-ddl-review`) and best-effort reverse SQL. Destructive changes
-  (drops, RLS disables, comment removals, enum value removals, and column type
-  changes) fail by default and require `--allow-destructive` to author when
-  executable SQL exists. Column type, default, nullability, generated
+  `requires-ddl-review`) and best-effort per-change reverse SQL with explicit
+  placeholders for irreversible changes. Destructive changes (drops, RLS
+  disables, comment removals, enum value removals, and column type changes)
+  fail by default and require `--allow-destructive` to author when executable
+  SQL exists. Column type, default, nullability, generated
   expression, and identity changes are planned as structured `ALTER COLUMN`
   changes with risk metadata; inline column constraint/reference mutations
   still fail closed. Enum value removals are detected as manual-review
@@ -640,8 +641,9 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: remaining PostgreSQL coverage such as raw SQL schema blocks
-  and the first non-PostgreSQL provider.
+- **Next tracks**: extension management hardening (version pinning, upgrades,
+  cascade, comments, and version introspection), remaining extension-provided
+  PostgreSQL types, and the first non-PostgreSQL provider.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

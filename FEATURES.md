@@ -323,6 +323,11 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` Add views.
 - `[x]` Add materialized views.
 - `[x]` Generate best-effort down SQL for simple create operations.
+- `[x]` Per-change down generation. If a migration mixes reversible and
+  irreversible changes, generated down SQL now reverses the changes that can be
+  reversed and marks the rest with an explicit placeholder such as
+  `-- no automatic down for: <object>`, so one irreversible change no longer
+  strips the whole down section.
 
 ### Slice 4: Destructive-Change Guardrails
 

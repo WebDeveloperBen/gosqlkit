@@ -303,6 +303,9 @@ func diffMigrationPlan(config *Config, opts MigrateCreateOptions, previous migra
 		}
 	}
 	downStatements := reverseStatements(planned.Changes)
+	if opts.NoDown {
+		downStatements = nil
+	}
 
 	return migrate.Plan{
 		Name:           opts.Name,
@@ -325,18 +328,29 @@ func reverseStatements(changes []migrateplan.Change) []migrate.Statement {
 	if len(changes) == 0 {
 		return nil
 	}
-	for _, change := range changes {
-		if len(change.ReverseStatements) == 0 {
-			return nil
-		}
-	}
 	out := make([]migrate.Statement, 0, len(changes))
 	for i := len(changes) - 1; i >= 0; i-- {
-		for _, statement := range changes[i].ReverseStatements {
+		change := changes[i]
+		if len(change.ReverseStatements) == 0 {
+			out = append(out, migrate.Statement{SQL: noAutomaticDownStatement(change)})
+			continue
+		}
+		for _, statement := range change.ReverseStatements {
 			out = append(out, migrate.Statement{SQL: statement.SQL})
 		}
 	}
 	return out
+}
+
+func noAutomaticDownStatement(change migrateplan.Change) string {
+	target := strings.TrimSpace(strings.Join([]string{string(change.Object.Kind), change.Object.Key}, " "))
+	if target == "" {
+		target = strings.TrimSpace(change.Summary)
+	}
+	if target == "" {
+		target = "unknown change"
+	}
+	return "-- no automatic down for: " + target
 }
 
 func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateCheckResult, error) {

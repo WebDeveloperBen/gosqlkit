@@ -108,6 +108,34 @@ func TestRendererPrefersStructuredStatements(t *testing.T) {
 	}
 }
 
+func TestRendererKeepsIrreversibleDownPlaceholders(t *testing.T) {
+	files, err := (golangmigrate.Renderer{}).Render(migrate.Plan{
+		Name:         "Mixed Down",
+		Dialect:      "postgresql",
+		CreatedAt:    time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		UpStatements: []migrate.Statement{{SQL: "ALTER TABLE users ALTER COLUMN email TYPE citext;"}},
+		DownStatements: []migrate.Statement{
+			{SQL: "-- no automatic down for: column public.users.email"},
+			{SQL: "DROP TABLE users;"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("file count = %d, want 2", len(files))
+	}
+	content := files[1].Content
+	for _, want := range []string{
+		"-- no automatic down for: column public.users.email",
+		"DROP TABLE users;",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("down content missing %q\n%s", want, content)
+		}
+	}
+}
+
 func TestRendererSplitsMultiStatementFilesAndPreservesConcurrentIndex(t *testing.T) {
 	files, err := (golangmigrate.Renderer{}).Render(migrate.Plan{
 		Name:      "Baseline",

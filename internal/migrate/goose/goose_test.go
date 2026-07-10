@@ -84,6 +84,32 @@ func TestRendererPrefersStructuredStatements(t *testing.T) {
 	}
 }
 
+func TestRendererKeepsIrreversibleDownPlaceholders(t *testing.T) {
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:         "Mixed Down",
+		Dialect:      "postgresql",
+		CreatedAt:    time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		UpStatements: []migrate.Statement{{SQL: "ALTER TABLE users ALTER COLUMN email TYPE citext;"}},
+		DownStatements: []migrate.Statement{
+			{SQL: "-- no automatic down for: column public.users.email"},
+			{SQL: "DROP TABLE users;"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := files[0].Content
+	for _, want := range []string{
+		"-- +goose Down",
+		"-- no automatic down for: column public.users.email",
+		"DROP TABLE users;",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("content missing %q\n%s", want, content)
+		}
+	}
+}
+
 func TestRendererRejectsEmptySlug(t *testing.T) {
 	_, err := (goose.Renderer{}).Render(migrate.Plan{Name: "!!!"})
 	if err == nil || !strings.Contains(err.Error(), "migration name must contain") {

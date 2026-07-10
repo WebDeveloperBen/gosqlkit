@@ -410,7 +410,7 @@ func TestReverseStatementsUsesReverseChangeOrder(t *testing.T) {
 	}
 }
 
-func TestReverseStatementsRequiresEveryChangeToBeReversible(t *testing.T) {
+func TestReverseStatementsKeepsReversibleChangesWithIrreversiblePlaceholder(t *testing.T) {
 	statements := reverseStatements([]migrateplan.Change{
 		migrateplan.NewChange(
 			migrateplan.OperationCreate,
@@ -426,8 +426,14 @@ func TestReverseStatementsRequiresEveryChangeToBeReversible(t *testing.T) {
 		),
 	})
 
-	if statements != nil {
-		t.Fatalf("statements = %#v, want nil", statements)
+	if len(statements) != 2 {
+		t.Fatalf("statements = %#v", statements)
+	}
+	if statements[0].SQL != "-- no automatic down for: column public.users.email" {
+		t.Fatalf("first statement = %q", statements[0].SQL)
+	}
+	if statements[1].SQL != "DROP TABLE users;" {
+		t.Fatalf("second statement = %q", statements[1].SQL)
 	}
 }
 
