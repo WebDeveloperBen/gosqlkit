@@ -25,15 +25,27 @@ type MigrateCmd struct {
 }
 
 type MigrateCreateCmd struct {
-	Config           string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	Dir              string `help:"Write migration files to this directory. Overrides config migrations.dir." type:"path"`
-	Runner           string `help:"Migration runner file format: goose or golang-migrate."`
-	Name             string `arg:"" help:"Migration name."`
-	Empty            bool   `help:"Create an empty migration for manual SQL."`
-	NoDown           bool   `help:"Omit the down migration section."`
-	AllowDestructive bool   `help:"Allow the migration to contain destructive changes (drops, disables, comment removals)."`
-	Interactive      bool   `help:"Prompt for ambiguous migration choices when stdin/stdout are TTYs."`
-	NoInteractive    bool   `name:"no-interactive" help:"Disable prompts and fail closed on ambiguous migrations."`
+	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
+	Dir                        string `help:"Write migration files to this directory. Overrides config migrations.dir." type:"path"`
+	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
+	Name                       string `arg:"" help:"Migration name."`
+	FromGCloudInstance         string `name:"from-gcloud-instance" help:"Cloud SQL instance ID for source database authentication."`
+	Config                     string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`
+	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
+	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
+	FromURL                    string `name:"from-url" help:"PostgreSQL URL for the source schema. When set, creates a migration from the live database to the desired schema."`
+	NoDown                     bool   `help:"Omit the down migration section."`
+	NoInteractive              bool   `name:"no-interactive" help:"Disable prompts and fail closed on ambiguous migrations."`
+	FromAzureCLIToken          bool   `name:"from-azure-cli-token" help:"Use Azure CLI to acquire a source database access token."`
+	FromAzureDefaultCredential bool   `name:"from-azure-default-credential" help:"Use Azure DefaultAzureCredential to acquire a source database access token."`
+	FromAWSCLIToken            bool   `name:"from-aws-cli-token" help:"Use AWS CLI to generate a source RDS/Aurora IAM auth token."`
+	FromAWSIAMToken            bool   `name:"from-aws-iam-token" help:"Use AWS SDK credentials to generate a source RDS/Aurora IAM auth token."`
+	Interactive                bool   `help:"Prompt for ambiguous migration choices when stdin/stdout are TTYs."`
+	AllowDestructive           bool   `help:"Allow the migration to contain destructive changes (drops, disables, comment removals)."`
+	FromGCloudToken            bool   `name:"from-gcloud-token" help:"Use gcloud to generate a source Cloud SQL PostgreSQL IAM login token."`
+	FromGCloudADCToken         bool   `name:"from-gcloud-adc-token" help:"Use gcloud Application Default Credentials to generate a source Cloud SQL PostgreSQL IAM login token."`
+	Empty                      bool   `help:"Create an empty migration for manual SQL."`
 }
 
 func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
@@ -77,6 +89,7 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 		AllowDestructive: c.AllowDestructive,
 		RenameDecider:    renameDecider,
 		Interaction:      interaction,
+		FromURL:          c.FromURL, FromURLEnv: c.FromURLEnv, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
 	}); err != nil {
 		return Exit(1, err)
 	}
@@ -275,12 +288,24 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 }
 
 type MigratePlanCmd struct {
-	Config   string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	Dir      string `help:"Migration directory containing the previous migration. Overrides config migrations.dir." type:"path"`
-	Runner   string `help:"Migration runner file format: goose or golang-migrate."`
-	Snapshot string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
-	JSON     bool   `help:"Emit machine-readable JSON instead of human-readable text."`
-	Quiet    bool   `help:"Suppress human-readable success output."`
+	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`
+	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
+	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
+	Snapshot                   string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
+	FromURL                    string `name:"from-url" help:"PostgreSQL URL for the source schema. When set, plans from the live database instead of the latest migration snapshot."`
+	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
+	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
+	FromGCloudInstance         string `name:"from-gcloud-instance" help:"Cloud SQL instance ID for source database authentication."`
+	Dir                        string `help:"Migration directory containing the previous migration. Overrides config migrations.dir." type:"path"`
+	Config                     string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	FromAWSIAMToken            bool   `name:"from-aws-iam-token" help:"Use AWS SDK credentials to generate a source RDS/Aurora IAM auth token."`
+	FromAWSCLIToken            bool   `name:"from-aws-cli-token" help:"Use AWS CLI to generate a source RDS/Aurora IAM auth token."`
+	FromAzureDefaultCredential bool   `name:"from-azure-default-credential" help:"Use Azure DefaultAzureCredential to acquire a source database access token."`
+	FromGCloudToken            bool   `name:"from-gcloud-token" help:"Use gcloud to generate a source Cloud SQL PostgreSQL IAM login token."`
+	FromGCloudADCToken         bool   `name:"from-gcloud-adc-token" help:"Use gcloud Application Default Credentials to generate a source Cloud SQL PostgreSQL IAM login token."`
+	FromAzureCLIToken          bool   `name:"from-azure-cli-token" help:"Use Azure CLI to acquire a source database access token."`
+	JSON                       bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet                      bool   `help:"Suppress human-readable success output."`
 }
 
 func (c *MigratePlanCmd) Run(g *GlobalFlags) error {
@@ -305,6 +330,7 @@ func (c *MigratePlanCmd) Run(g *GlobalFlags) error {
 		Dir:      c.Dir,
 		Runner:   c.Runner,
 		Snapshot: c.Snapshot,
+		FromURL:  c.FromURL, FromURLEnv: c.FromURLEnv, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
 	})
 	if err != nil {
 		return Exit(1, err)

@@ -269,8 +269,8 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Embedded target snapshots in generated migration metadata.
 - `[x]` Squashed/normalised representation for diffing.
 - `[x]` Deterministic serialisation to JSON.
-- `[~]` Diff input from current database introspection.
-- `[~]` Diff input from generated desired snapshot.
+- `[x]` Diff input from current database introspection.
+- `[x]` Diff input from generated desired snapshot.
 - `[~]` Drift check from database to generated schema.
 - `[x]` Rename annotations for tables.
 - `[x]` Rename annotations for columns.
@@ -505,7 +505,7 @@ Other provider requirement:
 - `[x]` `--interactive` / `--no-interactive` controls for prompt behaviour.
 - `[x]` Script-safe prompt bypass for CI, keeping `--json` and `--quiet`
   non-interactive.
-- `[ ]` Migration creation support for token-authenticated source databases.
+- `[x]` Migration creation support for token-authenticated source databases.
 - `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
 - `[~]` Goose-compatible migration file output.
 - `[x]` CI command for committed schema drift (`gosqlkit ci schema`).

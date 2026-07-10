@@ -995,6 +995,74 @@ func TestMigratePlanWithConfigReportsDestructive(t *testing.T) {
 	}
 }
 
+func TestMigratePlanWithConfigUsesLivePostgresSource(t *testing.T) {
+	config := &Config{
+		Dialect: "postgresql",
+		rootDir: mustModuleDir(t),
+		Schema:  SchemaSpec{paths: []string{"./examples/basic/schema"}},
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+
+	result, err := MigratePlanWithConfig(config, MigratePlanOptions{
+		FromURL: "postgres://source",
+		inspectPG: func(_ context.Context, databaseURL string) (pgschema.Schema, error) {
+			if databaseURL != "postgres://source" {
+				t.Fatalf("database URL = %q", databaseURL)
+			}
+			return pgschema.Schema{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.FromSnapshotID == "" || result.ToSnapshotID == "" {
+		t.Fatalf("snapshot IDs = %#v", result)
+	}
+	if len(result.Changes) == 0 {
+		t.Fatalf("changes = %#v", result)
+	}
+}
+
+func TestMigrateCreateWithConfigUsesLivePostgresSource(t *testing.T) {
+	config := &Config{
+		Dialect: "postgresql",
+		rootDir: mustModuleDir(t),
+		Schema:  SchemaSpec{paths: []string{"./examples/basic/schema"}},
+		Migrations: MigrationSpec{
+			Dir:    t.TempDir(),
+			Runner: DefaultMigrationsRunner,
+		},
+	}
+
+	result, err := MigrateCreateWithConfig(config, MigrateCreateOptions{
+		Name:      "from live source",
+		CreatedAt: time.Date(2026, 7, 11, 10, 0, 0, 0, time.UTC),
+		FromURL:   "postgres://source",
+		inspectPG: func(_ context.Context, databaseURL string) (pgschema.Schema, error) {
+			if databaseURL != "postgres://source" {
+				t.Fatalf("database URL = %q", databaseURL)
+			}
+			return pgschema.Schema{}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Files) != 1 {
+		t.Fatalf("files = %#v", result)
+	}
+	migrations, err := migrate.ScanDir(config.Migrations.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(migrations) != 1 || migrations[0].Metadata.FromSnapshotID == "" || migrations[0].Metadata.ToSnapshotID == "" {
+		t.Fatalf("migration metadata = %#v", migrations)
+	}
+}
+
 func TestMigrateApplyWithConfigUsesDatabaseURLEnv(t *testing.T) {
 	dir := t.TempDir()
 	config := &Config{

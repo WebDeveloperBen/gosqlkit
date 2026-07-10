@@ -21,15 +21,28 @@ import (
 )
 
 type MigrateCreateOptions struct {
-	CreatedAt        time.Time
-	RenameDecider    RenameDecisionFunc
-	Interaction      InteractionMode
-	Name             string
-	Dir              string
-	Runner           string
-	Empty            bool
-	NoDown           bool
-	AllowDestructive bool
+	CreatedAt                  time.Time
+	inspectPG                  driftInspectFunc
+	RenameDecider              RenameDecisionFunc
+	FromURL                    string
+	FromAWSProfile             string
+	Dir                        string
+	Runner                     string
+	FromGCloudInstance         string
+	Name                       string
+	FromAWSRegion              string
+	Interaction                InteractionMode
+	FromURLEnv                 string
+	FromTokenCommand           string
+	NoDown                     bool
+	AllowDestructive           bool
+	Empty                      bool
+	FromAzureCLIToken          bool
+	FromAzureDefaultCredential bool
+	FromAWSCLIToken            bool
+	FromAWSIAMToken            bool
+	FromGCloudADCToken         bool
+	FromGCloudToken            bool
 }
 
 type InteractionMode string
@@ -123,9 +136,22 @@ type MigrateApplyResult struct {
 type migrateApplyFunc func(context.Context, string, string, []migrate.Migration) (*MigrateApplyResult, error)
 
 type MigratePlanOptions struct {
-	Dir      string
-	Runner   string
-	Snapshot string
+	inspectPG                  driftInspectFunc
+	Dir                        string
+	Runner                     string
+	Snapshot                   string
+	FromURL                    string
+	FromURLEnv                 string
+	FromTokenCommand           string
+	FromAWSProfile             string
+	FromAWSRegion              string
+	FromGCloudInstance         string
+	FromAzureCLIToken          bool
+	FromAzureDefaultCredential bool
+	FromAWSCLIToken            bool
+	FromAWSIAMToken            bool
+	FromGCloudADCToken         bool
+	FromGCloudToken            bool
 }
 
 type MigratePlanResult struct {
@@ -224,11 +250,24 @@ func plannedMigration(config *Config, dir string, opts MigrateCreateOptions) (mi
 	if err != nil {
 		return migrate.Plan{}, err
 	}
+	if hasLiveMigrationSource(opts.FromURL, opts.FromURLEnv) {
+		source, sourceID, err := migratePlanSourceSnapshot(config, MigratePlanOptions{
+			inspectPG: opts.inspectPG, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
+		})
+		if err != nil {
+			return migrate.Plan{}, err
+		}
+		return diffMigrationPlan(config, opts, migrate.Migration{Metadata: migrate.Metadata{ToSnapshotID: sourceID, TargetSnapshot: source}}, snapshot, snapshotID)
+	}
 
 	if len(existing) == 0 {
 		return baselineMigrationPlan(config, opts, sql, snapshot, snapshotID), nil
 	}
 	return diffMigrationPlan(config, opts, existing[len(existing)-1], snapshot, snapshotID)
+}
+
+func hasLiveMigrationSource(rawURL, envName string) bool {
+	return strings.TrimSpace(rawURL) != "" || strings.TrimSpace(envName) != ""
 }
 
 func baselineMigrationPlan(config *Config, opts MigrateCreateOptions, sql, snapshot, snapshotID string) migrate.Plan {
@@ -483,25 +522,6 @@ func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePla
 		return nil, err
 	}
 
-	dir := opts.Dir
-	if dir == "" {
-		dir = config.MigrationsDir()
-	} else {
-		dir = config.ResolvePath(dir)
-	}
-
-	existing, err := migrate.ScanDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	if len(existing) == 0 {
-		return nil, errors.New("no existing migrations to diff against; use 'migrate create' to author an initial migration")
-	}
-	latest := existing[len(existing)-1]
-	if len(latest.Metadata.TargetSnapshot) == 0 {
-		return nil, errors.New("latest migration has no targetSnapshot metadata; cannot compute plan")
-	}
-
 	snapshotData, _, err := renderSnapshotWithConfig(config, opts.Snapshot)
 	if err != nil {
 		return nil, err
@@ -511,18 +531,24 @@ func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePla
 		return nil, err
 	}
 
+	fromSnapshot, fromSnapshotID, err := migratePlanSourceSnapshot(config, opts)
+	if err != nil {
+		return nil, err
+	}
+
 	planner, err := snapshotPlanner(config.Dialect)
 	if err != nil {
 		return nil, err
 	}
-	planned, err := planner.PlanSnapshotDiff(latest.Metadata.TargetSnapshot, []byte(snapshotData))
+	planned, err := planner.PlanSnapshotDiff(fromSnapshot, []byte(snapshotData))
 	if err != nil {
 		return nil, err
 	}
 	if len(planned.Changes) == 0 {
 		return &MigratePlanResult{
-			Dialect:      config.Dialect,
-			ToSnapshotID: snapshotID,
+			Dialect:        config.Dialect,
+			FromSnapshotID: fromSnapshotID,
+			ToSnapshotID:   snapshotID,
 		}, nil
 	}
 
@@ -557,7 +583,7 @@ func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePla
 
 	result := &MigratePlanResult{
 		Dialect:        config.Dialect,
-		FromSnapshotID: latest.Metadata.ToSnapshotID,
+		FromSnapshotID: fromSnapshotID,
 		ToSnapshotID:   snapshotID,
 		Changes:        changes,
 		Statements:     statements,
@@ -568,6 +594,61 @@ func MigratePlanWithConfig(config *Config, opts MigratePlanOptions) (*MigratePla
 		result.Destructive = destructiveOut
 	}
 	return result, nil
+}
+
+func migratePlanSourceSnapshot(config *Config, opts MigratePlanOptions) ([]byte, string, error) {
+	fromURL, err := resolveOptionalDatabaseURL(opts.FromURL, opts.FromURLEnv, "source")
+	if err != nil {
+		return nil, "", err
+	}
+	if fromURL == "" {
+		dir := opts.Dir
+		if dir == "" {
+			dir = config.MigrationsDir()
+		} else {
+			dir = config.ResolvePath(dir)
+		}
+		existing, err := migrate.ScanDir(dir)
+		if err != nil {
+			return nil, "", err
+		}
+		if len(existing) == 0 {
+			return nil, "", errors.New("no existing migrations to diff against; use 'migrate create' to author an initial migration or pass --from-url")
+		}
+		latest := existing[len(existing)-1]
+		if len(latest.Metadata.TargetSnapshot) == 0 {
+			return nil, "", errors.New("latest migration has no targetSnapshot metadata; cannot compute plan")
+		}
+		return latest.Metadata.TargetSnapshot, latest.Metadata.ToSnapshotID, nil
+	}
+	auth := databaseAuthOptions{TokenCommand: opts.FromTokenCommand, AWSProfile: opts.FromAWSProfile, AWSRegion: opts.FromAWSRegion, GCloudInstance: opts.FromGCloudInstance, AzureCLIToken: opts.FromAzureCLIToken, AzureDefaultCredential: opts.FromAzureDefaultCredential, AWSCLIToken: opts.FromAWSCLIToken, AWSIAMToken: opts.FromAWSIAMToken, GCloudADCToken: opts.FromGCloudADCToken, GCloudToken: opts.FromGCloudToken}
+	if err := validateDatabaseAuthOptions(auth); err != nil {
+		return nil, "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	var schema pgschema.Schema
+	if opts.inspectPG != nil {
+		schema, err = opts.inspectPG(ctx, fromURL)
+	} else {
+		schema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(fromURL, auth))
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	raw, err := pgschema.JSON("postgresql", schema)
+	if err != nil {
+		return nil, "", err
+	}
+	snapshot, err := injectSnapshotIDs(string(raw), "")
+	if err != nil {
+		return nil, "", err
+	}
+	id, err := snapshotIDFromJSON(snapshot)
+	if err != nil {
+		return nil, "", err
+	}
+	return []byte(snapshot), id, nil
 }
 
 func renderMigrationFiles(runner string, plan migrate.Plan) ([]migrate.File, error) {
