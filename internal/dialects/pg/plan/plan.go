@@ -76,6 +76,9 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := planner.grants(previous.Grants, current.Grants); err != nil {
 		return nil, err
 	}
+	if err := planner.rawSQL(previous.RawSQL, current.RawSQL); err != nil {
+		return nil, err
+	}
 	if err := planner.sortChanges(); err != nil {
 		return nil, err
 	}

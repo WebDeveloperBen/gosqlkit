@@ -22,6 +22,7 @@ type Schema struct {
 	Triggers          []Trigger          `json:"triggers,omitempty"`
 	Policies          []Policy           `json:"policies,omitempty"`
 	Grants            []Grant            `json:"grants,omitempty"`
+	RawSQL            []RawSQL           `json:"rawSQL,omitempty"`
 }
 
 type Document struct {
@@ -51,6 +52,7 @@ type Document struct {
 	Triggers           []Trigger                   `json:"triggers,omitempty"`
 	Policies           []Policy                    `json:"policies,omitempty"`
 	Grants             []Grant                     `json:"grants,omitempty"`
+	RawSQL             []RawSQL                    `json:"rawSQL,omitempty"`
 	Version            int                         `json:"version"`
 }
 
@@ -73,6 +75,7 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 		Triggers:          sortedTriggers(schema.Triggers),
 		Policies:          sortedPolicies(schema.Policies),
 		Grants:            sortedGrants(schema.Grants),
+		RawSQL:            sortedRawSQL(schema.RawSQL),
 		SchemaMetadata:    buildSchemaMetadata(schema.Namespaces),
 		TableMetadata:     buildTableMetadata(schema.Tables),
 		ColumnMetadata:    buildColumnMetadata(schema.Tables),

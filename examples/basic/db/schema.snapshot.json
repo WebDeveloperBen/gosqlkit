@@ -232,6 +232,13 @@
   "policyMetadata": {
     "public.users.users_read_self": {}
   },
+  "rawSQL": [
+    {
+      "name": "events_priority_duration_stats",
+      "sql": "CREATE STATISTICS IF NOT EXISTS events_priority_duration_stats (dependencies) ON priority, duration FROM events;",
+      "down": "DROP STATISTICS IF EXISTS events_priority_duration_stats;"
+    }
+  ],
   "roleMetadata": {
     "app_reader": {},
     "app_writer": {}
@@ -262,7 +269,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "30c360daaa35062c6a403621a46c390de15fb24ca537b36e7f30a8303cf69d11",
+  "snapshotId": "da56c17110ebf4ce28e6f5a0bc37811bea4a82fda49052262da6709800528d40",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},

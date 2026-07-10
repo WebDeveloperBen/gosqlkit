@@ -85,7 +85,29 @@ Legend:
 - `[x]` Comments.
 - `[x]` Tablespace assignment for tables, indexes, and materialized views.
 - `[x]` Collations.
-- `[ ]` Raw SQL schema blocks.
+- `[x]` Raw SQL schema blocks (escape hatch: named blocks rendered verbatim
+  before or after the structured schema, deterministically ordered, captured in
+  the snapshot, excluded from drift, additive-only in migration planning, with
+  optional `.Down()` reverse SQL so blocks can participate in down migrations).
+
+## Extension Management
+
+`gosqlkit` already declares extensions (`CREATE EXTENSION [WITH SCHEMA]`),
+introspects them, and diffs add/remove. Neither Atlas (gated behind Atlas Pro)
+nor Drizzle Kit (users run `CREATE EXTENSION` by hand) offers full open-source
+extension management, so completing this is a differentiator. Build this out
+after raw SQL schema blocks.
+
+- `[x]` Declare extensions with `CREATE EXTENSION IF NOT EXISTS [WITH SCHEMA]`.
+- `[x]` Introspect installed extensions and diff add/remove.
+- `[x]` Filter extension-owned objects out of drift.
+- `[ ]` Version pinning on create (`CREATE EXTENSION ... VERSION '<v>'`).
+- `[ ]` Version upgrades in the planner (`ALTER EXTENSION ... UPDATE TO '<v>'`).
+- `[ ]` `CASCADE` on create and drop.
+- `[ ]` Extension comments.
+- `[ ]` Introspect and diff extension version (`pg_extension.extversion`).
+- `[ ]` Recognise extension-provided types (e.g. pgvector `vector`, PostGIS
+  `geometry`) so their creation is attributed to the owning extension.
 
 ## Columns
 
@@ -569,8 +591,11 @@ Other provider requirement:
 10. Add runner-compatible migration file generation and destructive-change guardrails.
 11. Add styled CLI summaries and interactive ambiguity resolution for migration
     authoring.
-12. Expand into remaining advanced PostgreSQL features such as raw SQL schema
-    blocks and the first non-PostgreSQL provider.
+12. Add raw SQL schema blocks as an escape hatch for unmodelled DDL. (Done.)
+13. Complete extension management (version pinning, `ALTER EXTENSION ... UPDATE
+    TO`, `CASCADE`, comments, version introspection/diff).
+14. Expand into remaining advanced PostgreSQL features and the first
+    non-PostgreSQL provider.
 
 ## Drizzle Reference Notes
 

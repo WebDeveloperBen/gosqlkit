@@ -19,6 +19,18 @@ func Postgres(schema pgschema.Schema) (string, error) {
 		return "", err
 	}
 
+	core, err := renderStructuredSchema(schema)
+	if err != nil {
+		return "", err
+	}
+	return joinSchemaSections(
+		renderRawSQLSection(schema.RawSQL, false),
+		core,
+		renderRawSQLSection(schema.RawSQL, true),
+	), nil
+}
+
+func renderStructuredSchema(schema pgschema.Schema) (string, error) {
 	var b strings.Builder
 
 	tables, err := orderTables(schema.Tables)
@@ -236,6 +248,36 @@ func Postgres(schema pgschema.Schema) (string, error) {
 	return b.String(), nil
 }
 
+func renderRawSQLSection(blocks []pgschema.RawSQL, after bool) string {
+	selected := make([]pgschema.RawSQL, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Before == !after {
+			selected = append(selected, block)
+		}
+	}
+	if len(selected) == 0 {
+		return ""
+	}
+	sort.SliceStable(selected, func(i, j int) bool {
+		return selected[i].Name < selected[j].Name
+	})
+	parts := make([]string, 0, len(selected))
+	for _, block := range selected {
+		parts = append(parts, strings.TrimSpace(block.SQL)+"\n")
+	}
+	return strings.Join(parts, "\n")
+}
+
+func joinSchemaSections(sections ...string) string {
+	parts := make([]string, 0, len(sections))
+	for _, section := range sections {
+		if section != "" {
+			parts = append(parts, section)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
 func orderTables(input []pgschema.Table) ([]pgschema.Table, error) {
 	tables := append([]pgschema.Table(nil), input...)
 	sort.SliceStable(tables, func(i, j int) bool {
@@ -317,6 +359,20 @@ func tableDependencies(table pgschema.Table) []string {
 }
 
 func validateSchema(schema pgschema.Schema) error {
+	rawSQLNames := map[string]struct{}{}
+	for _, block := range schema.RawSQL {
+		if err := validateIdentifier("raw SQL block", block.Name); err != nil {
+			return err
+		}
+		if _, ok := rawSQLNames[block.Name]; ok {
+			return fmt.Errorf("duplicate raw SQL block %q", block.Name)
+		}
+		rawSQLNames[block.Name] = struct{}{}
+		if strings.TrimSpace(block.SQL) == "" {
+			return fmt.Errorf("raw SQL block %q must contain SQL", block.Name)
+		}
+	}
+
 	roleNames := map[string]struct{}{}
 	for _, role := range schema.Roles {
 		if err := validateRole(role, roleNames); err != nil {

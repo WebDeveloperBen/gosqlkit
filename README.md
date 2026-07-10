@@ -187,6 +187,9 @@ sqlc generate
 - Views with column aliases, check options, and security options
 - Materialized views with storage parameters, tablespaces, and `WITH NO DATA`
 - Column-level `COLLATE` clauses
+- Raw SQL schema blocks (`pg.RawSQL`) as an escape hatch for DDL the DSL does
+  not model, rendered before or after the structured schema, additive-only in
+  migration planning, with optional `.Down()` reverse SQL for down migrations
 - Schema-qualified rendering
 - Deterministic SQL and snapshot JSON output with stable snapshot IDs
 - Snapshot metadata maps (schema, table, column, view, role, function, trigger, policy) with

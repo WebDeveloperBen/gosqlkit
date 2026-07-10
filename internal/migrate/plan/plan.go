@@ -48,6 +48,7 @@ const (
 	ObjectKindTrigger          ObjectKind = "trigger"
 	ObjectKindPolicy           ObjectKind = "policy"
 	ObjectKindGrant            ObjectKind = "grant"
+	ObjectKindRawSQL           ObjectKind = "raw_sql"
 )
 
 type ObjectRef struct {

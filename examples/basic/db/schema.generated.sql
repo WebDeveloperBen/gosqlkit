@@ -142,3 +142,5 @@ GRANT SELECT ON TABLE users TO app_reader;
 GRANT INSERT, REFERENCES (id), UPDATE ON TABLE users TO app_writer;
 
 GRANT USAGE ON TYPE billing.invoice_status TO app_reader;
+
+CREATE STATISTICS IF NOT EXISTS events_priority_duration_stats (dependencies) ON priority, duration FROM events;

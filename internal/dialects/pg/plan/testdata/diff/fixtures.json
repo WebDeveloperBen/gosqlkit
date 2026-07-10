@@ -789,7 +789,7 @@
   {
     "name": "create_table_with_exclusion",
     "wantStatements": [
-      "CREATE TABLE bookings (\n    room_id uuid,\n    slot tsrange,\n    CONSTRAINT bookings_room_slot_excl EXCLUDE USING gist (room_id uuid_ops WITH =, slot WITH \u0026\u0026 ASC NULLS LAST) WHERE cancelled_at IS NULL DEFERRABLE INITIALLY DEFERRED\n);"
+      "CREATE TABLE bookings (\n    room_id uuid,\n    slot tsrange,\n    CONSTRAINT bookings_room_slot_excl EXCLUDE USING gist (room_id uuid_ops WITH =, slot WITH && ASC NULLS LAST) WHERE cancelled_at IS NULL DEFERRABLE INITIALLY DEFERRED\n);"
     ],
     "previous": {
       "dialect": "postgresql",
@@ -824,7 +824,7 @@
                 },
                 {
                   "expression": "slot",
-                  "operator": "\u0026\u0026",
+                  "operator": "&&",
                   "order": "ASC",
                   "nulls": "LAST"
                 }
@@ -1262,7 +1262,7 @@
   {
     "name": "add_check_constraint",
     "wantStatements": [
-      "ALTER TABLE users ADD CONSTRAINT users_email_check CHECK (position('@' in email) \u003e 1);"
+      "ALTER TABLE users ADD CONSTRAINT users_email_check CHECK (position('@' in email) > 1);"
     ],
     "previous": {
       "dialect": "postgresql",
@@ -1293,7 +1293,7 @@
           "checks": [
             {
               "name": "users_email_check",
-              "expression": "position('@' in email) \u003e 1"
+              "expression": "position('@' in email) > 1"
             }
           ]
         }
@@ -1304,7 +1304,7 @@
   {
     "name": "add_exclusion_constraint",
     "wantStatements": [
-      "ALTER TABLE bookings ADD CONSTRAINT bookings_slot_excl EXCLUDE USING gist (slot WITH \u0026\u0026);"
+      "ALTER TABLE bookings ADD CONSTRAINT bookings_slot_excl EXCLUDE USING gist (slot WITH &&);"
     ],
     "previous": {
       "dialect": "postgresql",
@@ -1338,7 +1338,7 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "\u0026\u0026"
+                  "operator": "&&"
                 }
               ]
             }
@@ -1365,7 +1365,7 @@
           "checks": [
             {
               "name": "users_email_check",
-              "expression": "position('@' in email) \u003e 1"
+              "expression": "position('@' in email) > 1"
             }
           ]
         }
@@ -1386,7 +1386,7 @@
           "checks": [
             {
               "name": "users_email_check",
-              "expression": "position('@' in email) \u003e 0"
+              "expression": "position('@' in email) > 0"
             }
           ]
         }
@@ -1414,7 +1414,7 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "\u0026\u0026"
+                  "operator": "&&"
                 }
               ]
             }
@@ -1441,7 +1441,7 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "\u0026\u0026"
+                  "operator": "&&"
                 }
               ]
             }
@@ -1517,7 +1517,7 @@
               "elements": [
                 {
                   "expression": "slot",
-                  "operator": "\u0026\u0026"
+                  "operator": "&&"
                 }
               ]
             }
@@ -1862,7 +1862,7 @@
   {
     "name": "add_domain",
     "wantStatements": [
-      "CREATE DOMAIN billing.email_address AS text DEFAULT 'unknown@example.com' NOT NULL CHECK (position('@' in VALUE) \u003e 1);"
+      "CREATE DOMAIN billing.email_address AS text DEFAULT 'unknown@example.com' NOT NULL CHECK (position('@' in VALUE) > 1);"
     ],
     "previous": {
       "dialect": "postgresql",
@@ -1876,7 +1876,7 @@
           "name": "email_address",
           "baseType": "text",
           "default": "'unknown@example.com'",
-          "check": "position('@' in VALUE) \u003e 1",
+          "check": "position('@' in VALUE) > 1",
           "notNull": true
         }
       ],
@@ -2734,6 +2734,26 @@
         }
       ],
       "version": 1
+    }
+  },
+  {
+    "name": "add_raw_sql_block",
+    "wantStatements": [
+      "CREATE STATISTICS s ON a, b FROM t;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "version": 1,
+      "rawSQL": [
+        {
+          "name": "stats",
+          "sql": "CREATE STATISTICS s ON a, b FROM t;"
+        }
+      ]
     }
   }
 ]

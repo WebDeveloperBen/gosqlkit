@@ -584,7 +584,9 @@ update of this file:
   with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
   (full advanced surface), schemas, extensions, enums, sequences, composite
   types, domains, partitioned tables with partition children and bounds, roles, functions, triggers, RLS policies, views, materialized views, comments, safe
-  default helpers, custom-type escape hatch.
+  default helpers, custom-type escape hatch, and raw SQL schema blocks
+  (`pg.RawSQL`, rendered before/after the structured schema, additive-only in
+  the planner).
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
   for snapshot), `inspect` (with `--url`, `--url-env`, `--token-command`,
   `--out`, and `--drift-projection`), `version`, `migrate create` (with `--empty`, `--no-down`,

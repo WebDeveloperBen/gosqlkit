@@ -95,6 +95,32 @@ func Namespace(name string) *NamespaceDef {
 	return &NamespaceDef{def: namespace}
 }
 
+type RawSQLDef struct {
+	def *pgschema.RawSQL
+}
+
+// RawSQL registers an arbitrary SQL DDL block as an escape hatch for schema
+// objects the structured DSL does not model. Blocks render after the
+// structured schema by default; call Before to render ahead of it.
+func RawSQL(name, sql string) *RawSQLDef {
+	block := &pgschema.RawSQL{Name: name, SQL: sql}
+	registerRawSQL(block)
+	return &RawSQLDef{def: block}
+}
+
+func (r *RawSQLDef) Before() *RawSQLDef {
+	r.def.Before = true
+	return r
+}
+
+// Down supplies the reverse SQL for this block so it can participate in
+// down migrations. Without it the block is irreversible, and including an
+// irreversible change in a migration suppresses that migration's down section.
+func (r *RawSQLDef) Down(sql string) *RawSQLDef {
+	r.def.Down = sql
+	return r
+}
+
 func Extension(name string) *ExtensionDef {
 	return ExtensionInSchema("", name)
 }

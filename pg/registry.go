@@ -24,6 +24,7 @@ var registry = struct {
 	triggers          []*pgschema.Trigger
 	policies          []*pgschema.Policy
 	grants            []*pgschema.Grant
+	rawSQL            []*pgschema.RawSQL
 	sync.Mutex
 }{}
 
@@ -133,6 +134,11 @@ func Schema() pgschema.Schema {
 		grants = append(grants, *grant)
 	}
 
+	rawSQL := make([]pgschema.RawSQL, 0, len(registry.rawSQL))
+	for _, block := range registry.rawSQL {
+		rawSQL = append(rawSQL, *block)
+	}
+
 	return pgschema.Schema{
 		Namespaces:        namespaces,
 		Extensions:        extensions,
@@ -149,6 +155,7 @@ func Schema() pgschema.Schema {
 		Triggers:          triggers,
 		Policies:          policies,
 		Grants:            grants,
+		RawSQL:            rawSQL,
 	}
 }
 
@@ -193,6 +200,7 @@ func Reset() {
 	registry.triggers = nil
 	registry.policies = nil
 	registry.grants = nil
+	registry.rawSQL = nil
 }
 
 func register(table *pgschema.Table) {
@@ -207,6 +215,13 @@ func registerNamespace(namespace pgschema.Namespace) {
 	defer registry.Unlock()
 
 	registry.namespaces = append(registry.namespaces, namespace)
+}
+
+func registerRawSQL(block *pgschema.RawSQL) {
+	registry.Lock()
+	defer registry.Unlock()
+
+	registry.rawSQL = append(registry.rawSQL, block)
 }
 
 func registerExtension(extension pgschema.Extension) {

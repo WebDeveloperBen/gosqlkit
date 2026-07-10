@@ -1183,6 +1183,56 @@ func TestPostgresRejectsInvalidTablespace(t *testing.T) {
 	}
 }
 
+func TestPostgresRendersRawSQLBlocksAroundStructuredSchema(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Tables: []pgschema.Table{{
+			Table: ast.Table{Name: "bookings", Columns: []ast.Column{{Name: "id", Type: "uuid"}}},
+		}},
+		RawSQL: []pgschema.RawSQL{
+			{Name: "zzz_stats", SQL: "CREATE STATISTICS s ON id, id FROM bookings;"},
+			{Name: "aaa_setup", SQL: "SET statement_timeout = 0;", Before: true},
+			{Name: "mmm_analyze", SQL: "ANALYZE bookings;"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	setupIdx := strings.Index(got, "SET statement_timeout = 0;")
+	tableIdx := strings.Index(got, "CREATE TABLE bookings")
+	analyzeIdx := strings.Index(got, "ANALYZE bookings;")
+	statsIdx := strings.Index(got, "CREATE STATISTICS")
+	if setupIdx < 0 || tableIdx < 0 || analyzeIdx < 0 || statsIdx < 0 {
+		t.Fatalf("missing rendered content\n%s", got)
+	}
+	if setupIdx >= tableIdx {
+		t.Fatalf("before block should precede structured schema\n%s", got)
+	}
+	if tableIdx >= analyzeIdx || analyzeIdx >= statsIdx {
+		t.Fatalf("after blocks should follow structured schema, sorted by name\n%s", got)
+	}
+}
+
+func TestPostgresRejectsRawSQLWithoutSQL(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		RawSQL: []pgschema.RawSQL{{Name: "empty", SQL: "   "}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "must contain SQL") {
+		t.Fatalf("expected empty raw SQL error, got %v", err)
+	}
+}
+
+func TestPostgresRejectsDuplicateRawSQL(t *testing.T) {
+	_, err := render.Postgres(pgschema.Schema{
+		RawSQL: []pgschema.RawSQL{
+			{Name: "dup", SQL: "SELECT 1;"},
+			{Name: "dup", SQL: "SELECT 2;"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "duplicate raw SQL block") {
+		t.Fatalf("expected duplicate raw SQL error, got %v", err)
+	}
+}
+
 func TestPostgresRejectsDuplicateFunctionSignature(t *testing.T) {
 	_, err := render.Postgres(pgschema.Schema{
 		Functions: []pgschema.Function{

@@ -217,3 +217,11 @@ var InvoiceStatusGrant = pg.Grant(pg.PrivilegeUsage).
 var NormaliseEmailGrant = pg.Grant(pg.PrivilegeExecute).
 	OnFunction("normalise_email(email text)").
 	To("app_writer")
+
+// EventStats uses the raw SQL escape hatch for extended statistics, which the
+// structured DSL does not yet model. It renders after the structured schema so
+// the events table already exists.
+var EventStats = pg.RawSQL(
+	"events_priority_duration_stats",
+	"CREATE STATISTICS IF NOT EXISTS events_priority_duration_stats (dependencies) ON priority, duration FROM events;",
+).Down("DROP STATISTICS IF EXISTS events_priority_duration_stats;")
