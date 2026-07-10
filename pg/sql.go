@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -131,6 +132,74 @@ func (c *CallExpr) SQL() string {
 
 func IsNotNull(expr Expression) Expression {
 	return expression(expr.SQL() + " IS NOT NULL")
+}
+
+func IsNull(expr Expression) Expression {
+	return expression(expr.SQL() + " IS NULL")
+}
+
+func String(value string) Expression {
+	return expression(quoteLiteral(value))
+}
+
+func Int(value int) Expression {
+	return expression(strconv.Itoa(value))
+}
+
+func Int64(value int64) Expression {
+	return expression(strconv.FormatInt(value, 10))
+}
+
+func Bool(value bool) Expression {
+	return expression(strconv.FormatBool(value))
+}
+
+func Eq(left, right Expression) Expression {
+	return binaryExpression(left, "=", right)
+}
+
+func Ne(left, right Expression) Expression {
+	return binaryExpression(left, "<>", right)
+}
+
+func Gt(left, right Expression) Expression {
+	return binaryExpression(left, ">", right)
+}
+
+func Gte(left, right Expression) Expression {
+	return binaryExpression(left, ">=", right)
+}
+
+func Lt(left, right Expression) Expression {
+	return binaryExpression(left, "<", right)
+}
+
+func Lte(left, right Expression) Expression {
+	return binaryExpression(left, "<=", right)
+}
+
+func And(expressions ...Expression) Expression {
+	return joinExpressions("AND", expressions)
+}
+
+func Or(expressions ...Expression) Expression {
+	return joinExpressions("OR", expressions)
+}
+
+func Not(expr Expression) Expression {
+	return expression("NOT (" + expr.SQL() + ")")
+}
+
+func binaryExpression(left Expression, operator string, right Expression) Expression {
+	return expression(left.SQL() + " " + operator + " " + right.SQL())
+}
+
+func joinExpressions(operator string, expressions []Expression) Expression {
+	parts := make([]string, 0, len(expressions))
+	for _, expr := range expressions {
+		parts = append(parts, expr.SQL())
+	}
+	return expression("(" + strings.Join(parts, " "+operator+" ") + ")")
 }
 
 type SelectQuery struct {

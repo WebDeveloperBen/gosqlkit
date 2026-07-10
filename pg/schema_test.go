@@ -6,6 +6,29 @@ import (
 	"github.com/webdeveloperben/gosqlkit/pg"
 )
 
+func TestCheckExprDSLRegistersStructuredExpression(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Table(
+		"invoices",
+		pg.Integer("amount_cents").NotNull(),
+		pg.Text("status").NotNull(),
+		pg.CheckExpr("invoices_valid_amount", pg.And(
+			pg.Gt(pg.Col("amount_cents"), pg.Int(0)),
+			pg.Ne(pg.Col("status"), pg.String("void")),
+		)),
+	)
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 1 || len(schema.Tables[0].Checks) != 1 {
+		t.Fatalf("unexpected tables %#v", schema.Tables)
+	}
+	if got, want := schema.Tables[0].Checks[0].Expression, "(amount_cents > 0 AND status <> 'void')"; got != want {
+		t.Fatalf("check expression = %q, want %q", got, want)
+	}
+}
+
 func TestRoleDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

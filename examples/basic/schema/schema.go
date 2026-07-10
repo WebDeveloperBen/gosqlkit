@@ -89,7 +89,7 @@ var Invoices = pg.TableInSchema(
 	pg.TimestampTZ("created_at").
 		NotNull().
 		Default("now()"),
-	pg.Check("invoices_amount_cents_positive", "amount_cents > 0"),
+	pg.CheckExpr("invoices_amount_cents_positive", pg.Gt(pg.Col("amount_cents"), pg.Int(0))),
 	pg.ForeignKey("invoices_user_id_fkey", "user_id").
 		References("public.users", "id").
 		OnDelete(pg.Cascade).
@@ -111,7 +111,7 @@ var InvoiceLines = pg.TableInSchema(
 	pg.ForeignKey("invoice_lines_invoice_id_fkey", "invoice_id").
 		References("billing.invoices", "id").
 		OnDelete(pg.Cascade),
-	pg.Check("invoice_lines_amount_cents_positive", "amount_cents > 0"),
+	pg.CheckExpr("invoice_lines_amount_cents_positive", pg.Gt(pg.Col("amount_cents"), pg.Int(0))),
 	pg.IndexOn(
 		"invoice_lines_description_idx",
 		pg.IndexColumn("description").OpClass("text_ops"),

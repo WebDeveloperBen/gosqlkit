@@ -190,7 +190,7 @@ Missing common PostgreSQL types:
 - `[x]` `ON DELETE` action rendering.
 - `[x]` `ON UPDATE` action rendering.
 - `[x]` Basic table check constraints.
-- `[ ]` Named check helper ergonomics beyond raw expression strings.
+- `[x]` Named check helper ergonomics beyond raw expression strings.
 - `[x]` Exclusion constraints.
 - `[x]` Deferrable constraints.
 

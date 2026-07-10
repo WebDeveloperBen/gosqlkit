@@ -92,6 +92,10 @@ func Check(name, expression string) *CheckDef {
 	}
 }
 
+func CheckExpr(name string, expression Expression) *CheckDef {
+	return Check(name, expression.SQL())
+}
+
 func Index(name string, columns ...string) *IndexDef {
 	indexColumns := make([]pgschema.IndexColumn, 0, len(columns))
 	for _, column := range columns {
