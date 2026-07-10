@@ -236,6 +236,76 @@ func TestPgVectorRejectsInvalidOptions(t *testing.T) {
 	}
 }
 
+func TestPostGISGeometryDSLRegistersTypes(t *testing.T) {
+	pg.Reset()
+	t.Cleanup(pg.Reset)
+
+	pg.Extension("postgis")
+	pg.Table(
+		"places",
+		pg.UUID("id").PrimaryKey(),
+		pg.Geometry("footprint").NotNull(),
+		pg.Geometry("centroid", pg.GeometryConfig{Subtype: "Point", SRID: 4326}),
+		pg.Geometry("route", pg.GeometryConfig{Subtype: "LineString"}),
+		pg.Geometry("generic_wgs84", pg.GeometryConfig{SRID: 4326}),
+	)
+	pg.SQLFunction("place_centroid").
+		Returns(pg.GeometryType(pg.GeometryConfig{Subtype: "Point", SRID: 4326})).
+		Args(pg.FunctionArg("footprint", pg.GeometryType())).
+		Body(pg.Expr("SELECT ST_Centroid(footprint)::geometry(Point, 4326)"))
+
+	schema := pg.Schema()
+	if len(schema.Tables) != 1 || len(schema.Tables[0].Columns) != 5 {
+		t.Fatalf("unexpected tables %#v", schema.Tables)
+	}
+	wantColumnTypes := []string{
+		"uuid",
+		"geometry",
+		"geometry(Point, 4326)",
+		"geometry(LineString)",
+		"geometry(Geometry, 4326)",
+	}
+	for i, want := range wantColumnTypes {
+		if schema.Tables[0].Columns[i].Type != want {
+			t.Fatalf("column %d type = %q, want %q", i, schema.Tables[0].Columns[i].Type, want)
+		}
+	}
+	if len(schema.Functions) != 1 {
+		t.Fatalf("unexpected functions %#v", schema.Functions)
+	}
+	if schema.Functions[0].ReturnType != "geometry(Point, 4326)" {
+		t.Fatalf("return type = %q, want geometry(Point, 4326)", schema.Functions[0].ReturnType)
+	}
+	if len(schema.Functions[0].Arguments) != 1 || schema.Functions[0].Arguments[0].Type != "geometry" {
+		t.Fatalf("unexpected function arguments %#v", schema.Functions[0].Arguments)
+	}
+}
+
+func TestPostGISGeometryRejectsInvalidOptions(t *testing.T) {
+	tests := []struct {
+		run  func()
+		name string
+	}{
+		{name: "negative SRID", run: func() { pg.Geometry("location", pg.GeometryConfig{Subtype: "Point", SRID: -1}) }},
+		{name: "negative SQL type SRID", run: func() { pg.GeometryType(pg.GeometryConfig{Subtype: "Point", SRID: -1}) }},
+		{name: "multiple configs", run: func() {
+			pg.Geometry("location", pg.GeometryConfig{Subtype: "Point"}, pg.GeometryConfig{Subtype: "Polygon"})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("expected geometry config panic")
+				}
+			}()
+
+			tt.run()
+		})
+	}
+}
+
 func TestFunctionDSLRegistersOptions(t *testing.T) {
 	pg.Reset()
 	t.Cleanup(pg.Reset)

@@ -7,6 +7,8 @@ CREATE SCHEMA billing;
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" VERSION '1.3' CASCADE;
 COMMENT ON EXTENSION "pgcrypto" IS 'Cryptographic functions for UUID defaults.';
 
+CREATE EXTENSION IF NOT EXISTS "postgis";
+
 CREATE TYPE billing.invoice_status AS ENUM ('draft', 'issued', 'paid', 'void');
 
 CREATE TYPE billing.money AS (
@@ -56,6 +58,7 @@ CREATE TABLE users (
     email text NOT NULL,
     display_name text,
     last_login_ip inet,
+    home_location geometry(Point, 4326),
     tags text[],
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),

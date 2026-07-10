@@ -168,7 +168,7 @@ Missing common PostgreSQL types:
 - `[x]` `macaddr8`
 - `[x]` `point`
 - `[x]` `line`
-- `[ ]` PostGIS `geometry`
+- `[x]` PostGIS `geometry`
 - `[x]` pgvector `vector`
 - `[x]` pgvector `halfvec`
 - `[x]` pgvector `sparsevec`

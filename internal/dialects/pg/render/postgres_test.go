@@ -51,6 +51,7 @@ func TestPostgresRender(t *testing.T) {
 		},
 		Extensions: []pgschema.Extension{
 			{Name: "pgcrypto", Version: "1.3", Cascade: true, Comment: "Cryptographic functions for UUID defaults."},
+			{Name: "postgis"},
 		},
 		Enums: []pgschema.Enum{
 			{Schema: "billing", Name: "invoice_status", Values: []string{"draft", "issued", "paid", "void"}},
@@ -131,6 +132,7 @@ func TestPostgresRender(t *testing.T) {
 						{Name: "email", Type: "text", NotNull: true},
 						{Name: "display_name", Type: "text"},
 						{Name: "last_login_ip", Type: "inet"},
+						{Name: "home_location", Type: "geometry(Point, 4326)"},
 						{Name: "tags", Type: "text[]"},
 						{Name: "created_at", Type: "timestamptz", NotNull: true, Default: "now()"},
 						{Name: "updated_at", Type: "timestamptz", NotNull: true, Default: "now()"},
@@ -456,6 +458,33 @@ func TestPostgresRendersPgVectorColumns(t *testing.T) {
 	want := "CREATE EXTENSION IF NOT EXISTS \"vector\";\n\nCREATE TABLE documents (\n    id uuid PRIMARY KEY,\n    embedding vector(1536) NOT NULL,\n    summary_embedding halfvec(768),\n    sparse_embedding sparsevec(2048),\n    binary_embedding bit(256)\n);\n\nCREATE INDEX documents_embedding_hnsw_idx ON documents USING hnsw (embedding vector_cosine_ops) WITH (ef_construction = 64, m = 16);\n\nCREATE INDEX documents_embedding_ivfflat_idx ON documents USING ivfflat (embedding vector_l2_ops) WITH (lists = 1);\n"
 	if got != want {
 		t.Fatalf("unexpected vector SQL:\n%s", got)
+	}
+}
+
+func TestPostgresRendersPostGISGeometryColumns(t *testing.T) {
+	got, err := render.Postgres(pgschema.Schema{
+		Extensions: []pgschema.Extension{
+			{Name: "postgis"},
+		},
+		Tables: []pgschema.Table{
+			{
+				Table: ast.Table{
+					Name: "places",
+					Columns: []ast.Column{
+						{Name: "id", Type: "uuid", PrimaryKey: true},
+						{Name: "footprint", Type: "geometry", NotNull: true},
+						{Name: "centroid", Type: "geometry(Point, 4326)"},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "CREATE EXTENSION IF NOT EXISTS \"postgis\";\n\nCREATE TABLE places (\n    id uuid PRIMARY KEY,\n    footprint geometry NOT NULL,\n    centroid geometry(Point, 4326)\n);\n"
+	if got != want {
+		t.Fatalf("unexpected geometry SQL:\n%s", got)
 	}
 }
 

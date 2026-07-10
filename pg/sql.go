@@ -59,6 +59,10 @@ func CharType(length int) SQLType {
 	return sqlType(fmt.Sprintf("char(%d)", length))
 }
 
+func GeometryType(config ...GeometryConfig) SQLType {
+	return sqlType(geometryType(config))
+}
+
 func VectorType(dimensions int) SQLType {
 	return sqlType(vectorType("vector", dimensions))
 }

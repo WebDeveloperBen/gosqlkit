@@ -148,6 +148,15 @@ func Line(name string) *Column {
 	return column(name, "line")
 }
 
+type GeometryConfig struct {
+	Subtype string
+	SRID    int
+}
+
+func Geometry(name string, config ...GeometryConfig) *Column {
+	return column(name, geometryType(config))
+}
+
 func Vector(name string, dimensions int) *Column {
 	return column(name, vectorType("vector", dimensions))
 }
@@ -227,6 +236,30 @@ func intervalType(config IntervalConfig) string {
 		fmt.Fprintf(&b, " (%d)", config.Precision)
 	}
 	return b.String()
+}
+
+func geometryType(config []GeometryConfig) string {
+	switch len(config) {
+	case 0:
+		return "geometry"
+	case 1:
+		subtype := strings.TrimSpace(config[0].Subtype)
+		if config[0].SRID < 0 {
+			panic("geometry SRID must be non-negative")
+		}
+		if subtype == "" && config[0].SRID == 0 {
+			return "geometry"
+		}
+		if subtype == "" {
+			subtype = "Geometry"
+		}
+		if config[0].SRID == 0 {
+			return fmt.Sprintf("geometry(%s)", subtype)
+		}
+		return fmt.Sprintf("geometry(%s, %d)", subtype, config[0].SRID)
+	default:
+		panic("geometry expects either no config or a single GeometryConfig")
+	}
 }
 
 func vectorType(name string, dimensions int) string {

@@ -168,8 +168,8 @@ sqlc generate
   bigint, serial, smallserial, bigserial, real, double precision, boolean,
   numeric, char, date, time, timetz, timestamp, timestamptz, interval, json,
   jsonb, bytea, inet, cidr, macaddr, macaddr8, point, line)
-- Array columns, pgvector `vector(n)` / `halfvec(n)` / `sparsevec(n)` /
-  `bit(n)`, and custom type escape hatch
+- Array columns, PostGIS `geometry`, pgvector `vector(n)` / `halfvec(n)` /
+  `sparsevec(n)` / `bit(n)`, and custom type escape hatch
 - Identity columns with sequence options
 - Generated stored columns
 - Column and table comments
