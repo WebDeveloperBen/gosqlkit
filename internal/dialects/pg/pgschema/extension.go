@@ -7,6 +7,7 @@ type Extension struct {
 	Version      string `json:"version,omitempty"`
 	Name         string `json:"name"`
 	Schema       string `json:"schema,omitempty"`
+	Cascade      bool   `json:"cascade,omitempty"`
 }
 
 func sortedExtensions(input []Extension) []Extension {

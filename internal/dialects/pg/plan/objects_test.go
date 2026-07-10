@@ -437,6 +437,83 @@ func TestSnapshotDiffProducesExtensionVersionSQL(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffProducesExtensionCascadeSQL(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "postgis",
+			Version: "3.5.0",
+			Cascade: true,
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "CREATE EXTENSION postgis VERSION '3.5.0' CASCADE;" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 || len(planned.Changes[0].ReverseStatements) != 1 || planned.Changes[0].ReverseStatements[0].SQL != "DROP EXTENSION postgis CASCADE;" {
+		t.Fatalf("change = %#v", planned.Changes)
+	}
+}
+
+func TestSnapshotDiffDropsExtensionWithCascade(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "postgis",
+			Version: "3.5.0",
+			Cascade: true,
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "DROP EXTENSION postgis CASCADE;" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 || len(planned.Changes[0].ReverseStatements) != 1 || planned.Changes[0].ReverseStatements[0].SQL != "CREATE EXTENSION postgis VERSION '3.5.0' CASCADE;" {
+		t.Fatalf("change = %#v", planned.Changes)
+	}
+}
+
+func TestSnapshotDiffRejectsExtensionCascadeMetadataChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name: "postgis",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "postgis",
+			Cascade: true,
+		}},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil || !strings.Contains(err.Error(), "extension public.postgis cascade metadata changes require manual migration authoring") {
+		t.Fatalf("expected unsupported cascade metadata error, got %v", err)
+	}
+}
+
 func TestSnapshotDiffProducesExtensionVersionUpdate(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

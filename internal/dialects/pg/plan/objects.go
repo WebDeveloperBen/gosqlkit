@@ -258,12 +258,15 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 					"create extension "+key,
 					migrateplan.SQL(stmt+";"),
 				).WithReverse(
-					migrateplan.SQL("DROP EXTENSION " + item.Name + ";"),
+					migrateplan.SQL(renderDropExtension(item) + ";"),
 				),
 			)
 			continue
 		}
 		previousItem := prev[key]
+		if previousItem.Cascade != item.Cascade {
+			return unsupported("extension " + key + " cascade metadata changes require manual migration authoring")
+		}
 		if previousItem.Version != item.Version {
 			if item.Version == "" {
 				return unsupported("extension " + key + " version pin removal has no automatic SQL")
@@ -295,7 +298,7 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 					migrateplan.OperationDrop,
 					migrateplan.Ref(migrateplan.ObjectKindExtension, key),
 					"drop extension "+key,
-					migrateplan.SQL("DROP EXTENSION "+extension.Name+";"),
+					migrateplan.SQL(renderDropExtension(extension)+";"),
 				).WithRisks(
 					migrateplan.RiskDestructive,
 				).WithReverse(
@@ -314,6 +317,17 @@ func renderCreateExtension(extension pgschema.Extension) string {
 	}
 	if extension.Version != "" {
 		stmt += " VERSION " + quoteSQL(extension.Version)
+	}
+	if extension.Cascade {
+		stmt += " CASCADE"
+	}
+	return stmt
+}
+
+func renderDropExtension(extension pgschema.Extension) string {
+	stmt := "DROP EXTENSION " + extension.Name
+	if extension.Cascade {
+		stmt += " CASCADE"
 	}
 	return stmt
 }

@@ -136,6 +136,11 @@ func (e *ExtensionDef) Version(version string) *ExtensionDef {
 	return e
 }
 
+func (e *ExtensionDef) Cascade() *ExtensionDef {
+	e.def.Cascade = true
+	return e
+}
+
 func Role(name string) *RoleDef {
 	role := &pgschema.Role{Name: name}
 	registerRole(role)

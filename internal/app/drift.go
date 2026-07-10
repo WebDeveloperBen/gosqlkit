@@ -169,7 +169,7 @@ func projectDriftSchema(schema pgschema.Schema) pgschema.Schema {
 	}
 	return pgschema.Schema{
 		Namespaces:        clearNamespacePreviousNames(schema.Namespaces),
-		Extensions:        clearExtensionPreviousNames(schema.Extensions),
+		Extensions:        projectDriftExtensions(schema.Extensions),
 		Roles:             projectDriftRoles(schema.Roles),
 		Collations:        projectDriftCollations(schema.Collations),
 		Enums:             clearEnumPreviousNames(schema.Enums),
@@ -274,10 +274,11 @@ func clearNamespacePreviousNames(items []pgschema.Namespace) []pgschema.Namespac
 	return out
 }
 
-func clearExtensionPreviousNames(items []pgschema.Extension) []pgschema.Extension {
+func projectDriftExtensions(items []pgschema.Extension) []pgschema.Extension {
 	out := append([]pgschema.Extension(nil), items...)
 	for i := range out {
 		out[i].PreviousName = ""
+		out[i].Cascade = false
 	}
 	return out
 }

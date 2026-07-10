@@ -58,6 +58,27 @@
     }
   },
   {
+    "name": "create_extension_with_cascade",
+    "wantStatements": [
+      "CREATE EXTENSION postgis VERSION '3.5.0' CASCADE;"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "extensions": [
+        {
+          "name": "postgis",
+          "version": "3.5.0",
+          "cascade": true
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
     "name": "update_extension_version",
     "wantStatements": [
       "ALTER EXTENSION pgcrypto UPDATE TO '1.3';"

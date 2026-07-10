@@ -75,7 +75,8 @@
   "extensions": [
     {
       "version": "1.3",
-      "name": "pgcrypto"
+      "name": "pgcrypto",
+      "cascade": true
     }
   ],
   "functionMetadata": {
@@ -270,7 +271,7 @@
       "increment": 1
     }
   ],
-  "snapshotId": "fd68986b90b045ee3a4fa554995cc82a0f77f4924d3cbf59bc11ed701380911a",
+  "snapshotId": "077546408cdfc813010503f8a4e4fc9324ed31cda60a370a287d25dd94cb1d7a",
   "tableMetadata": {
     "billing.invoice_lines": {},
     "billing.invoices": {},

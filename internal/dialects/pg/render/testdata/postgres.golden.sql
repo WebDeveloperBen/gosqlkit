@@ -4,7 +4,7 @@ CREATE ROLE app_reader WITH LOGIN CONNECTION LIMIT 20 IN ROLE pg_read_all_data;
 
 CREATE SCHEMA billing;
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto" VERSION '1.3';
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" VERSION '1.3' CASCADE;
 
 CREATE TYPE billing.invoice_status AS ENUM ('draft', 'issued', 'paid', 'void');
 

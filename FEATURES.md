@@ -93,20 +93,20 @@ Legend:
 ## Extension Management
 
 `gosqlkit` already declares extensions (`CREATE EXTENSION [WITH SCHEMA]
-[VERSION]`),
+[VERSION] [CASCADE]`),
 introspects them, and diffs add/remove. Neither Atlas (gated behind Atlas Pro)
 nor Drizzle Kit (users run `CREATE EXTENSION` by hand) offers full open-source
 extension management, so completing this is a differentiator. Build this out
 after raw SQL schema blocks.
 
 - `[x]` Declare extensions with `CREATE EXTENSION IF NOT EXISTS [WITH SCHEMA]
-  [VERSION]`.
+  [VERSION] [CASCADE]`.
 - `[x]` Introspect installed extensions and diff add/remove.
 - `[x]` Filter extension-owned objects out of drift.
 - `[x]` Version pinning on create (`CREATE EXTENSION ... VERSION '<v>'`).
 - `[x]` Version upgrades in the planner (`ALTER EXTENSION ... UPDATE TO '<v>'`)
   with manual-review and DDL-review risk flags.
-- `[ ]` `CASCADE` on create and drop.
+- `[x]` `CASCADE` on create and drop.
 - `[ ]` Extension comments.
 - `[x]` Introspect and diff extension version (`pg_extension.extversion`);
   version pin removals fail closed because PostgreSQL has no unpin operation.

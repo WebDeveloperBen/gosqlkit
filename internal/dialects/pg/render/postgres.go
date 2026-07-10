@@ -992,6 +992,9 @@ func renderExtension(b *strings.Builder, extension pgschema.Extension) {
 		b.WriteString(" VERSION ")
 		b.WriteString(quoteLiteral(extension.Version))
 	}
+	if extension.Cascade {
+		b.WriteString(" CASCADE")
+	}
 	b.WriteString(";\n")
 }
 
