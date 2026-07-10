@@ -182,8 +182,8 @@ sqlc generate
 - Strongly typed option helpers for finite PostgreSQL choices such as foreign
   key actions, index methods, and view check options
 - PostgreSQL schemas/namespaces, extensions with version pinning, cascade,
-  comments, and upgrade planning, enums, sequences, composite types, domains,
-  partitioned tables with child bounds, roles, functions,
+  comments, upgrade planning, and extension-owned type attribution, enums,
+  sequences, composite types, domains, partitioned tables with child bounds, roles, functions,
   triggers, RLS policies, explicit grants, collations, and tablespace
   assignment for tables, indexes, and materialized views
 - Builder-style function bodies, composite fields, views, and materialized

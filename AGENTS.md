@@ -642,15 +642,15 @@ update of this file:
   Testcontainers suite for generated schema apply, catalogue introspection,
   drift detection, sandbox replay, and `migrate apply` version tracking.
   `task integration:postgres:pgvector` runs the pgvector type apply,
-  insertion, introspection, and drift comparison path against a pgvector image.
+  insertion, extension-owned type attribution, introspection, and drift
+  comparison path against a pgvector image.
   Drift check results include object-level diagnostics for missing, extra, and
   changed schema objects, including table-nested columns, constraints, and
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
 - **Next tracks**: remaining extension-provided PostgreSQL types such as
-  PostGIS `geometry`, extension-owned type attribution, and the first
-  non-PostgreSQL provider.
+  PostGIS `geometry`, and the first non-PostgreSQL provider.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

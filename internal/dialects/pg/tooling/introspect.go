@@ -296,6 +296,13 @@ JOIN pg_enum e ON e.enumtypid = t.oid
 JOIN pg_namespace n ON n.oid = t.typnamespace
 WHERE n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_depend dep
+    WHERE dep.classid = 'pg_type'::regclass
+      AND dep.objid = t.oid
+      AND dep.deptype = 'e'
+  )
 GROUP BY n.nspname, t.typname
 ORDER BY n.nspname, t.typname`)
 	if err != nil {
@@ -332,6 +339,13 @@ WHERE n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
   AND a.attnum > 0
   AND NOT a.attisdropped
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_depend dep
+    WHERE dep.classid = 'pg_type'::regclass
+      AND dep.objid = t.oid
+      AND dep.deptype = 'e'
+  )
 ORDER BY n.nspname, t.typname, a.attnum`)
 	if err != nil {
 		return nil, fmt.Errorf("introspect composite types: %w", err)
@@ -376,6 +390,13 @@ LEFT JOIN pg_constraint con ON con.contypid = t.oid AND con.contype = 'c'
 WHERE t.typtype = 'd'
   AND n.nspname NOT LIKE 'pg_%'
   AND n.nspname <> 'information_schema'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_depend dep
+    WHERE dep.classid = 'pg_type'::regclass
+      AND dep.objid = t.oid
+      AND dep.deptype = 'e'
+  )
 GROUP BY n.nspname, t.typname, t.typbasetype, t.typtypmod, t.typdefault, t.typnotnull
 ORDER BY n.nspname, t.typname`)
 	if err != nil {

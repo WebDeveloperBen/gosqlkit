@@ -153,6 +153,9 @@ func assertPgVectorColumnsIntrospected(t *testing.T, ctx context.Context, conn *
 	if len(schema.Tables) != 1 || schema.Tables[0].Name != "documents" {
 		t.Fatalf("documents table was not introspected: %#v", schema.Tables)
 	}
+	if len(schema.Enums) != 0 || len(schema.CompositeTypes) != 0 || len(schema.Domains) != 0 {
+		t.Fatalf("extension-owned type objects leaked into schema: %#v", schema)
+	}
 	want := map[string]string{
 		"id":                "integer",
 		"embedding":         "vector(3)",

@@ -110,7 +110,7 @@ after raw SQL schema blocks.
 - `[x]` Extension comments.
 - `[x]` Introspect and diff extension version (`pg_extension.extversion`);
   version pin removals fail closed because PostgreSQL has no unpin operation.
-- `[ ]` Recognise extension-provided types (e.g. pgvector `vector`, PostGIS
+- `[x]` Recognise extension-provided types (e.g. pgvector `vector`, PostGIS
   `geometry`) so their creation is attributed to the owning extension.
 
 ## Columns

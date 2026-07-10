@@ -1,6 +1,13 @@
 package tooling
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
 
 func TestParseIndexColumn(t *testing.T) {
 	tests := []struct {
@@ -40,6 +47,35 @@ func TestReloptionsMap(t *testing.T) {
 	got := reloptionsMap([]string{"fillfactor=90", "deduplicate_items=off"})
 	if got["fillfactor"] != "90" || got["deduplicate_items"] != "off" {
 		t.Fatalf("reloptionsMap = %#v", got)
+	}
+}
+
+func TestTypeObjectIntrospectionFiltersExtensionOwnedTypes(t *testing.T) {
+	queryer := &recordingQueryer{}
+	if _, err := introspectEnums(context.Background(), queryer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := introspectCompositeTypes(context.Background(), queryer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := introspectDomains(context.Background(), queryer); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(queryer.queries) != 3 {
+		t.Fatalf("queries len = %d, want 3", len(queryer.queries))
+	}
+	for _, query := range queryer.queries {
+		for _, want := range []string{
+			"FROM pg_depend dep",
+			"dep.classid = 'pg_type'::regclass",
+			"dep.objid = t.oid",
+			"dep.deptype = 'e'",
+		} {
+			if !strings.Contains(query, want) {
+				t.Fatalf("query missing %q:\n%s", want, query)
+			}
+		}
 	}
 }
 
@@ -110,4 +146,49 @@ func TestParsePartitionDefaultBound(t *testing.T) {
 	if !ok || got.Type != "default" {
 		t.Fatalf("default bound = %#v", got)
 	}
+}
+
+type recordingQueryer struct {
+	queries []string
+}
+
+func (q *recordingQueryer) Query(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
+	q.queries = append(q.queries, sql)
+	return emptyRows{}, nil
+}
+
+type emptyRows struct{}
+
+func (emptyRows) Close() {}
+
+func (emptyRows) Err() error {
+	return nil
+}
+
+func (emptyRows) CommandTag() pgconn.CommandTag {
+	return pgconn.CommandTag{}
+}
+
+func (emptyRows) FieldDescriptions() []pgconn.FieldDescription {
+	return nil
+}
+
+func (emptyRows) Next() bool {
+	return false
+}
+
+func (emptyRows) Scan(...any) error {
+	return nil
+}
+
+func (emptyRows) Values() ([]any, error) {
+	return nil, nil
+}
+
+func (emptyRows) RawValues() [][]byte {
+	return nil
+}
+
+func (emptyRows) Conn() *pgx.Conn {
+	return nil
 }
