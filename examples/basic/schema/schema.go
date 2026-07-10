@@ -2,7 +2,7 @@ package schema
 
 import "github.com/webdeveloperben/gosqlkit/pg"
 
-var PgCrypto = pg.Extension("pgcrypto")
+var PgCrypto = pg.Extension("pgcrypto").Version("1.3")
 
 var AppReader = pg.Role("app_reader").NoLogin()
 

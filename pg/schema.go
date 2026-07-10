@@ -11,7 +11,7 @@ type NamespaceDef struct {
 }
 
 type ExtensionDef struct {
-	def pgschema.Extension
+	def *pgschema.Extension
 }
 
 type RoleDef struct {
@@ -114,8 +114,8 @@ func (r *RawSQLDef) Before() *RawSQLDef {
 }
 
 // Down supplies the reverse SQL for this block so it can participate in
-// down migrations. Without it the block is irreversible, and including an
-// irreversible change in a migration suppresses that migration's down section.
+// down migrations. Without it the block is marked with an irreversible
+// placeholder in generated down SQL.
 func (r *RawSQLDef) Down(sql string) *RawSQLDef {
 	r.def.Down = sql
 	return r
@@ -126,9 +126,14 @@ func Extension(name string) *ExtensionDef {
 }
 
 func ExtensionInSchema(schema, name string) *ExtensionDef {
-	extension := pgschema.Extension{Schema: schema, Name: name}
+	extension := &pgschema.Extension{Schema: schema, Name: name}
 	registerExtension(extension)
 	return &ExtensionDef{def: extension}
+}
+
+func (e *ExtensionDef) Version(version string) *ExtensionDef {
+	e.def.Version = version
+	return e
 }
 
 func Role(name string) *RoleDef {

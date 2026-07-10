@@ -411,6 +411,79 @@ func TestSnapshotDiffProducesSimpleCreateReverses(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffProducesExtensionVersionSQL(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Version: "1.3",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "CREATE EXTENSION pgcrypto VERSION '1.3';" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 || len(planned.Changes[0].ReverseStatements) != 1 || planned.Changes[0].ReverseStatements[0].SQL != "DROP EXTENSION pgcrypto;" {
+		t.Fatalf("change = %#v", planned.Changes)
+	}
+}
+
+func TestSnapshotDiffRejectsExtensionVersionChange(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Version: "1.2",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Version: "1.3",
+		}},
+	})
+
+	_, err := plan.SnapshotDiff(previous, current)
+	if err == nil || !strings.Contains(err.Error(), "extension public.pgcrypto version changes require manual migration authoring") {
+		t.Fatalf("expected unsupported version change error, got %v", err)
+	}
+}
+
+func TestSnapshotDiffRestoresDroppedExtensionVersion(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Version: "1.3",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 || len(planned.Changes[0].ReverseStatements) != 1 || planned.Changes[0].ReverseStatements[0].SQL != "CREATE EXTENSION pgcrypto VERSION '1.3';" {
+		t.Fatalf("change = %#v", planned.Changes)
+	}
+}
+
 func TestSnapshotDiffDetectsExtensionRenameAsManualReplacement(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

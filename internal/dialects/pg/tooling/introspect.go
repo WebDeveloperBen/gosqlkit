@@ -102,7 +102,7 @@ ORDER BY nspname`)
 
 func introspectExtensions(ctx context.Context, queryer Queryer) ([]pgschema.Extension, error) {
 	rows, err := queryer.Query(ctx, `
-SELECT e.extname, n.nspname
+SELECT e.extname, n.nspname, e.extversion
 FROM pg_extension e
 JOIN pg_namespace n ON n.oid = e.extnamespace
 WHERE e.extname <> 'plpgsql'
@@ -115,7 +115,7 @@ ORDER BY n.nspname, e.extname`)
 	var out []pgschema.Extension
 	for rows.Next() {
 		var item pgschema.Extension
-		if err := rows.Scan(&item.Name, &item.Schema); err != nil {
+		if err := rows.Scan(&item.Name, &item.Schema, &item.Version); err != nil {
 			return nil, fmt.Errorf("scan extension: %w", err)
 		}
 		item.Schema = snapshotSchema(item.Schema)

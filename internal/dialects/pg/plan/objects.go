@@ -250,10 +250,7 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 				}
 				return unsupported("extension " + key + " previousName " + item.PreviousName + " does not match any extension in the previous snapshot")
 			}
-			stmt := "CREATE EXTENSION " + item.Name
-			if item.Schema != "" {
-				stmt += " WITH SCHEMA " + item.Schema
-			}
+			stmt := renderCreateExtension(item)
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationCreate,
@@ -266,15 +263,16 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 			)
 			continue
 		}
+		previousItem := prev[key]
+		if previousItem.Version != item.Version {
+			return unsupported("extension " + key + " version changes require manual migration authoring")
+		}
 		delete(prev, key)
 	}
 	if len(prev) > 0 {
 		for _, key := range sortedStrings(removedNames(prev)) {
 			extension := prev[key]
-			stmt := "CREATE EXTENSION " + extension.Name
-			if extension.Schema != "" {
-				stmt += " WITH SCHEMA " + extension.Schema
-			}
+			stmt := renderCreateExtension(extension)
 			p.addWith(
 				migrateplan.NewChange(
 					migrateplan.OperationDrop,
@@ -290,6 +288,17 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 		}
 	}
 	return nil
+}
+
+func renderCreateExtension(extension pgschema.Extension) string {
+	stmt := "CREATE EXTENSION " + extension.Name
+	if extension.Schema != "" {
+		stmt += " WITH SCHEMA " + extension.Schema
+	}
+	if extension.Version != "" {
+		stmt += " VERSION " + quoteSQL(extension.Version)
+	}
+	return stmt
 }
 
 func (p planner) collations(previous, current []pgschema.Collation) error {

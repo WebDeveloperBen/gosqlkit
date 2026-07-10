@@ -10,7 +10,7 @@ import (
 
 var registry = struct {
 	namespaces        []pgschema.Namespace
-	extensions        []pgschema.Extension
+	extensions        []*pgschema.Extension
 	roles             []*pgschema.Role
 	collations        []*pgschema.Collation
 	enums             []pgschema.Enum
@@ -78,7 +78,7 @@ func Schema() pgschema.Schema {
 	defer registry.Unlock()
 
 	namespaces := append([]pgschema.Namespace(nil), registry.namespaces...)
-	extensions := append([]pgschema.Extension(nil), registry.extensions...)
+	extensions := make([]pgschema.Extension, 0, len(registry.extensions))
 	roles := make([]pgschema.Role, 0, len(registry.roles))
 	collations := make([]pgschema.Collation, 0, len(registry.collations))
 	enums := append([]pgschema.Enum(nil), registry.enums...)
@@ -89,6 +89,10 @@ func Schema() pgschema.Schema {
 
 	for _, role := range registry.roles {
 		roles = append(roles, *role)
+	}
+
+	for _, extension := range registry.extensions {
+		extensions = append(extensions, *extension)
 	}
 
 	for _, collation := range registry.collations {
@@ -224,7 +228,7 @@ func registerRawSQL(block *pgschema.RawSQL) {
 	registry.rawSQL = append(registry.rawSQL, block)
 }
 
-func registerExtension(extension pgschema.Extension) {
+func registerExtension(extension *pgschema.Extension) {
 	registry.Lock()
 	defer registry.Unlock()
 

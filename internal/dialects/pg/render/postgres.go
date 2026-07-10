@@ -988,6 +988,10 @@ func renderExtension(b *strings.Builder, extension pgschema.Extension) {
 		b.WriteString(" WITH SCHEMA ")
 		b.WriteString(extension.Schema)
 	}
+	if extension.Version != "" {
+		b.WriteString(" VERSION ")
+		b.WriteString(quoteLiteral(extension.Version))
+	}
 	b.WriteString(";\n")
 }
 

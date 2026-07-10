@@ -38,6 +38,26 @@
     }
   },
   {
+    "name": "create_versioned_extension",
+    "wantStatements": [
+      "CREATE EXTENSION pgcrypto VERSION '1.3';"
+    ],
+    "previous": {
+      "dialect": "postgresql",
+      "version": 1
+    },
+    "current": {
+      "dialect": "postgresql",
+      "extensions": [
+        {
+          "name": "pgcrypto",
+          "version": "1.3"
+        }
+      ],
+      "version": 1
+    }
+  },
+  {
     "name": "create_enum",
     "wantStatements": [
       "CREATE TYPE invoice_status AS ENUM ('draft', 'issued');"

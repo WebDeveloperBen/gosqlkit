@@ -127,6 +127,7 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 		Extensions: []pgschema.Extension{{
 			Name:         "pgcrypto",
 			PreviousName: "old_pgcrypto",
+			Version:      "1.3",
 		}},
 		Collations: []pgschema.Collation{{
 			Name:          "stable_text",
@@ -200,6 +201,9 @@ func TestProjectDriftSchemaIncludesRicherIntrospectedObjects(t *testing.T) {
 	}
 	if len(schema.Collations) != 1 || len(schema.CompositeTypes) != 1 || len(schema.Domains) != 1 || len(schema.Sequences) != 1 || len(schema.Tables[0].Indexes) != 1 {
 		t.Fatalf("projected schema dropped richer introspected objects: %#v", schema)
+	}
+	if schema.Extensions[0].Version != "1.3" {
+		t.Fatalf("projected extension dropped version: %#v", schema.Extensions[0])
 	}
 	if schema.Collations[0].Provider != "" || schema.Collations[0].Version != "" || schema.Collations[0].Deterministic != nil {
 		t.Fatalf("projected collation retained default introspection fields: %#v", schema.Collations[0])

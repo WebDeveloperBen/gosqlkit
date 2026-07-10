@@ -297,6 +297,9 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		if len(schema.Extensions) != 1 || schema.Extensions[0].Name != "pgcrypto" {
 			t.Fatalf("extensions = %#v", schema.Extensions)
 		}
+		if schema.Extensions[0].Version == "" {
+			t.Fatalf("extension version was not introspected: %#v", schema.Extensions[0])
+		}
 		if len(schema.Functions) != 0 || len(schema.CompositeTypes) != 0 || len(schema.Domains) != 0 || len(schema.Sequences) != 0 || len(schema.Tables) != 0 {
 			t.Fatalf("extension-owned objects leaked into schema: %#v", schema)
 		}

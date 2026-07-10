@@ -92,20 +92,23 @@ Legend:
 
 ## Extension Management
 
-`gosqlkit` already declares extensions (`CREATE EXTENSION [WITH SCHEMA]`),
+`gosqlkit` already declares extensions (`CREATE EXTENSION [WITH SCHEMA]
+[VERSION]`),
 introspects them, and diffs add/remove. Neither Atlas (gated behind Atlas Pro)
 nor Drizzle Kit (users run `CREATE EXTENSION` by hand) offers full open-source
 extension management, so completing this is a differentiator. Build this out
 after raw SQL schema blocks.
 
-- `[x]` Declare extensions with `CREATE EXTENSION IF NOT EXISTS [WITH SCHEMA]`.
+- `[x]` Declare extensions with `CREATE EXTENSION IF NOT EXISTS [WITH SCHEMA]
+  [VERSION]`.
 - `[x]` Introspect installed extensions and diff add/remove.
 - `[x]` Filter extension-owned objects out of drift.
-- `[ ]` Version pinning on create (`CREATE EXTENSION ... VERSION '<v>'`).
+- `[x]` Version pinning on create (`CREATE EXTENSION ... VERSION '<v>'`).
 - `[ ]` Version upgrades in the planner (`ALTER EXTENSION ... UPDATE TO '<v>'`).
 - `[ ]` `CASCADE` on create and drop.
 - `[ ]` Extension comments.
-- `[ ]` Introspect and diff extension version (`pg_extension.extversion`).
+- `[x]` Introspect and diff extension version (`pg_extension.extversion`);
+  version changes fail closed until automatic upgrade planning lands.
 - `[ ]` Recognise extension-provided types (e.g. pgvector `vector`, PostGIS
   `geometry`) so their creation is attributed to the owning extension.
 

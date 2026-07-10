@@ -582,8 +582,10 @@ update of this file:
   compatibility) are complete. The DSL covers tables, columns (all common PG
   scalar types + arrays + identity + generated), constraints (PK, unique
   with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
-  (full advanced surface), schemas, extensions, enums, sequences, composite
-  types, domains, partitioned tables with partition children and bounds, roles, functions, triggers, RLS policies, views, materialized views, comments, safe
+  (full advanced surface), schemas, extensions with version pinning, enums,
+  sequences, composite types, domains, partitioned tables with partition
+  children and bounds, roles, functions, triggers, RLS policies, views,
+  materialized views, comments, safe
   default helpers, custom-type escape hatch, and raw SQL schema blocks
   (`pg.RawSQL`, rendered before/after the structured schema, additive-only in
   the planner).
@@ -627,11 +629,11 @@ update of this file:
   matches the current generated schema snapshot, then introspects the replayed
   database and compares it to the embedded target snapshot. PostgreSQL drift
   checking is implemented with `drift check --url`; the introspector covers
-  namespaces, extensions, roles, collations, enums, composite types, domains,
-  standalone sequences, functions, tables, partitioning metadata,
-  partition-child bounds, tablespace assignments, columns, comments, RLS flags,
-  table constraints, standalone indexes, policies, triggers, grants, views, and
-  materialized views. Drift projection normalises rename metadata, non-persistent index
+  namespaces, extensions and extension versions, roles, collations, enums,
+  composite types, domains, standalone sequences, functions, tables,
+  partitioning metadata, partition-child bounds, tablespace assignments,
+  columns, comments, RLS flags, table constraints, standalone indexes,
+  policies, triggers, grants, views, and materialized views. Drift projection normalises rename metadata, non-persistent index
   flags, identity-backed sequences, extension-owned objects, dependency hints,
   and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
   Testcontainers suite for generated schema apply, catalogue introspection,
@@ -641,9 +643,9 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: extension management hardening (version pinning, upgrades,
-  cascade, comments, and version introspection), remaining extension-provided
-  PostgreSQL types, and the first non-PostgreSQL provider.
+- **Next tracks**: extension management hardening (version upgrades, cascade,
+  comments), remaining extension-provided PostgreSQL types, and the first
+  non-PostgreSQL provider.
   See FEATURES.md for the open `[ ]` items.
 
 When you change the state, update FEATURES.md first, then this section.

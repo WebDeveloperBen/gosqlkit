@@ -178,8 +178,9 @@ sqlc generate
   `CONCURRENTLY`, `ONLY`, `WITH (...)`, named auto-generation)
 - Strongly typed option helpers for finite PostgreSQL choices such as foreign
   key actions, index methods, and view check options
-- PostgreSQL schemas/namespaces, extensions, enums, sequences, composite
-  types, domains, partitioned tables with child bounds, roles, functions,
+- PostgreSQL schemas/namespaces, extensions with version pinning, enums,
+  sequences, composite types, domains, partitioned tables with child bounds,
+  roles, functions,
   triggers, RLS policies, explicit grants, collations, and tablespace
   assignment for tables, indexes, and materialized views
 - Builder-style function bodies, composite fields, views, and materialized
@@ -211,8 +212,9 @@ sqlc generate
 - PostgreSQL database inspection with `gosqlkit inspect --url ...`, emitting
   deterministic snapshot JSON or the normalised drift-projection shape
 - PostgreSQL drift checking with `gosqlkit drift check --url ...` across the
-  PostgreSQL snapshot model: namespaces, extensions, roles, enums, composite
-  types, domains, sequences, functions, tables, columns, table constraints,
+  PostgreSQL snapshot model: namespaces, extensions and extension versions,
+  roles, enums, composite types, domains, sequences, functions, tables, columns,
+  table constraints,
   standalone indexes, comments, RLS flags, policies, triggers, grants,
   collations, tablespaces, views, and materialized views, with object-level
   diagnostics for missing, extra, and changed objects in a styled terminal
