@@ -104,11 +104,12 @@ after raw SQL schema blocks.
 - `[x]` Introspect installed extensions and diff add/remove.
 - `[x]` Filter extension-owned objects out of drift.
 - `[x]` Version pinning on create (`CREATE EXTENSION ... VERSION '<v>'`).
-- `[ ]` Version upgrades in the planner (`ALTER EXTENSION ... UPDATE TO '<v>'`).
+- `[x]` Version upgrades in the planner (`ALTER EXTENSION ... UPDATE TO '<v>'`)
+  with manual-review and DDL-review risk flags.
 - `[ ]` `CASCADE` on create and drop.
 - `[ ]` Extension comments.
 - `[x]` Introspect and diff extension version (`pg_extension.extversion`);
-  version changes fail closed until automatic upgrade planning lands.
+  version pin removals fail closed because PostgreSQL has no unpin operation.
 - `[ ]` Recognise extension-provided types (e.g. pgvector `vector`, PostGIS
   `geometry`) so their creation is attributed to the owning extension.
 

@@ -265,7 +265,24 @@ func (p planner) extensions(previous, current []pgschema.Extension) error {
 		}
 		previousItem := prev[key]
 		if previousItem.Version != item.Version {
-			return unsupported("extension " + key + " version changes require manual migration authoring")
+			if item.Version == "" {
+				return unsupported("extension " + key + " version pin removal has no automatic SQL")
+			}
+			change := migrateplan.NewChange(
+				migrateplan.OperationAlter,
+				migrateplan.Ref(migrateplan.ObjectKindExtension, key),
+				"update extension "+key+" to version "+item.Version,
+				migrateplan.SQL(renderAlterExtensionUpdate(item.Name, item.Version)+";"),
+			).WithRisks(
+				migrateplan.RiskManualReview,
+				migrateplan.RiskRequiresDDLReview,
+			)
+			if previousItem.Version != "" {
+				change = change.WithReverse(
+					migrateplan.SQL(renderAlterExtensionUpdate(previousItem.Name, previousItem.Version) + ";"),
+				)
+			}
+			p.addWith(change)
 		}
 		delete(prev, key)
 	}
@@ -299,6 +316,10 @@ func renderCreateExtension(extension pgschema.Extension) string {
 		stmt += " VERSION " + quoteSQL(extension.Version)
 	}
 	return stmt
+}
+
+func renderAlterExtensionUpdate(name, version string) string {
+	return "ALTER EXTENSION " + name + " UPDATE TO " + quoteSQL(version)
 }
 
 func (p planner) collations(previous, current []pgschema.Collation) error {

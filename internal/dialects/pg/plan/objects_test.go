@@ -437,7 +437,7 @@ func TestSnapshotDiffProducesExtensionVersionSQL(t *testing.T) {
 	}
 }
 
-func TestSnapshotDiffRejectsExtensionVersionChange(t *testing.T) {
+func TestSnapshotDiffProducesExtensionVersionUpdate(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",
 		Version: pgschema.SnapshotVersion,
@@ -455,9 +455,77 @@ func TestSnapshotDiffRejectsExtensionVersionChange(t *testing.T) {
 		}},
 	})
 
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "ALTER EXTENSION pgcrypto UPDATE TO '1.3';" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+	change := planned.Changes[0]
+	if change.Op != migrateplan.OperationAlter || change.Object.Kind != migrateplan.ObjectKindExtension || change.Object.Key != "public.pgcrypto" {
+		t.Fatalf("change = %#v", change)
+	}
+	if !change.HasRisk(migrateplan.RiskManualReview) || !change.HasRisk(migrateplan.RiskRequiresDDLReview) {
+		t.Fatalf("change risks = %#v", change.Risks)
+	}
+	if !change.Reversible || len(change.ReverseStatements) != 1 || change.ReverseStatements[0].SQL != "ALTER EXTENSION pgcrypto UPDATE TO '1.2';" {
+		t.Fatalf("reverse = %#v reversible=%v", change.ReverseStatements, change.Reversible)
+	}
+}
+
+func TestSnapshotDiffProducesExtensionVersionUpdateWithoutReverseWhenPreviousUnpinned(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name: "pgcrypto",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Version: "1.3",
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Statements) != 1 || planned.Statements[0] != "ALTER EXTENSION pgcrypto UPDATE TO '1.3';" {
+		t.Fatalf("statements = %#v", planned.Statements)
+	}
+	if len(planned.Changes) != 1 || planned.Changes[0].Reversible || len(planned.Changes[0].ReverseStatements) != 0 {
+		t.Fatalf("change = %#v", planned.Changes)
+	}
+}
+
+func TestSnapshotDiffRejectsExtensionVersionPinRemoval(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name:    "pgcrypto",
+			Version: "1.3",
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Extensions: []pgschema.Extension{{
+			Name: "pgcrypto",
+		}},
+	})
+
 	_, err := plan.SnapshotDiff(previous, current)
-	if err == nil || !strings.Contains(err.Error(), "extension public.pgcrypto version changes require manual migration authoring") {
-		t.Fatalf("expected unsupported version change error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "extension public.pgcrypto version pin removal has no automatic SQL") {
+		t.Fatalf("expected unsupported version pin removal error, got %v", err)
 	}
 }
 
