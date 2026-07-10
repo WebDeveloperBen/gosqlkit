@@ -100,3 +100,31 @@ func TestSnapshotDiffProducesStructuredChangeMetadata(t *testing.T) {
 		t.Fatalf("change statements = %#v", change.Statements)
 	}
 }
+
+func TestSnapshotDiffIgnoresTransportMetadata(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect:    "postgresql",
+		SnapshotID: "previous",
+		TableMetadata: map[string]pgschema.TableMetadata{
+			"public.users": {},
+		},
+		Tables: []pgschema.Table{{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect:            "postgresql",
+		SnapshotID:         "current",
+		PreviousSnapshotID: "previous",
+		ColumnMetadata: map[string]pgschema.ColumnMetadata{
+			"public.users.id": {},
+		},
+		Tables: []pgschema.Table{{Table: ast.Table{Name: "users", Columns: []ast.Column{{Name: "id", Type: "uuid"}}}}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 0 {
+		t.Fatalf("changes = %#v", planned.Changes)
+	}
+}

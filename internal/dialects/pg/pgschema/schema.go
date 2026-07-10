@@ -93,6 +93,46 @@ func JSON(dialect string, schema Schema) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+func NormaliseDocumentForDiff(document Document) (Document, error) {
+	raw, err := JSON(document.Dialect, Schema{
+		Namespaces:        document.Namespaces,
+		Extensions:        document.Extensions,
+		Roles:             document.Roles,
+		Collations:        document.Collations,
+		Enums:             document.Enums,
+		CompositeTypes:    document.CompositeTypes,
+		Domains:           document.Domains,
+		Sequences:         document.Sequences,
+		Functions:         document.Functions,
+		Tables:            document.Tables,
+		Views:             document.Views,
+		MaterializedViews: document.MaterializedViews,
+		Triggers:          document.Triggers,
+		Policies:          document.Policies,
+		Grants:            document.Grants,
+		RawSQL:            document.RawSQL,
+	})
+	if err != nil {
+		return Document{}, err
+	}
+
+	var normalised Document
+	if err := json.Unmarshal(raw, &normalised); err != nil {
+		return Document{}, err
+	}
+	normalised.SnapshotID = ""
+	normalised.PreviousSnapshotID = ""
+	normalised.SchemaMetadata = nil
+	normalised.TableMetadata = nil
+	normalised.ColumnMetadata = nil
+	normalised.ViewMetadata = nil
+	normalised.RoleMetadata = nil
+	normalised.FunctionMetadata = nil
+	normalised.TriggerMetadata = nil
+	normalised.PolicyMetadata = nil
+	return normalised, nil
+}
+
 func qualified(schema, name string) string {
 	if schema == "" {
 		schema = "public"

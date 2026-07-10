@@ -26,6 +26,16 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 	if err := json.Unmarshal(currentJSON, &current); err != nil {
 		return nil, fmt.Errorf("parse current snapshot: %w", err)
 	}
+	normalisedPrevious, err := pgschema.NormaliseDocumentForDiff(previous)
+	if err != nil {
+		return nil, fmt.Errorf("normalise previous snapshot: %w", err)
+	}
+	normalisedCurrent, err := pgschema.NormaliseDocumentForDiff(current)
+	if err != nil {
+		return nil, fmt.Errorf("normalise current snapshot: %w", err)
+	}
+	previous = normalisedPrevious
+	current = normalisedCurrent
 
 	planner := planner{plan: &migrateplan.Plan{}}
 	if err := planner.roles(previous.Roles, current.Roles); err != nil {

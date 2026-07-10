@@ -267,7 +267,7 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Schema metadata map.
 - `[x]` Stable object keys for schema-qualified names.
 - `[x]` Embedded target snapshots in generated migration metadata.
-- `[ ]` Squashed/normalised representation for diffing.
+- `[x]` Squashed/normalised representation for diffing.
 - `[x]` Deterministic serialisation to JSON.
 - `[~]` Diff input from current database introspection.
 - `[~]` Diff input from generated desired snapshot.
