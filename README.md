@@ -136,6 +136,16 @@ changes reviewable):
 gosqlkit migrate create drop_legacy_columns --allow-destructive
 ```
 
+Author a migration that repopulates a materialized view. Refreshing is a
+data-population operation rather than structural schema (matching Drizzle and
+Atlas, which keep `REFRESH` out of the schema diff), so it is authored as an
+explicit, reviewable migration step instead of being inferred from the schema:
+
+```bash
+gosqlkit migrate refresh cached_bookings
+gosqlkit migrate refresh cached_bookings --concurrently   # allows concurrent reads; needs a unique index
+```
+
 Schema can be a single path or a list of paths:
 
 ```yaml
@@ -226,6 +236,8 @@ sqlc generate
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing, using
   styled terminal tables for humans and JSON for automation
+- `gosqlkit migrate refresh <matview> [--concurrently]` to author an explicit,
+  risk-flagged migration that repopulates a materialized view
 - Fail-closed rename-candidate diagnostics for simple destructive drop/create
   plans, with `previousName` guidance where rename intent should be explicit,
   plus interactive rename selection for TTY workflows

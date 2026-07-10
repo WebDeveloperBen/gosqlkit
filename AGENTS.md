@@ -588,7 +588,9 @@ update of this file:
   CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
   for snapshot), `inspect` (with `--url`, `--url-env`, `--token-command`,
   `--out`, and `--drift-projection`), `version`, `migrate create` (with `--empty`, `--no-down`,
-  `--allow-destructive`), `migrate plan` (with `--json` and `--quiet`),
+  `--allow-destructive`), `migrate refresh <matview>` (with `--concurrently`;
+  authors an explicit, risk-flagged materialized-view refresh migration),
+  `migrate plan` (with `--json` and `--quiet`),
   `migrate check` (with `--json`, `--quiet`, and optional `--sandbox-url` /
   `--sandbox-url-env`),
   `migrate apply` (with `--url`, `--url-env`, `--json`, and `--quiet`), and

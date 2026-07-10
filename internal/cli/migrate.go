@@ -17,10 +17,11 @@ import (
 )
 
 type MigrateCmd struct {
-	Apply  MigrateApplyCmd  `cmd:"" help:"Apply pending migrations to a PostgreSQL database."`
-	Check  MigrateCheckCmd  `cmd:"" help:"Validate migration files."`
-	Create MigrateCreateCmd `cmd:"" help:"Create a migration file."`
-	Plan   MigratePlanCmd   `cmd:"" help:"Print the structured migration plan without writing files."`
+	Apply   MigrateApplyCmd   `cmd:"" help:"Apply pending migrations to a PostgreSQL database."`
+	Check   MigrateCheckCmd   `cmd:"" help:"Validate migration files."`
+	Create  MigrateCreateCmd  `cmd:"" help:"Create a migration file."`
+	Plan    MigratePlanCmd    `cmd:"" help:"Print the structured migration plan without writing files."`
+	Refresh MigrateRefreshCmd `cmd:"" help:"Author a migration that refreshes a materialized view."`
 }
 
 type MigrateCreateCmd struct {
@@ -78,6 +79,67 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 		Interaction:      interaction,
 	}); err != nil {
 		return Exit(1, err)
+	}
+	return nil
+}
+
+type MigrateRefreshCmd struct {
+	Config       string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	Dir          string `help:"Write migration files to this directory. Overrides config migrations.dir." type:"path"`
+	Runner       string `help:"Migration runner file format: goose or golang-migrate."`
+	Name         string `help:"Override the generated migration name."`
+	View         string `arg:"" help:"Materialized view to refresh (optionally schema-qualified)."`
+	Concurrently bool   `help:"Use REFRESH MATERIALIZED VIEW CONCURRENTLY (requires a unique index; allows concurrent reads)."`
+	JSON         bool   `help:"Emit machine-readable JSON instead of human-readable text."`
+	Quiet        bool   `help:"Suppress human-readable success output."`
+}
+
+func (c *MigrateRefreshCmd) Run(g *GlobalFlags) error {
+	root, err := app.ResolveRoot(g.Root)
+	if err != nil {
+		return Exit(1, err)
+	}
+
+	configPath := c.Config
+	if configPath == "" {
+		if configPath, err = discoverConfigPath(root); err != nil {
+			return Exit(1, err)
+		}
+	}
+
+	config, err := app.LoadConfig(configPath)
+	if err != nil {
+		return Exit(1, err)
+	}
+
+	result, err := app.MigrateRefreshWithConfig(config, app.MigrateRefreshOptions{
+		Name:         c.Name,
+		Dir:          c.Dir,
+		Runner:       c.Runner,
+		View:         c.View,
+		Concurrently: c.Concurrently,
+	})
+	if err != nil {
+		return Exit(1, err)
+	}
+
+	if c.JSON {
+		return printJSON(g.stdout(), result)
+	}
+	if !printHuman(c.JSON, c.Quiet) {
+		return nil
+	}
+	return printCreatedFiles(g.stdout(), result)
+}
+
+func printCreatedFiles(w io.Writer, result *app.MigrateCreateResult) error {
+	if result == nil {
+		return nil
+	}
+	for _, file := range result.Files {
+		if _, err := fmt.Fprintf(w, "created %s\n", file); err != nil {
+			return err
+		}
 	}
 	return nil
 }

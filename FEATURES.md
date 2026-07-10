@@ -208,7 +208,10 @@ Missing common PostgreSQL types:
 - `[x]` View security options.
 - `[x]` Materialized view storage options.
 - `[x]` Materialized view `WITH NO DATA`.
-- `[ ]` Refresh materialized view support.
+- `[x]` Refresh materialized view support (authored as an explicit `migrate
+  refresh` migration step, not a structural snapshot field; refresh is a
+  data-population operation kept out of the schema diff, matching Drizzle and
+  Atlas).
 
 ## Sequences
 
@@ -445,6 +448,8 @@ Other provider requirement:
 - `[x]` `gosqlkit migrate create <name> --empty`.
 - `[x]` `gosqlkit migrate create <name> --allow-destructive` to author a
   migration containing drops, RLS disables, or comment removals.
+- `[x]` `gosqlkit migrate refresh <matview> [--concurrently]` to author an
+  explicit, risk-flagged migration that repopulates a materialized view.
 - `[x]` `gosqlkit migrate plan` to print the structured migration plan without
   writing any files (`--json` for machine-readable output).
 - `[~]` `gosqlkit migrate check`.
@@ -524,6 +529,9 @@ Other provider requirement:
 - `[x]` Testcontainers replay tests for rename migrations.
 - `[x]` Testcontainers replay tests for destructive-change guardrails and allowed destructive SQL.
 - `[x]` Down SQL replay tests for reversible generated migrations.
+- `[x]` Testcontainers replay test for a generated `migrate refresh` migration,
+  verifying a `WITH NO DATA` materialized view is unqueryable until the refresh
+  migration populates it.
 - `[x]` Drift normalisation matrix tests for casts, default opclasses, index ordering/nulls, inline constraints, qualified references, and PostgreSQL expression rewrites.
 - `[x]` Goose statement parser tests for `StatementBegin` / `StatementEnd`, tagged dollar quotes, quoted semicolons, comments, empty statements, and non-transactional statements.
 - `[x]` Migration metadata tamper tests for broken JSON, missing target snapshots, stale IDs, and incoherent lineage.
