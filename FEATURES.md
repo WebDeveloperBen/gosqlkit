@@ -513,9 +513,9 @@ Other provider requirement:
 - `[x]` Styled terminal tables for human drift diagnostics using
   `charm.land/lipgloss/v2`.
 - `[x]` Styled terminal tables for migration plan summaries.
-- `[~]` Interactive ambiguity prompts for migration authoring when stdout/stdin
-  are TTYs. Implemented for rename candidates; other manual-review ambiguity
-  classes remain fail-closed.
+- `[x]` Interactive ambiguity prompts for supported migration authoring when
+  stdin/stdout are TTYs, including rename-candidate selection; manual-review
+  changes without executable SQL remain fail-closed.
 - `[x]` Non-interactive fail-closed ambiguity diagnostics with exact schema
   annotations to accept rename intent.
 - `[x]` Interactive rename-candidate selection for tables, columns,
