@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/cloudsqlconn"
 	"github.com/jackc/pgx/v5"
@@ -24,11 +25,18 @@ type PasswordProvider interface {
 	Password(context.Context) (string, error)
 }
 
+type RefreshablePasswordProvider interface {
+	PasswordProvider
+	Refresh(context.Context) (string, error)
+}
+
 type ConnectionOptions struct {
 	PasswordProvider PasswordProvider
 	URL              string
 	CloudSQLInstance string
 	CloudSQLIAMAuthN bool
+	ConnectAttempts  int
+	ConnectBackoff   time.Duration
 }
 
 type Conn struct {
@@ -49,13 +57,6 @@ func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error)
 	if err != nil {
 		return nil, fmt.Errorf("parse PostgreSQL URL %s: %w", RedactURL(rawURL), err)
 	}
-	if opts.PasswordProvider != nil && !opts.CloudSQLIAMAuthN {
-		password, err := opts.PasswordProvider.Password(ctx)
-		if err != nil {
-			return nil, err
-		}
-		config.Password = password
-	}
 	var closeDialer func() error
 	if instance := strings.TrimSpace(opts.CloudSQLInstance); instance != "" {
 		dialerOptions := []cloudsqlconn.Option{cloudsqlconn.WithLazyRefresh()}
@@ -72,14 +73,52 @@ func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error)
 			return dialer.Dial(ctx, instance)
 		}
 	}
-	conn, err := pgx.ConnectConfig(ctx, config)
-	if err != nil {
-		if closeDialer != nil {
-			_ = closeDialer()
-		}
-		return nil, fmt.Errorf("connect to PostgreSQL %s: %w", RedactURL(rawURL), err)
+	attempts := opts.ConnectAttempts
+	if attempts < 1 {
+		attempts = 1
 	}
-	return &Conn{conn: conn, closeDialer: closeDialer}, nil
+	backoff := opts.ConnectBackoff
+	for attempt := 0; attempt < attempts; attempt++ {
+		if opts.PasswordProvider != nil && !opts.CloudSQLIAMAuthN {
+			var password string
+			if attempt > 0 {
+				if provider, ok := opts.PasswordProvider.(RefreshablePasswordProvider); ok {
+					password, err = provider.Refresh(ctx)
+				} else {
+					password, err = opts.PasswordProvider.Password(ctx)
+				}
+			} else {
+				password, err = opts.PasswordProvider.Password(ctx)
+			}
+			if err != nil {
+				if closeDialer != nil {
+					_ = closeDialer()
+				}
+				return nil, err
+			}
+			config.Password = password
+		}
+		conn, connectErr := pgx.ConnectConfig(ctx, config)
+		if connectErr == nil {
+			return &Conn{conn: conn, closeDialer: closeDialer}, nil
+		}
+		if attempt+1 < attempts && backoff > 0 {
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				connectErr = ctx.Err()
+			case <-timer.C:
+			}
+		}
+		if attempt+1 == attempts {
+			if closeDialer != nil {
+				_ = closeDialer()
+			}
+			return nil, fmt.Errorf("connect to PostgreSQL %s: %w", RedactURL(rawURL), connectErr)
+		}
+	}
+	return nil, errors.New("postgres connection attempts exhausted")
 }
 
 func (c *Conn) Exec(ctx context.Context, sql string, args ...any) error {
