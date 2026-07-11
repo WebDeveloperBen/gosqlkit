@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 type Token struct {
@@ -15,6 +17,24 @@ type Token struct {
 
 type TokenProvider interface {
 	Token(context.Context) (Token, error)
+}
+
+type OAuth2TokenProvider struct {
+	Source oauth2.TokenSource
+}
+
+func (p OAuth2TokenProvider) Token(ctx context.Context) (Token, error) {
+	if p.Source == nil {
+		return Token{}, errors.New("OAuth2 token source is required")
+	}
+	token, err := p.Source.Token()
+	if err != nil {
+		return Token{}, err
+	}
+	if strings.TrimSpace(token.AccessToken) == "" {
+		return Token{}, errors.New("OAuth2 token source produced an empty access token")
+	}
+	return Token{Value: token.AccessToken, ExpiresAt: token.Expiry}, nil
 }
 
 type RefreshingPasswordProvider struct {

@@ -422,7 +422,8 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Connect using token-as-password authentication.
 - `[x]` Support token providers through an expiry-aware, refreshable token
   interface for reconnect-capable tooling.
-- `[~]` Support OAuth2 access-token providers.
+- `[x]` Support OAuth2 access-token providers through the shared expiry-aware
+  token-provider boundary.
 - `[x]` Support AWS RDS and Aurora PostgreSQL signed database auth tokens.
 - `[x]` Support Azure Database for PostgreSQL Microsoft Entra authentication.
 - `[x]` Support Azure CLI token acquisition for local development.
