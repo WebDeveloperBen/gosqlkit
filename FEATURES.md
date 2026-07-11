@@ -19,7 +19,9 @@ Legend:
 - `[x]` No runtime ORM.
 - `[x]` No query builder.
 - `[x]` Preserve `sqlc` and `pgx` for runtime database access.
-- `[~]` CLI generation workflow.
+- `[x]` CLI generation workflow for package-driven and config-driven SQL and
+  snapshot generation, output writing, stale checks, dialect overrides, and
+  previous-snapshot tracking.
 - `[~]` Migration diff workflow.
 - `[x]` Review-first destructive-change handling.
 - `[x]` Snapshot metadata for stable diffs and rename support.
