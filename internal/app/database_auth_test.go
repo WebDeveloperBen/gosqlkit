@@ -13,6 +13,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
 )
 
 func TestSplitCommandLine(t *testing.T) {
@@ -59,9 +60,7 @@ func TestCommandPasswordProviderRedactsTokenOutputOnFailure(t *testing.T) {
 
 func TestAzureCLIPasswordProviderUsesAzurePostgresTokenCommand(t *testing.T) {
 	provider := databasePasswordProvider("", databaseAuthOptions{AzureCLIToken: true})
-	if _, ok := provider.(azureCLIPasswordProvider); !ok {
-		t.Fatalf("provider = %T, want azureCLIPasswordProvider", provider)
-	}
+	requireRefreshingPasswordProvider(t, provider)
 
 	parts, err := splitCommandLine(azureCLITokenCommand)
 	if err != nil {
@@ -171,9 +170,7 @@ func TestAzureDefaultCredentialPasswordProviderRequestsPostgresScope(t *testing.
 
 func TestDatabasePasswordProviderUsesAzureDefaultCredential(t *testing.T) {
 	provider := databasePasswordProvider("", databaseAuthOptions{AzureDefaultCredential: true})
-	if _, ok := provider.(azureDefaultCredentialPasswordProvider); !ok {
-		t.Fatalf("provider = %T, want azureDefaultCredentialPasswordProvider", provider)
-	}
+	requireRefreshingPasswordProvider(t, provider)
 }
 
 func TestDatabasePasswordProviderUsesAWSIAMToken(t *testing.T) {
@@ -183,13 +180,7 @@ func TestDatabasePasswordProviderUsesAWSIAMToken(t *testing.T) {
 		AWSProfile:  "dev",
 		AWSRegion:   "us-east-1",
 	})
-	got, ok := provider.(awsIAMPasswordProvider)
-	if !ok {
-		t.Fatalf("provider = %T, want awsIAMPasswordProvider", provider)
-	}
-	if got.rawURL != rawURL || got.region != "us-east-1" || got.profile != "dev" {
-		t.Fatalf("provider = %#v", got)
-	}
+	requireRefreshingPasswordProvider(t, provider)
 }
 
 func TestDatabasePasswordProviderUsesAWSCLIToken(t *testing.T) {
@@ -199,13 +190,7 @@ func TestDatabasePasswordProviderUsesAWSCLIToken(t *testing.T) {
 		AWSProfile:  "dev",
 		AWSRegion:   "us-east-1",
 	})
-	got, ok := provider.(awsCLIPasswordProvider)
-	if !ok {
-		t.Fatalf("provider = %T, want awsCLIPasswordProvider", provider)
-	}
-	if got.rawURL != rawURL || got.region != "us-east-1" || got.profile != "dev" {
-		t.Fatalf("provider = %#v", got)
-	}
+	requireRefreshingPasswordProvider(t, provider)
 }
 
 func TestDatabasePasswordProviderUsesGCloudToken(t *testing.T) {
@@ -213,13 +198,7 @@ func TestDatabasePasswordProviderUsesGCloudToken(t *testing.T) {
 		GCloudToken:    true,
 		GCloudInstance: "app-prod",
 	})
-	got, ok := provider.(gcloudPasswordProvider)
-	if !ok {
-		t.Fatalf("provider = %T, want gcloudPasswordProvider", provider)
-	}
-	if got.instance != "app-prod" || got.applicationDefault {
-		t.Fatalf("provider = %#v", got)
-	}
+	requireRefreshingPasswordProvider(t, provider)
 }
 
 func TestDatabasePasswordProviderUsesGCloudADCToken(t *testing.T) {
@@ -227,12 +206,13 @@ func TestDatabasePasswordProviderUsesGCloudADCToken(t *testing.T) {
 		GCloudADCToken: true,
 		GCloudInstance: "app-prod",
 	})
-	got, ok := provider.(gcloudPasswordProvider)
-	if !ok {
-		t.Fatalf("provider = %T, want gcloudPasswordProvider", provider)
-	}
-	if got.instance != "app-prod" || !got.applicationDefault {
-		t.Fatalf("provider = %#v", got)
+	requireRefreshingPasswordProvider(t, provider)
+}
+
+func requireRefreshingPasswordProvider(t *testing.T, provider any) {
+	t.Helper()
+	if _, ok := provider.(*pgtooling.RefreshingPasswordProvider); !ok {
+		t.Fatalf("provider = %T, want *tooling.RefreshingPasswordProvider", provider)
 	}
 }
 

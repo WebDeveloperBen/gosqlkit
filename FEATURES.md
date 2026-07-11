@@ -407,7 +407,7 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Connect using password authentication.
 - `[x]` Connect using SSL/TLS options required by managed PostgreSQL providers.
 - `[x]` Connect using token-as-password authentication.
-- `[~]` Support token providers through a refreshable token callback.
+- `[x]` Support token providers through an expiry-aware, refreshable token callback.
 - `[~]` Support OAuth2 access-token providers.
 - `[~]` Support cloud-specific signed database auth tokens.
 - `[~]` Support Azure Database for PostgreSQL Microsoft Entra authentication.
@@ -424,7 +424,7 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
 - `[x]` Redact credentials and tokens in diagnostics.
 - `[x]` Acquire short-lived tokens immediately before opening database connections.
-- `[ ]` Refresh tokens for long-running introspection or diff operations.
+- `[x]` Refresh expiring tokens before reconnecting during long-running introspection or diff operations.
 - `[x]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
 - `[ ]` Support provider-specific username formats.
 - `[ ]` Support provider-specific TLS/SSL requirements.

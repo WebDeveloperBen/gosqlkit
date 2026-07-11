@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -51,27 +52,31 @@ func postgresConnectionOptions(rawURL string, auth databaseAuthOptions) pgtoolin
 
 func databasePasswordProvider(rawURL string, auth databaseAuthOptions) pgtooling.PasswordProvider {
 	if auth.AzureCLIToken {
-		return azureCLIPasswordProvider{}
+		return refreshablePasswordProvider(azureCLIPasswordProvider{})
 	}
 	if auth.AzureDefaultCredential {
-		return azureDefaultCredentialPasswordProvider{}
+		return refreshablePasswordProvider(azureDefaultCredentialPasswordProvider{})
 	}
 	if auth.AWSCLIToken {
-		return awsCLIPasswordProvider{rawURL: rawURL, region: auth.AWSRegion, profile: auth.AWSProfile}
+		return refreshablePasswordProvider(awsCLIPasswordProvider{rawURL: rawURL, region: auth.AWSRegion, profile: auth.AWSProfile})
 	}
 	if auth.AWSIAMToken {
-		return awsIAMPasswordProvider{rawURL: rawURL, region: auth.AWSRegion, profile: auth.AWSProfile}
+		return refreshablePasswordProvider(awsIAMPasswordProvider{rawURL: rawURL, region: auth.AWSRegion, profile: auth.AWSProfile})
 	}
 	if auth.GCloudToken {
-		return gcloudPasswordProvider{instance: auth.GCloudInstance}
+		return refreshablePasswordProvider(gcloudPasswordProvider{instance: auth.GCloudInstance})
 	}
 	if auth.GCloudADCToken {
-		return gcloudPasswordProvider{applicationDefault: true, instance: auth.GCloudInstance}
+		return refreshablePasswordProvider(gcloudPasswordProvider{applicationDefault: true, instance: auth.GCloudInstance})
 	}
 	if strings.TrimSpace(auth.TokenCommand) == "" {
 		return nil
 	}
-	return commandPasswordProvider{command: auth.TokenCommand}
+	return refreshablePasswordProvider(commandPasswordProvider{command: auth.TokenCommand})
+}
+
+func refreshablePasswordProvider(provider pgtooling.TokenProvider) pgtooling.PasswordProvider {
+	return pgtooling.NewRefreshingPasswordProvider(provider, time.Minute)
 }
 
 func validateDatabaseAuthOptions(auth databaseAuthOptions) error {
@@ -183,7 +188,12 @@ const (
 type azureCLIPasswordProvider struct{}
 
 func (p azureCLIPasswordProvider) Password(ctx context.Context) (string, error) {
-	return (commandPasswordProvider{command: azureCLITokenCommand}).Password(ctx)
+	token, err := p.Token(ctx)
+	return token.Value, err
+}
+
+func (p azureCLIPasswordProvider) Token(ctx context.Context) (pgtooling.Token, error) {
+	return (commandPasswordProvider{command: azureCLITokenCommand}).Token(ctx)
 }
 
 type azureDefaultCredentialPasswordProvider struct {
@@ -191,24 +201,29 @@ type azureDefaultCredentialPasswordProvider struct {
 }
 
 func (p azureDefaultCredentialPasswordProvider) Password(ctx context.Context) (string, error) {
+	token, err := p.Token(ctx)
+	return token.Value, err
+}
+
+func (p azureDefaultCredentialPasswordProvider) Token(ctx context.Context) (pgtooling.Token, error) {
 	credential := p.credential
 	if credential == nil {
 		var err error
 		credential, err = azidentity.NewDefaultAzureCredential(nil)
 		if err != nil {
-			return "", fmt.Errorf("create Azure default credential: %w", err)
+			return pgtooling.Token{}, fmt.Errorf("create Azure default credential: %w", err)
 		}
 	}
 	token, err := credential.GetToken(ctx, policy.TokenRequestOptions{
 		Scopes: []string{azurePostgresScope},
 	})
 	if err != nil {
-		return "", fmt.Errorf("get Azure PostgreSQL access token: %w", err)
+		return pgtooling.Token{}, fmt.Errorf("get Azure PostgreSQL access token: %w", err)
 	}
 	if strings.TrimSpace(token.Token) == "" {
-		return "", errors.New("azure default credential produced an empty access token")
+		return pgtooling.Token{}, errors.New("azure default credential produced an empty access token")
 	}
-	return token.Token, nil
+	return pgtooling.Token{Value: token.Token, ExpiresAt: token.ExpiresOn}, nil
 }
 
 type awsConfigLoader func(context.Context, string, string) (aws.Config, error)
@@ -225,9 +240,14 @@ type awsIAMPasswordProvider struct {
 }
 
 func (p awsIAMPasswordProvider) Password(ctx context.Context) (string, error) {
+	token, err := p.Token(ctx)
+	return token.Value, err
+}
+
+func (p awsIAMPasswordProvider) Token(ctx context.Context) (pgtooling.Token, error) {
 	target, err := resolvePostgresAuthTarget(p.rawURL)
 	if err != nil {
-		return "", err
+		return pgtooling.Token{}, err
 	}
 	region := strings.TrimSpace(p.region)
 	loadConfig := p.loadConfig
@@ -236,13 +256,13 @@ func (p awsIAMPasswordProvider) Password(ctx context.Context) (string, error) {
 	}
 	cfg, err := loadConfig(ctx, region, strings.TrimSpace(p.profile))
 	if err != nil {
-		return "", err
+		return pgtooling.Token{}, err
 	}
 	if region == "" {
 		region = strings.TrimSpace(cfg.Region)
 	}
 	if region == "" {
-		return "", errors.New("aws region is required for IAM database auth; pass --aws-region or configure AWS_REGION")
+		return pgtooling.Token{}, errors.New("aws region is required for IAM database auth; pass --aws-region or configure AWS_REGION")
 	}
 	credentials := p.credentials
 	if credentials == nil {
@@ -254,12 +274,12 @@ func (p awsIAMPasswordProvider) Password(ctx context.Context) (string, error) {
 	}
 	authToken, err := buildToken(ctx, target.endpoint, region, target.user, credentials)
 	if err != nil {
-		return "", fmt.Errorf("build AWS RDS IAM auth token: %w", err)
+		return pgtooling.Token{}, fmt.Errorf("build AWS RDS IAM auth token: %w", err)
 	}
 	if strings.TrimSpace(authToken) == "" {
-		return "", errors.New("aws rds IAM auth token provider produced an empty token")
+		return pgtooling.Token{}, errors.New("aws rds IAM auth token provider produced an empty token")
 	}
-	return authToken, nil
+	return pgtooling.Token{Value: authToken, ExpiresAt: time.Now().Add(15 * time.Minute)}, nil
 }
 
 func buildAWSAuthToken(ctx context.Context, endpoint, region, user string, credentials aws.CredentialsProvider) (string, error) {
@@ -284,11 +304,21 @@ type awsCLIPasswordProvider struct {
 }
 
 func (p awsCLIPasswordProvider) Password(ctx context.Context) (string, error) {
+	token, err := p.Token(ctx)
+	return token.Value, err
+}
+
+func (p awsCLIPasswordProvider) Token(ctx context.Context) (pgtooling.Token, error) {
 	target, err := resolvePostgresAuthTarget(p.rawURL)
 	if err != nil {
-		return "", err
+		return pgtooling.Token{}, err
 	}
-	return commandPasswordProvider{command: strings.Join(awsCLITokenArgs(target, p.region, p.profile), " ")}.Password(ctx)
+	token, err := (commandPasswordProvider{command: strings.Join(awsCLITokenArgs(target, p.region, p.profile), " ")}).Token(ctx)
+	if err != nil {
+		return pgtooling.Token{}, err
+	}
+	token.ExpiresAt = time.Now().Add(15 * time.Minute)
+	return token, nil
 }
 
 func awsCLITokenArgs(target postgresAuthTarget, region, profile string) []string {
@@ -319,7 +349,12 @@ type gcloudPasswordProvider struct {
 }
 
 func (p gcloudPasswordProvider) Password(ctx context.Context) (string, error) {
-	return commandPasswordProvider{command: strings.Join(gcloudLoginTokenArgs(p.instance, p.applicationDefault), " ")}.Password(ctx)
+	token, err := p.Token(ctx)
+	return token.Value, err
+}
+
+func (p gcloudPasswordProvider) Token(ctx context.Context) (pgtooling.Token, error) {
+	return (commandPasswordProvider{command: strings.Join(gcloudLoginTokenArgs(p.instance, p.applicationDefault), " ")}).Token(ctx)
 }
 
 func gcloudLoginTokenArgs(instance string, applicationDefault bool) []string {
@@ -378,12 +413,17 @@ type commandPasswordProvider struct {
 }
 
 func (p commandPasswordProvider) Password(ctx context.Context) (string, error) {
+	token, err := p.Token(ctx)
+	return token.Value, err
+}
+
+func (p commandPasswordProvider) Token(ctx context.Context) (pgtooling.Token, error) {
 	parts, err := splitCommandLine(p.command)
 	if err != nil {
-		return "", fmt.Errorf("parse token command: %w", err)
+		return pgtooling.Token{}, fmt.Errorf("parse token command: %w", err)
 	}
 	if len(parts) == 0 {
-		return "", errors.New("token command is required")
+		return pgtooling.Token{}, errors.New("token command is required")
 	}
 
 	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...) // #nosec G204 -- command is explicit user CLI input for database token acquisition.
@@ -392,13 +432,13 @@ func (p commandPasswordProvider) Password(ctx context.Context) (string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("run token command: %w", err)
+		return pgtooling.Token{}, fmt.Errorf("run token command: %w", err)
 	}
 	token := strings.TrimSpace(stdout.String())
 	if token == "" {
-		return "", errors.New("token command produced no stdout")
+		return pgtooling.Token{}, errors.New("token command produced no stdout")
 	}
-	return token, nil
+	return pgtooling.Token{Value: token}, nil
 }
 
 func splitCommandLine(command string) ([]string, error) {
