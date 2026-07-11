@@ -17,15 +17,16 @@ import (
 )
 
 type MigrateCmd struct {
+	Plan    MigratePlanCmd    `cmd:"" help:"Print the structured migration plan without writing files."`
 	Apply   MigrateApplyCmd   `cmd:"" help:"Apply pending migrations to a PostgreSQL database."`
 	Check   MigrateCheckCmd   `cmd:"" help:"Validate migration files."`
-	Create  MigrateCreateCmd  `cmd:"" help:"Create a migration file."`
-	Plan    MigratePlanCmd    `cmd:"" help:"Print the structured migration plan without writing files."`
 	Refresh MigrateRefreshCmd `cmd:"" help:"Author a migration that refreshes a materialized view."`
+	Create  MigrateCreateCmd  `cmd:"" help:"Create a migration file."`
 }
 
 type MigrateCreateCmd struct {
 	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
+	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	Dir                        string `help:"Write migration files to this directory. Overrides config migrations.dir." type:"path"`
 	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
 	Name                       string `arg:"" help:"Migration name."`
@@ -89,7 +90,7 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 		AllowDestructive: c.AllowDestructive,
 		RenameDecider:    renameDecider,
 		Interaction:      interaction,
-		FromURL:          c.FromURL, FromURLEnv: c.FromURLEnv, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
+		FromURL:          c.FromURL, FromURLEnv: c.FromURLEnv, FromAuth: c.FromAuth, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
 	}); err != nil {
 		return Exit(1, err)
 	}
@@ -162,6 +163,7 @@ type MigrateCheckCmd struct {
 	Dir                           string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
 	SandboxURL                    string `help:"PostgreSQL URL for replaying migrations into a disposable sandbox database."`
 	SandboxURLEnv                 string `name:"sandbox-url-env" help:"Environment variable containing the sandbox PostgreSQL URL."`
+	SandboxAuth                   string `name:"sandbox-auth" help:"Sandbox database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	SandboxTokenCommand           string `name:"sandbox-token-command" help:"Command that prints a sandbox database auth token to stdout. The token is used as the PostgreSQL password."`
 	SandboxAWSProfile             string `name:"sandbox-aws-profile" help:"AWS profile for sandbox RDS/Aurora IAM database authentication."`
 	SandboxAWSRegion              string `name:"sandbox-aws-region" help:"AWS region for sandbox RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
@@ -198,6 +200,7 @@ func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
 		Dir:                           c.Dir,
 		SandboxURL:                    c.SandboxURL,
 		SandboxURLEnv:                 c.SandboxURLEnv,
+		SandboxAuth:                   c.SandboxAuth,
 		SandboxTokenCommand:           c.SandboxTokenCommand,
 		SandboxAWSProfile:             c.SandboxAWSProfile,
 		SandboxAWSRegion:              c.SandboxAWSRegion,
@@ -226,6 +229,7 @@ type MigrateApplyCmd struct {
 	Runner                 string `help:"Migration runner file format: goose or golang-migrate."`
 	URL                    string `help:"PostgreSQL URL for the target database. Defaults to DATABASE_URL when omitted."`
 	URLEnv                 string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
+	Auth                   string `help:"Database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	TokenCommand           string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the PostgreSQL password."`
 	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
 	AWSRegion              string `name:"aws-region" help:"AWS region for RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
@@ -263,6 +267,7 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 		Runner:                 c.Runner,
 		URL:                    c.URL,
 		URLEnv:                 c.URLEnv,
+		Auth:                   c.Auth,
 		TokenCommand:           c.TokenCommand,
 		AWSProfile:             c.AWSProfile,
 		AWSRegion:              c.AWSRegion,
@@ -294,6 +299,7 @@ type MigratePlanCmd struct {
 	Snapshot                   string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
 	FromURL                    string `name:"from-url" help:"PostgreSQL URL for the source schema. When set, plans from the live database instead of the latest migration snapshot."`
 	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
+	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
 	FromGCloudInstance         string `name:"from-gcloud-instance" help:"Cloud SQL instance ID for source database authentication."`
 	Dir                        string `help:"Migration directory containing the previous migration. Overrides config migrations.dir." type:"path"`
@@ -330,7 +336,7 @@ func (c *MigratePlanCmd) Run(g *GlobalFlags) error {
 		Dir:      c.Dir,
 		Runner:   c.Runner,
 		Snapshot: c.Snapshot,
-		FromURL:  c.FromURL, FromURLEnv: c.FromURLEnv, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
+		FromURL:  c.FromURL, FromURLEnv: c.FromURLEnv, FromAuth: c.FromAuth, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
 	})
 	if err != nil {
 		return Exit(1, err)

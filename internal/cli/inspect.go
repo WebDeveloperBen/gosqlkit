@@ -6,6 +6,7 @@ type InspectCmd struct {
 	Config                 string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	URL                    string `help:"Database URL to inspect. Defaults to DATABASE_URL when omitted."`
 	URLEnv                 string `name:"url-env" help:"Environment variable containing the database URL."`
+	Auth                   string `help:"Database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	TokenCommand           string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the database password."`
 	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
 	AWSRegion              string `name:"aws-region" help:"AWS region for RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
@@ -42,6 +43,7 @@ func (c *InspectCmd) Run(g *GlobalFlags) error {
 	if _, err := app.InspectWithConfig(config, app.InspectOptions{
 		URL:                    c.URL,
 		URLEnv:                 c.URLEnv,
+		Auth:                   c.Auth,
 		TokenCommand:           c.TokenCommand,
 		AWSProfile:             c.AWSProfile,
 		AWSRegion:              c.AWSRegion,

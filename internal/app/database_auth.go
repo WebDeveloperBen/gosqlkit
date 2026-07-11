@@ -21,6 +21,7 @@ import (
 )
 
 type databaseAuthOptions struct {
+	Auth                   string
 	TokenCommand           string
 	AWSProfile             string
 	AWSRegion              string
@@ -32,6 +33,14 @@ type databaseAuthOptions struct {
 	GCloudADCToken         bool
 	GCloudToken            bool
 }
+
+const (
+	databaseAuthPassword     = "password"
+	databaseAuthTokenCommand = "token-command"
+	databaseAuthAzureEntra   = "azure-entra"
+	databaseAuthAWSIAM       = "aws-iam"
+	databaseAuthGCPIAM       = "gcp-iam"
+)
 
 func postgresConnectionOptions(rawURL string, auth databaseAuthOptions) pgtooling.ConnectionOptions {
 	return pgtooling.ConnectionOptions{
@@ -66,6 +75,56 @@ func databasePasswordProvider(rawURL string, auth databaseAuthOptions) pgtooling
 }
 
 func validateDatabaseAuthOptions(auth databaseAuthOptions) error {
+	mode := strings.TrimSpace(auth.Auth)
+	if mode != "" {
+		if databaseAuthFlagCount(auth) != 0 {
+			return errors.New("--auth cannot be combined with legacy database token provider flags")
+		}
+		switch mode {
+		case databaseAuthPassword:
+			if strings.TrimSpace(auth.AWSProfile) != "" || strings.TrimSpace(auth.AWSRegion) != "" || strings.TrimSpace(auth.GCloudInstance) != "" {
+				return errors.New("--auth password cannot be combined with provider-specific authentication options")
+			}
+		case databaseAuthTokenCommand:
+			if strings.TrimSpace(auth.TokenCommand) == "" {
+				return errors.New("--auth token-command requires --token-command")
+			}
+		case databaseAuthAzureEntra:
+			if strings.TrimSpace(auth.TokenCommand) != "" || strings.TrimSpace(auth.AWSProfile) != "" || strings.TrimSpace(auth.AWSRegion) != "" || strings.TrimSpace(auth.GCloudInstance) != "" {
+				return errors.New("--auth azure-entra cannot be combined with other provider-specific authentication options")
+			}
+		case databaseAuthAWSIAM:
+			if strings.TrimSpace(auth.TokenCommand) != "" || strings.TrimSpace(auth.GCloudInstance) != "" {
+				return errors.New("--auth aws-iam cannot be combined with --gcloud-instance")
+			}
+		case databaseAuthGCPIAM:
+			if strings.TrimSpace(auth.TokenCommand) != "" || strings.TrimSpace(auth.AWSProfile) != "" || strings.TrimSpace(auth.AWSRegion) != "" {
+				return errors.New("--auth gcp-iam cannot be combined with AWS authentication options")
+			}
+		default:
+			return fmt.Errorf("unsupported database auth mode %q; use password, token-command, azure-entra, aws-iam, or gcp-iam", mode)
+		}
+		return nil
+	}
+
+	if strings.TrimSpace(auth.AWSProfile) != "" || strings.TrimSpace(auth.AWSRegion) != "" {
+		if !auth.AWSCLIToken && !auth.AWSIAMToken {
+			return errors.New("AWS authentication options require --auth aws-iam or an AWS token provider flag")
+		}
+	}
+	if strings.TrimSpace(auth.GCloudInstance) != "" && !auth.GCloudToken && !auth.GCloudADCToken {
+		return errors.New("--gcloud-instance requires --auth gcp-iam or a gcloud token provider flag")
+	}
+	if strings.TrimSpace(auth.TokenCommand) == "" && auth.Auth == databaseAuthTokenCommand {
+		return errors.New("--auth token-command requires --token-command")
+	}
+	if databaseAuthProviderCount(auth) > 1 {
+		return errors.New("only one database token provider can be configured")
+	}
+	return nil
+}
+
+func databaseAuthProviderCount(auth databaseAuthOptions) int {
 	count := 0
 	if strings.TrimSpace(auth.TokenCommand) != "" {
 		count++
@@ -88,10 +147,32 @@ func validateDatabaseAuthOptions(auth databaseAuthOptions) error {
 	if auth.GCloudADCToken {
 		count++
 	}
-	if count > 1 {
-		return errors.New("only one database token provider can be configured")
+	return count
+}
+
+func databaseAuthFlagCount(auth databaseAuthOptions) int {
+	count := 0
+	for _, enabled := range []bool{auth.AzureCLIToken, auth.AzureDefaultCredential, auth.AWSCLIToken, auth.AWSIAMToken, auth.GCloudToken, auth.GCloudADCToken} {
+		if enabled {
+			count++
+		}
 	}
-	return nil
+	return count
+}
+
+func normaliseDatabaseAuthOptions(auth databaseAuthOptions) (databaseAuthOptions, error) {
+	if err := validateDatabaseAuthOptions(auth); err != nil {
+		return databaseAuthOptions{}, err
+	}
+	switch strings.TrimSpace(auth.Auth) {
+	case databaseAuthAzureEntra:
+		auth.AzureDefaultCredential = true
+	case databaseAuthAWSIAM:
+		auth.AWSIAMToken = true
+	case databaseAuthGCPIAM:
+		auth.GCloudADCToken = true
+	}
+	return auth, nil
 }
 
 const (

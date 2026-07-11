@@ -19,6 +19,7 @@ type DriftCheckOptions struct {
 	inspectPG              driftInspectFunc
 	URL                    string
 	URLEnv                 string
+	Auth                   string
 	TokenCommand           string
 	AWSProfile             string
 	AWSRegion              string
@@ -53,6 +54,7 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 		return nil, err
 	}
 	auth := databaseAuthOptions{
+		Auth:                   opts.Auth,
 		TokenCommand:           opts.TokenCommand,
 		AWSProfile:             opts.AWSProfile,
 		AWSRegion:              opts.AWSRegion,
@@ -64,7 +66,8 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 		GCloudADCToken:         opts.GCloudADCToken,
 		GCloudToken:            opts.GCloudToken,
 	}
-	if err := validateDatabaseAuthOptions(auth); err != nil {
+	auth, err = normaliseDatabaseAuthOptions(auth)
+	if err != nil {
 		return nil, err
 	}
 

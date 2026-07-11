@@ -33,6 +33,7 @@ type MigrateCreateOptions struct {
 	FromAWSRegion              string
 	Interaction                InteractionMode
 	FromURLEnv                 string
+	FromAuth                   string
 	FromTokenCommand           string
 	NoDown                     bool
 	AllowDestructive           bool
@@ -80,6 +81,7 @@ type MigrateCheckOptions struct {
 	Dir                           string
 	SandboxURL                    string
 	SandboxURLEnv                 string
+	SandboxAuth                   string
 	SandboxTokenCommand           string
 	SandboxAWSProfile             string
 	SandboxAWSRegion              string
@@ -113,6 +115,7 @@ type MigrateApplyOptions struct {
 	Runner                 string
 	URL                    string
 	URLEnv                 string
+	Auth                   string
 	TokenCommand           string
 	AWSProfile             string
 	AWSRegion              string
@@ -142,6 +145,7 @@ type MigratePlanOptions struct {
 	Snapshot                   string
 	FromURL                    string
 	FromURLEnv                 string
+	FromAuth                   string
 	FromTokenCommand           string
 	FromAWSProfile             string
 	FromAWSRegion              string
@@ -252,7 +256,7 @@ func plannedMigration(config *Config, dir string, opts MigrateCreateOptions) (mi
 	}
 	if hasLiveMigrationSource(opts.FromURL, opts.FromURLEnv) {
 		source, sourceID, err := migratePlanSourceSnapshot(config, MigratePlanOptions{
-			inspectPG: opts.inspectPG, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
+			inspectPG: opts.inspectPG, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromAuth: opts.FromAuth, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
 		})
 		if err != nil {
 			return migrate.Plan{}, err
@@ -401,6 +405,7 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 		return nil, err
 	}
 	sandboxAuth := databaseAuthOptions{
+		Auth:                   opts.SandboxAuth,
 		TokenCommand:           opts.SandboxTokenCommand,
 		AWSProfile:             opts.SandboxAWSProfile,
 		AWSRegion:              opts.SandboxAWSRegion,
@@ -412,7 +417,8 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 		GCloudADCToken:         opts.SandboxGCloudADCToken,
 		GCloudToken:            opts.SandboxGCloudToken,
 	}
-	if err := validateDatabaseAuthOptions(sandboxAuth); err != nil {
+	sandboxAuth, err = normaliseDatabaseAuthOptions(sandboxAuth)
+	if err != nil {
 		return nil, err
 	}
 	if sandboxURL != "" {
@@ -460,6 +466,7 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 		return nil, err
 	}
 	auth := databaseAuthOptions{
+		Auth:                   opts.Auth,
 		TokenCommand:           opts.TokenCommand,
 		AWSProfile:             opts.AWSProfile,
 		AWSRegion:              opts.AWSRegion,
@@ -471,7 +478,8 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 		GCloudADCToken:         opts.GCloudADCToken,
 		GCloudToken:            opts.GCloudToken,
 	}
-	if err := validateDatabaseAuthOptions(auth); err != nil {
+	auth, err = normaliseDatabaseAuthOptions(auth)
+	if err != nil {
 		return nil, err
 	}
 
@@ -621,8 +629,9 @@ func migratePlanSourceSnapshot(config *Config, opts MigratePlanOptions) ([]byte,
 		}
 		return latest.Metadata.TargetSnapshot, latest.Metadata.ToSnapshotID, nil
 	}
-	auth := databaseAuthOptions{TokenCommand: opts.FromTokenCommand, AWSProfile: opts.FromAWSProfile, AWSRegion: opts.FromAWSRegion, GCloudInstance: opts.FromGCloudInstance, AzureCLIToken: opts.FromAzureCLIToken, AzureDefaultCredential: opts.FromAzureDefaultCredential, AWSCLIToken: opts.FromAWSCLIToken, AWSIAMToken: opts.FromAWSIAMToken, GCloudADCToken: opts.FromGCloudADCToken, GCloudToken: opts.FromGCloudToken}
-	if err := validateDatabaseAuthOptions(auth); err != nil {
+	auth := databaseAuthOptions{Auth: opts.FromAuth, TokenCommand: opts.FromTokenCommand, AWSProfile: opts.FromAWSProfile, AWSRegion: opts.FromAWSRegion, GCloudInstance: opts.FromGCloudInstance, AzureCLIToken: opts.FromAzureCLIToken, AzureDefaultCredential: opts.FromAzureDefaultCredential, AWSCLIToken: opts.FromAWSCLIToken, AWSIAMToken: opts.FromAWSIAMToken, GCloudADCToken: opts.FromGCloudADCToken, GCloudToken: opts.FromGCloudToken}
+	auth, err = normaliseDatabaseAuthOptions(auth)
+	if err != nil {
 		return nil, "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

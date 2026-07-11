@@ -386,6 +386,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 ### Slice 7: Auth, Apply, and Runner Expansion
 
 - `[x]` Provider-neutral auth interface for tooling database connections.
+- `[x]` Shared `--auth` mode selection for inspect, live-source planning and migration authoring, sandbox replay, migration apply, and drift checks.
 - `[x]` Password and environment URL auth.
 - `[x]` Custom token command auth.
 - `[~]` Azure Entra token auth.

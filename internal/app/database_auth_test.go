@@ -83,6 +83,77 @@ func TestValidateDatabaseAuthOptionsRejectsMultipleTokenProviders(t *testing.T) 
 	}
 }
 
+func TestNormaliseDatabaseAuthOptions(t *testing.T) {
+	tests := []struct {
+		check func(*testing.T, databaseAuthOptions)
+		name  string
+		auth  databaseAuthOptions
+	}{
+		{
+			name: "password",
+			auth: databaseAuthOptions{Auth: databaseAuthPassword},
+		},
+		{
+			name: "token command",
+			auth: databaseAuthOptions{Auth: databaseAuthTokenCommand, TokenCommand: "print-token"},
+		},
+		{
+			name: "azure entra",
+			auth: databaseAuthOptions{Auth: databaseAuthAzureEntra},
+			check: func(t *testing.T, got databaseAuthOptions) {
+				t.Helper()
+				if !got.AzureDefaultCredential {
+					t.Fatal("AzureDefaultCredential = false, want true")
+				}
+			},
+		},
+		{
+			name: "aws iam",
+			auth: databaseAuthOptions{Auth: databaseAuthAWSIAM, AWSRegion: "ap-southeast-2"},
+			check: func(t *testing.T, got databaseAuthOptions) {
+				t.Helper()
+				if !got.AWSIAMToken {
+					t.Fatal("AWSIAMToken = false, want true")
+				}
+			},
+		},
+		{
+			name: "gcp iam",
+			auth: databaseAuthOptions{Auth: databaseAuthGCPIAM, GCloudInstance: "project:region:instance"},
+			check: func(t *testing.T, got databaseAuthOptions) {
+				t.Helper()
+				if !got.GCloudADCToken {
+					t.Fatal("GCloudADCToken = false, want true")
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normaliseDatabaseAuthOptions(tt.auth)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.check != nil {
+				tt.check(t, got)
+			}
+		})
+	}
+}
+
+func TestNormaliseDatabaseAuthOptionsRejectsInvalidModes(t *testing.T) {
+	for _, auth := range []databaseAuthOptions{
+		{Auth: "unknown"},
+		{Auth: databaseAuthTokenCommand},
+		{Auth: databaseAuthAWSIAM, AzureCLIToken: true},
+		{Auth: databaseAuthPassword, AWSRegion: "ap-southeast-2"},
+	} {
+		if _, err := normaliseDatabaseAuthOptions(auth); err == nil {
+			t.Fatalf("normaliseDatabaseAuthOptions(%+v) error = nil", auth)
+		}
+	}
+}
+
 func TestAzureDefaultCredentialPasswordProviderRequestsPostgresScope(t *testing.T) {
 	credential := &fakeAzureCredential{accessValue: "azure-sdk-access"}
 	password, err := (azureDefaultCredentialPasswordProvider{credential: credential}).Password(context.Background())

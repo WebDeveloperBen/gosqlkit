@@ -231,6 +231,10 @@ sqlc generate
   and quiet output modes for drift and migrate status/apply commands
 - Provider-neutral token-as-password auth with `--token-command` /
   `--sandbox-token-command` for managed database workflows
+- Shared `--auth password|token-command|azure-entra|aws-iam|gcp-iam` mode
+  selection, with the existing provider-specific flags retained as compatible
+  aliases; use `--from-auth` for live migration sources and `--sandbox-auth`
+  for sandbox replay
 - First-class Azure CLI token acquisition with `--azure-cli-token` and
   `--sandbox-azure-cli-token` for Azure Database for PostgreSQL Entra auth
 - Azure SDK `DefaultAzureCredential` support with `--azure-default-credential`
