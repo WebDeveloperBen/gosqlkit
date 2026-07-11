@@ -65,7 +65,7 @@ func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error)
 		if config.TLSConfig == nil || slices.ContainsFunc(config.Fallbacks, func(fallback *pgconn.FallbackConfig) bool {
 			return fallback.TLSConfig == nil
 		}) {
-			return nil, errors.New("Cloud SQL IAM database authentication requires TLS; set sslmode=require or use --cloud-sql-connector")
+			return nil, errors.New("cloud SQL IAM database authentication requires TLS; set sslmode=require or use --cloud-sql-connector")
 		}
 	}
 	if opts.CloudSQLIAMUser {

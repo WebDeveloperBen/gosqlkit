@@ -66,6 +66,28 @@ func TestRunVersionExitsZero(t *testing.T) {
 	}
 }
 
+func TestRunCompletionSupportsShells(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		t.Run(shell, func(t *testing.T) {
+			var stdout bytes.Buffer
+			code, err := run([]string{"completion", shell}, &stdout, nil)
+			if code != 0 || err != nil {
+				t.Fatalf("completion %s: code=%d err=%v", shell, code, err)
+			}
+			if !strings.Contains(stdout.String(), "gosqlkit") {
+				t.Fatalf("completion %s output missing command name", shell)
+			}
+		})
+	}
+}
+
+func TestRunCompletionRejectsUnknownShell(t *testing.T) {
+	code, err := runWithRecover(t, []string{"completion", "tcsh"})
+	if code != 1 || err == nil || !strings.Contains(err.Error(), "unsupported shell") {
+		t.Fatalf("completion tcsh: code=%d err=%v", code, err)
+	}
+}
+
 func TestRunUnknownCommandExitsTwo(t *testing.T) {
 	code, _ := runWithRecover(t, []string{"unknown-cmd"})
 	if code != 2 {

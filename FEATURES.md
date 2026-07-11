@@ -533,7 +533,7 @@ Other provider requirement:
 - `[x]` CI command for database drift (`gosqlkit ci database`).
 - `[x]` Machine-readable JSON output for commands.
 - `[x]` Quiet output mode for scripts.
-- `[ ]` Shell completion.
+- `[x]` Shell completion for bash, zsh, fish, and PowerShell.
 
 ## Validation
 
