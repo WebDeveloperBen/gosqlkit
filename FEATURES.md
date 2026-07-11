@@ -265,13 +265,18 @@ Drizzle's serializer models schema as a structured snapshot before diffing. `gos
 - `[x]` Table metadata map.
 - `[x]` Column metadata map.
 - `[x]` Schema metadata map.
+- `[x]` View metadata map.
+- `[x]` Role metadata map.
+- `[x]` Function metadata map.
+- `[x]` Trigger metadata map.
+- `[x]` Policy metadata map.
 - `[x]` Stable object keys for schema-qualified names.
 - `[x]` Embedded target snapshots in generated migration metadata.
 - `[x]` Squashed/normalised representation for diffing.
 - `[x]` Deterministic serialisation to JSON.
 - `[x]` Diff input from current database introspection.
 - `[x]` Diff input from generated desired snapshot.
-- `[~]` Drift check from database to generated schema.
+- `[x]` Drift check from database to generated schema.
 - `[x]` Rename annotations for tables.
 - `[x]` Rename annotations for columns.
 - `[x]` Rename annotations for indexes and constraints.
@@ -288,7 +293,8 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 
 - `[x]` Baseline goose migration generation from the current schema.
 - `[x]` Empty goose migration generation for manual SQL.
-- `[~]` Conservative additive PostgreSQL diffs from embedded target snapshots.
+- `[x]` PostgreSQL snapshot diffs for additive, destructive, rename, alter,
+  and fail-closed replacement changes.
 - `[x]` Embedded target snapshot metadata in generated migrations.
 - `[x]` Migration directory validation for filenames, metadata, goose
   annotations, target snapshot IDs, and adjacent lineage.
@@ -301,7 +307,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 ### Slice 2: Structured Planner IR
 
 - `[x]` Planner changes include stable object kind and object key.
-- `[~]` Planner changes include create, drop, rename, alter, and replace
+- `[x]` Planner changes include create, drop, rename, alter, and replace
   operations.
 - `[x]` Planner changes include dependency metadata.
 - `[x]` Planner changes include reversibility metadata.
@@ -374,6 +380,9 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
   extensions, roles, enums, composite types, domains, sequences, functions,
   tables, columns, comments, RLS flags, table constraints, standalone indexes,
   policies, triggers, views, and materialized views.
+- `[x]` PostgreSQL introspection and drift projection for grants, collations,
+  tablespaces, partition metadata, extension versions, and extension-owned
+  objects.
 - `[x]` Sandbox replay of committed migrations.
 - `[x]` Replay result comparison against the latest embedded target snapshot.
 - `[x]` `gosqlkit migrate check --sandbox-url ...`.
@@ -389,7 +398,7 @@ must keep unsupported changes fail-closed rather than writing partial SQL.
 - `[x]` Shared `--auth` mode selection for inspect, live-source planning and migration authoring, sandbox replay, migration apply, and drift checks.
 - `[x]` Password and environment URL auth.
 - `[x]` Custom token command auth.
-- `[~]` Azure Entra token auth.
+- `[x]` Azure Entra token auth.
 - `[x]` AWS IAM token auth.
 - `[x]` GCP IAM token auth.
 - `[x]` Credential and token redaction in diagnostics.
@@ -407,28 +416,31 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Connect using password authentication.
 - `[x]` Connect using SSL/TLS options required by managed PostgreSQL providers.
 - `[x]` Connect using token-as-password authentication.
-- `[x]` Support token providers through an expiry-aware, refreshable token callback.
+- `[~]` Support token providers through an expiry-aware, refreshable token
+  interface for reconnect-capable tooling.
 - `[~]` Support OAuth2 access-token providers.
-- `[~]` Support cloud-specific signed database auth tokens.
-- `[~]` Support Azure Database for PostgreSQL Microsoft Entra authentication.
+- `[x]` Support AWS RDS and Aurora PostgreSQL signed database auth tokens.
+- `[x]` Support Azure Database for PostgreSQL Microsoft Entra authentication.
 - `[x]` Support Azure CLI token acquisition for local development.
 - `[x]` Support Azure managed identity/service principal token acquisition for CI and hosted workloads.
 - `[x]` Support AWS RDS and Aurora PostgreSQL IAM database authentication.
 - `[x]` Support AWS SDK/credential-chain token generation.
 - `[x]` Support AWS CLI token generation for local development.
 - `[x]` Support Google Cloud SQL for PostgreSQL IAM database authentication.
-- `[ ]` Support Google Cloud SQL connector based automatic IAM auth.
+- `[x]` Support Google Cloud SQL Go Connector based automatic IAM auth.
 - `[x]` Support Google `gcloud` OAuth2 token acquisition for local development.
 - `[x]` Support custom token command execution for other providers.
 - `[ ]` Support custom token-provider plugins/interfaces for providers not built in.
 - `[x]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
 - `[x]` Redact credentials and tokens in diagnostics.
 - `[x]` Acquire short-lived tokens immediately before opening database connections.
-- `[x]` Refresh expiring tokens before reconnecting during long-running introspection or diff operations.
+- `[~]` Refresh expiring tokens before reconnecting during long-running
+  introspection or diff operations.
 - `[x]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
 - `[ ]` Support provider-specific username formats.
 - `[ ]` Support provider-specific TLS/SSL requirements.
-- `[ ]` Support direct connections and proxy/connector-mediated connections.
+- `[x]` Support direct connections, externally managed Cloud SQL Auth Proxy
+  endpoints, and native Cloud SQL Go Connector connections.
 - `[x]` Keep database auth plumbing isolated from the schema DSL and renderer.
 
 Azure-specific requirement:
@@ -468,10 +480,10 @@ Other provider requirement:
 - `[x]` `gosqlkit inspect` database introspection to snapshot JSON.
 - `[x]` `gosqlkit inspect --url ...`.
 - `[x]` `gosqlkit inspect` using password/database URL auth.
-- `[ ]` `gosqlkit inspect --auth token`.
-- `[ ]` `gosqlkit inspect --auth azure-entra`.
-- `[ ]` `gosqlkit inspect --auth aws-iam`.
-- `[ ]` `gosqlkit inspect --auth gcp-iam`.
+- `[x]` `gosqlkit inspect --auth token-command`.
+- `[x]` `gosqlkit inspect --auth azure-entra`.
+- `[x]` `gosqlkit inspect --auth aws-iam`.
+- `[x]` `gosqlkit inspect --auth gcp-iam`.
 - `[x]` `gosqlkit inspect --token-command ...`.
 - `[x]` `gosqlkit snapshot` for deterministic snapshot output.
 - `[x]` `gosqlkit snapshot --prev` for previous snapshot ID tracking.
@@ -486,7 +498,7 @@ Other provider requirement:
   explicit, risk-flagged migration that repopulates a materialized view.
 - `[x]` `gosqlkit migrate plan` to print the structured migration plan without
   writing any files (`--json` for machine-readable output).
-- `[~]` `gosqlkit migrate check`.
+- `[x]` `gosqlkit migrate check`.
 - `[x]` `gosqlkit migrate check --sandbox-url ...`.
 - `[x]` `gosqlkit migrate apply --url ...`.
 - `[x]` `gosqlkit drift check --url ...`.
@@ -507,8 +519,10 @@ Other provider requirement:
 - `[x]` Script-safe prompt bypass for CI, keeping `--json` and `--quiet`
   non-interactive.
 - `[x]` Migration creation support for token-authenticated source databases.
-- `[ ]` Migration creation support for provider-specific auth on both source and target inputs.
-- `[~]` Goose-compatible migration file output.
+- `[x]` Provider-specific auth for live migration sources, sandbox replay, and
+  migration-apply targets through `--from-auth`, `--sandbox-auth`, and
+  `--auth`.
+- `[x]` Goose-compatible migration file output.
 - `[x]` CI command for committed schema drift (`gosqlkit ci schema`).
 - `[x]` CI command for database drift (`gosqlkit ci database`).
 - `[x]` Machine-readable JSON output for commands.

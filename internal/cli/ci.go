@@ -22,6 +22,7 @@ type CISchemaCmd struct {
 	SandboxAWSProfile             string `name:"sandbox-aws-profile" help:"AWS profile for sandbox RDS/Aurora IAM database authentication."`
 	SandboxAWSRegion              string `name:"sandbox-aws-region" help:"AWS region for sandbox RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
 	SandboxGCloudInstance         string `name:"sandbox-gcloud-instance" help:"Cloud SQL instance ID passed to gcloud sql generate-login-token for sandbox auth."`
+	SandboxCloudSQLConnector      bool   `name:"sandbox-cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM authentication for the sandbox database."`
 	SandboxAzureCLIToken          bool   `name:"sandbox-azure-cli-token" help:"Use Azure CLI to acquire an Azure Database for PostgreSQL access token as the sandbox database password."`
 	SandboxAzureDefaultCredential bool   `name:"sandbox-azure-default-credential" help:"Use Azure SDK DefaultAzureCredential to acquire an Azure Database for PostgreSQL access token as the sandbox database password."`
 	SandboxAWSCLIToken            bool   `name:"sandbox-aws-cli-token" help:"Use AWS CLI to generate an RDS/Aurora PostgreSQL IAM auth token as the sandbox database password."`
@@ -46,6 +47,7 @@ func (c *CISchemaCmd) Run(g *GlobalFlags) error {
 		SandboxAWSProfile:             c.SandboxAWSProfile,
 		SandboxAWSRegion:              c.SandboxAWSRegion,
 		SandboxGCloudInstance:         c.SandboxGCloudInstance,
+		SandboxCloudSQLConnector:      c.SandboxCloudSQLConnector,
 		SandboxAzureCLIToken:          c.SandboxAzureCLIToken,
 		SandboxAzureDefaultCredential: c.SandboxAzureDefaultCredential,
 		SandboxAWSCLIToken:            c.SandboxAWSCLIToken,
@@ -75,6 +77,7 @@ type CIDatabaseCmd struct {
 	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
 	AWSRegion              string `name:"aws-region" help:"AWS region for RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
 	GCloudInstance         string `name:"gcloud-instance" help:"Cloud SQL instance ID passed to gcloud sql generate-login-token."`
+	CloudSQLConnector      bool   `name:"cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM database authentication."`
 	AzureCLIToken          bool   `name:"azure-cli-token" help:"Use Azure CLI to acquire an Azure Database for PostgreSQL access token as the database password."`
 	AzureDefaultCredential bool   `name:"azure-default-credential" help:"Use Azure SDK DefaultAzureCredential to acquire an Azure Database for PostgreSQL access token as the database password."`
 	AWSCLIToken            bool   `name:"aws-cli-token" help:"Use AWS CLI to generate an RDS/Aurora PostgreSQL IAM auth token as the database password."`
@@ -98,6 +101,7 @@ func (c *CIDatabaseCmd) Run(g *GlobalFlags) error {
 		AWSProfile:             c.AWSProfile,
 		AWSRegion:              c.AWSRegion,
 		GCloudInstance:         c.GCloudInstance,
+		CloudSQLConnector:      c.CloudSQLConnector,
 		AzureCLIToken:          c.AzureCLIToken,
 		AzureDefaultCredential: c.AzureDefaultCredential,
 		AWSCLIToken:            c.AWSCLIToken,

@@ -24,17 +24,18 @@ type MigrateCreateOptions struct {
 	CreatedAt                  time.Time
 	inspectPG                  driftInspectFunc
 	RenameDecider              RenameDecisionFunc
-	FromURL                    string
-	FromAWSProfile             string
+	FromURLEnv                 string
+	FromTokenCommand           string
 	Dir                        string
 	Runner                     string
 	FromGCloudInstance         string
+	FromAWSProfile             string
 	Name                       string
 	FromAWSRegion              string
 	Interaction                InteractionMode
-	FromURLEnv                 string
+	FromURL                    string
 	FromAuth                   string
-	FromTokenCommand           string
+	FromCloudSQLConnector      bool
 	NoDown                     bool
 	AllowDestructive           bool
 	Empty                      bool
@@ -86,6 +87,7 @@ type MigrateCheckOptions struct {
 	SandboxAWSProfile             string
 	SandboxAWSRegion              string
 	SandboxGCloudInstance         string
+	SandboxCloudSQLConnector      bool
 	SandboxAzureCLIToken          bool
 	SandboxAzureDefaultCredential bool
 	SandboxAWSCLIToken            bool
@@ -120,6 +122,7 @@ type MigrateApplyOptions struct {
 	AWSProfile             string
 	AWSRegion              string
 	GCloudInstance         string
+	CloudSQLConnector      bool
 	AzureCLIToken          bool
 	AzureDefaultCredential bool
 	AWSCLIToken            bool
@@ -150,6 +153,7 @@ type MigratePlanOptions struct {
 	FromAWSProfile             string
 	FromAWSRegion              string
 	FromGCloudInstance         string
+	FromCloudSQLConnector      bool
 	FromAzureCLIToken          bool
 	FromAzureDefaultCredential bool
 	FromAWSCLIToken            bool
@@ -256,7 +260,7 @@ func plannedMigration(config *Config, dir string, opts MigrateCreateOptions) (mi
 	}
 	if hasLiveMigrationSource(opts.FromURL, opts.FromURLEnv) {
 		source, sourceID, err := migratePlanSourceSnapshot(config, MigratePlanOptions{
-			inspectPG: opts.inspectPG, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromAuth: opts.FromAuth, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
+			inspectPG: opts.inspectPG, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromAuth: opts.FromAuth, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromCloudSQLConnector: opts.FromCloudSQLConnector, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
 		})
 		if err != nil {
 			return migrate.Plan{}, err
@@ -410,6 +414,7 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 		AWSProfile:             opts.SandboxAWSProfile,
 		AWSRegion:              opts.SandboxAWSRegion,
 		GCloudInstance:         opts.SandboxGCloudInstance,
+		CloudSQLConnector:      opts.SandboxCloudSQLConnector,
 		AzureCLIToken:          opts.SandboxAzureCLIToken,
 		AzureDefaultCredential: opts.SandboxAzureDefaultCredential,
 		AWSCLIToken:            opts.SandboxAWSCLIToken,
@@ -471,6 +476,7 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 		AWSProfile:             opts.AWSProfile,
 		AWSRegion:              opts.AWSRegion,
 		GCloudInstance:         opts.GCloudInstance,
+		CloudSQLConnector:      opts.CloudSQLConnector,
 		AzureCLIToken:          opts.AzureCLIToken,
 		AzureDefaultCredential: opts.AzureDefaultCredential,
 		AWSCLIToken:            opts.AWSCLIToken,
@@ -629,7 +635,7 @@ func migratePlanSourceSnapshot(config *Config, opts MigratePlanOptions) ([]byte,
 		}
 		return latest.Metadata.TargetSnapshot, latest.Metadata.ToSnapshotID, nil
 	}
-	auth := databaseAuthOptions{Auth: opts.FromAuth, TokenCommand: opts.FromTokenCommand, AWSProfile: opts.FromAWSProfile, AWSRegion: opts.FromAWSRegion, GCloudInstance: opts.FromGCloudInstance, AzureCLIToken: opts.FromAzureCLIToken, AzureDefaultCredential: opts.FromAzureDefaultCredential, AWSCLIToken: opts.FromAWSCLIToken, AWSIAMToken: opts.FromAWSIAMToken, GCloudADCToken: opts.FromGCloudADCToken, GCloudToken: opts.FromGCloudToken}
+	auth := databaseAuthOptions{Auth: opts.FromAuth, TokenCommand: opts.FromTokenCommand, AWSProfile: opts.FromAWSProfile, AWSRegion: opts.FromAWSRegion, GCloudInstance: opts.FromGCloudInstance, CloudSQLConnector: opts.FromCloudSQLConnector, AzureCLIToken: opts.FromAzureCLIToken, AzureDefaultCredential: opts.FromAzureDefaultCredential, AWSCLIToken: opts.FromAWSCLIToken, AWSIAMToken: opts.FromAWSIAMToken, GCloudADCToken: opts.FromGCloudADCToken, GCloudToken: opts.FromGCloudToken}
 	auth, err = normaliseDatabaseAuthOptions(auth)
 	if err != nil {
 		return nil, "", err

@@ -25,17 +25,18 @@ type MigrateCmd struct {
 }
 
 type MigrateCreateCmd struct {
-	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
-	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
+	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
+	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`
 	Dir                        string `help:"Write migration files to this directory. Overrides config migrations.dir." type:"path"`
 	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
 	Name                       string `arg:"" help:"Migration name."`
 	FromGCloudInstance         string `name:"from-gcloud-instance" help:"Cloud SQL instance ID for source database authentication."`
+	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
 	Config                     string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`
-	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
-	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
 	FromURL                    string `name:"from-url" help:"PostgreSQL URL for the source schema. When set, creates a migration from the live database to the desired schema."`
+	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
+	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
+	FromCloudSQLConnector      bool   `name:"from-cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM authentication for the source database."`
 	NoDown                     bool   `help:"Omit the down migration section."`
 	NoInteractive              bool   `name:"no-interactive" help:"Disable prompts and fail closed on ambiguous migrations."`
 	FromAzureCLIToken          bool   `name:"from-azure-cli-token" help:"Use Azure CLI to acquire a source database access token."`
@@ -90,7 +91,7 @@ func (c *MigrateCreateCmd) Run(g *GlobalFlags) error {
 		AllowDestructive: c.AllowDestructive,
 		RenameDecider:    renameDecider,
 		Interaction:      interaction,
-		FromURL:          c.FromURL, FromURLEnv: c.FromURLEnv, FromAuth: c.FromAuth, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
+		FromURL:          c.FromURL, FromURLEnv: c.FromURLEnv, FromAuth: c.FromAuth, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromCloudSQLConnector: c.FromCloudSQLConnector, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
 	}); err != nil {
 		return Exit(1, err)
 	}
@@ -168,6 +169,7 @@ type MigrateCheckCmd struct {
 	SandboxAWSProfile             string `name:"sandbox-aws-profile" help:"AWS profile for sandbox RDS/Aurora IAM database authentication."`
 	SandboxAWSRegion              string `name:"sandbox-aws-region" help:"AWS region for sandbox RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
 	SandboxGCloudInstance         string `name:"sandbox-gcloud-instance" help:"Cloud SQL instance ID passed to gcloud sql generate-login-token for sandbox auth."`
+	SandboxCloudSQLConnector      bool   `name:"sandbox-cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM authentication for the sandbox database."`
 	SandboxAzureCLIToken          bool   `name:"sandbox-azure-cli-token" help:"Use Azure CLI to acquire an Azure Database for PostgreSQL access token as the sandbox database password."`
 	SandboxAzureDefaultCredential bool   `name:"sandbox-azure-default-credential" help:"Use Azure SDK DefaultAzureCredential to acquire an Azure Database for PostgreSQL access token as the sandbox database password."`
 	SandboxAWSCLIToken            bool   `name:"sandbox-aws-cli-token" help:"Use AWS CLI to generate an RDS/Aurora PostgreSQL IAM auth token as the sandbox database password."`
@@ -205,6 +207,7 @@ func (c *MigrateCheckCmd) Run(g *GlobalFlags) error {
 		SandboxAWSProfile:             c.SandboxAWSProfile,
 		SandboxAWSRegion:              c.SandboxAWSRegion,
 		SandboxGCloudInstance:         c.SandboxGCloudInstance,
+		SandboxCloudSQLConnector:      c.SandboxCloudSQLConnector,
 		SandboxAzureCLIToken:          c.SandboxAzureCLIToken,
 		SandboxAzureDefaultCredential: c.SandboxAzureDefaultCredential,
 		SandboxAWSCLIToken:            c.SandboxAWSCLIToken,
@@ -234,6 +237,7 @@ type MigrateApplyCmd struct {
 	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
 	AWSRegion              string `name:"aws-region" help:"AWS region for RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
 	GCloudInstance         string `name:"gcloud-instance" help:"Cloud SQL instance ID passed to gcloud sql generate-login-token."`
+	CloudSQLConnector      bool   `name:"cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM database authentication."`
 	AzureCLIToken          bool   `name:"azure-cli-token" help:"Use Azure CLI to acquire an Azure Database for PostgreSQL access token as the database password."`
 	AzureDefaultCredential bool   `name:"azure-default-credential" help:"Use Azure SDK DefaultAzureCredential to acquire an Azure Database for PostgreSQL access token as the database password."`
 	AWSCLIToken            bool   `name:"aws-cli-token" help:"Use AWS CLI to generate an RDS/Aurora PostgreSQL IAM auth token as the database password."`
@@ -272,6 +276,7 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 		AWSProfile:             c.AWSProfile,
 		AWSRegion:              c.AWSRegion,
 		GCloudInstance:         c.GCloudInstance,
+		CloudSQLConnector:      c.CloudSQLConnector,
 		AzureCLIToken:          c.AzureCLIToken,
 		AzureDefaultCredential: c.AzureDefaultCredential,
 		AWSCLIToken:            c.AWSCLIToken,
@@ -293,7 +298,7 @@ func (c *MigrateApplyCmd) Run(g *GlobalFlags) error {
 }
 
 type MigratePlanCmd struct {
-	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`
+	Dir                        string `help:"Migration directory containing the previous migration. Overrides config migrations.dir." type:"path"`
 	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
 	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
 	Snapshot                   string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
@@ -301,10 +306,11 @@ type MigratePlanCmd struct {
 	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
 	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
+	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`
 	FromGCloudInstance         string `name:"from-gcloud-instance" help:"Cloud SQL instance ID for source database authentication."`
-	Dir                        string `help:"Migration directory containing the previous migration. Overrides config migrations.dir." type:"path"`
 	Config                     string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	FromAWSIAMToken            bool   `name:"from-aws-iam-token" help:"Use AWS SDK credentials to generate a source RDS/Aurora IAM auth token."`
+	FromCloudSQLConnector      bool   `name:"from-cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM authentication for the source database."`
 	FromAWSCLIToken            bool   `name:"from-aws-cli-token" help:"Use AWS CLI to generate a source RDS/Aurora IAM auth token."`
 	FromAzureDefaultCredential bool   `name:"from-azure-default-credential" help:"Use Azure DefaultAzureCredential to acquire a source database access token."`
 	FromGCloudToken            bool   `name:"from-gcloud-token" help:"Use gcloud to generate a source Cloud SQL PostgreSQL IAM login token."`
@@ -336,7 +342,7 @@ func (c *MigratePlanCmd) Run(g *GlobalFlags) error {
 		Dir:      c.Dir,
 		Runner:   c.Runner,
 		Snapshot: c.Snapshot,
-		FromURL:  c.FromURL, FromURLEnv: c.FromURLEnv, FromAuth: c.FromAuth, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
+		FromURL:  c.FromURL, FromURLEnv: c.FromURLEnv, FromAuth: c.FromAuth, FromTokenCommand: c.FromTokenCommand, FromAWSProfile: c.FromAWSProfile, FromAWSRegion: c.FromAWSRegion, FromGCloudInstance: c.FromGCloudInstance, FromCloudSQLConnector: c.FromCloudSQLConnector, FromAzureCLIToken: c.FromAzureCLIToken, FromAzureDefaultCredential: c.FromAzureDefaultCredential, FromAWSCLIToken: c.FromAWSCLIToken, FromAWSIAMToken: c.FromAWSIAMToken, FromGCloudADCToken: c.FromGCloudADCToken, FromGCloudToken: c.FromGCloudToken,
 	})
 	if err != nil {
 		return Exit(1, err)

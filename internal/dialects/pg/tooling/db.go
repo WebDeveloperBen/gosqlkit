@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
+	"cloud.google.com/go/cloudsqlconn"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -25,10 +27,13 @@ type PasswordProvider interface {
 type ConnectionOptions struct {
 	PasswordProvider PasswordProvider
 	URL              string
+	CloudSQLInstance string
+	CloudSQLIAMAuthN bool
 }
 
 type Conn struct {
-	conn *pgx.Conn
+	conn        *pgx.Conn
+	closeDialer func() error
 }
 
 func Open(ctx context.Context, rawURL string) (*Conn, error) {
@@ -44,18 +49,37 @@ func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error)
 	if err != nil {
 		return nil, fmt.Errorf("parse PostgreSQL URL %s: %w", RedactURL(rawURL), err)
 	}
-	if opts.PasswordProvider != nil {
+	if opts.PasswordProvider != nil && !opts.CloudSQLIAMAuthN {
 		password, err := opts.PasswordProvider.Password(ctx)
 		if err != nil {
 			return nil, err
 		}
 		config.Password = password
 	}
+	var closeDialer func() error
+	if instance := strings.TrimSpace(opts.CloudSQLInstance); instance != "" {
+		dialerOptions := []cloudsqlconn.Option{cloudsqlconn.WithLazyRefresh()}
+		if opts.CloudSQLIAMAuthN {
+			dialerOptions = append(dialerOptions, cloudsqlconn.WithIAMAuthN())
+		}
+		dialer, err := cloudsqlconn.NewDialer(ctx, dialerOptions...)
+		if err != nil {
+			return nil, fmt.Errorf("create Cloud SQL connector dialer: %w", err)
+		}
+		closeDialer = dialer.Close
+		config.TLSConfig = nil
+		config.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return dialer.Dial(ctx, instance)
+		}
+	}
 	conn, err := pgx.ConnectConfig(ctx, config)
 	if err != nil {
+		if closeDialer != nil {
+			_ = closeDialer()
+		}
 		return nil, fmt.Errorf("connect to PostgreSQL %s: %w", RedactURL(rawURL), err)
 	}
-	return &Conn{conn: conn}, nil
+	return &Conn{conn: conn, closeDialer: closeDialer}, nil
 }
 
 func (c *Conn) Exec(ctx context.Context, sql string, args ...any) error {
@@ -68,7 +92,13 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, er
 }
 
 func (c *Conn) Close(ctx context.Context) error {
-	return c.conn.Close(ctx)
+	err := c.conn.Close(ctx)
+	if c.closeDialer != nil {
+		if closeErr := c.closeDialer(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}
+	return err
 }
 
 func RedactURL(rawURL string) string {

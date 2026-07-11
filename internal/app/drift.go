@@ -24,6 +24,7 @@ type DriftCheckOptions struct {
 	AWSProfile             string
 	AWSRegion              string
 	GCloudInstance         string
+	CloudSQLConnector      bool
 	AzureCLIToken          bool
 	AzureDefaultCredential bool
 	AWSCLIToken            bool
@@ -59,6 +60,7 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 		AWSProfile:             opts.AWSProfile,
 		AWSRegion:              opts.AWSRegion,
 		GCloudInstance:         opts.GCloudInstance,
+		CloudSQLConnector:      opts.CloudSQLConnector,
 		AzureCLIToken:          opts.AzureCLIToken,
 		AzureDefaultCredential: opts.AzureDefaultCredential,
 		AWSCLIToken:            opts.AWSCLIToken,

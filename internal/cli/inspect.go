@@ -3,7 +3,7 @@ package cli
 import "github.com/webdeveloperben/gosqlkit/internal/app"
 
 type InspectCmd struct {
-	Config                 string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	Out                    string `help:"Write inspected snapshot JSON to path instead of stdout." type:"path"`
 	URL                    string `help:"Database URL to inspect. Defaults to DATABASE_URL when omitted."`
 	URLEnv                 string `name:"url-env" help:"Environment variable containing the database URL."`
 	Auth                   string `help:"Database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
@@ -11,7 +11,8 @@ type InspectCmd struct {
 	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
 	AWSRegion              string `name:"aws-region" help:"AWS region for RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`
 	GCloudInstance         string `name:"gcloud-instance" help:"Cloud SQL instance ID passed to gcloud sql generate-login-token."`
-	Out                    string `help:"Write inspected snapshot JSON to path instead of stdout." type:"path"`
+	Config                 string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
+	CloudSQLConnector      bool   `name:"cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM database authentication."`
 	AzureCLIToken          bool   `name:"azure-cli-token" help:"Use Azure CLI to acquire an Azure Database for PostgreSQL access token as the database password."`
 	AzureDefaultCredential bool   `name:"azure-default-credential" help:"Use Azure SDK DefaultAzureCredential to acquire an Azure Database for PostgreSQL access token as the database password."`
 	AWSCLIToken            bool   `name:"aws-cli-token" help:"Use AWS CLI to generate an RDS/Aurora PostgreSQL IAM auth token as the database password."`
@@ -48,6 +49,7 @@ func (c *InspectCmd) Run(g *GlobalFlags) error {
 		AWSProfile:             c.AWSProfile,
 		AWSRegion:              c.AWSRegion,
 		GCloudInstance:         c.GCloudInstance,
+		CloudSQLConnector:      c.CloudSQLConnector,
 		AzureCLIToken:          c.AzureCLIToken,
 		AzureDefaultCredential: c.AzureDefaultCredential,
 		AWSCLIToken:            c.AWSCLIToken,

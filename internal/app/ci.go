@@ -8,6 +8,7 @@ type CISchemaOptions struct {
 	SandboxAWSProfile             string
 	SandboxAWSRegion              string
 	SandboxGCloudInstance         string
+	SandboxCloudSQLConnector      bool
 	SandboxAzureCLIToken          bool
 	SandboxAzureDefaultCredential bool
 	SandboxAWSCLIToken            bool
@@ -29,6 +30,7 @@ type CIDatabaseOptions struct {
 	AWSProfile             string
 	AWSRegion              string
 	GCloudInstance         string
+	CloudSQLConnector      bool
 	AzureCLIToken          bool
 	AzureDefaultCredential bool
 	AWSCLIToken            bool
@@ -58,6 +60,7 @@ func CISchemaWithConfig(config *Config, opts CISchemaOptions) (*CISchemaResult, 
 		SandboxAWSProfile:             opts.SandboxAWSProfile,
 		SandboxAWSRegion:              opts.SandboxAWSRegion,
 		SandboxGCloudInstance:         opts.SandboxGCloudInstance,
+		SandboxCloudSQLConnector:      opts.SandboxCloudSQLConnector,
 		SandboxAzureCLIToken:          opts.SandboxAzureCLIToken,
 		SandboxAzureDefaultCredential: opts.SandboxAzureDefaultCredential,
 		SandboxAWSCLIToken:            opts.SandboxAWSCLIToken,
@@ -83,6 +86,7 @@ func CIDatabaseWithConfig(config *Config, opts CIDatabaseOptions) (*CIDatabaseRe
 		AWSProfile:             opts.AWSProfile,
 		AWSRegion:              opts.AWSRegion,
 		GCloudInstance:         opts.GCloudInstance,
+		CloudSQLConnector:      opts.CloudSQLConnector,
 		AzureCLIToken:          opts.AzureCLIToken,
 		AzureDefaultCredential: opts.AzureDefaultCredential,
 		AWSCLIToken:            opts.AWSCLIToken,

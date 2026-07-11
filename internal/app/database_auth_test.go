@@ -153,6 +153,46 @@ func TestNormaliseDatabaseAuthOptionsRejectsInvalidModes(t *testing.T) {
 	}
 }
 
+func TestNormaliseDatabaseAuthOptionsValidatesCloudSQLConnector(t *testing.T) {
+	for _, auth := range []databaseAuthOptions{
+		{CloudSQLConnector: true, Auth: databaseAuthGCPIAM},
+		{CloudSQLConnector: true, GCloudInstance: "project:region:instance"},
+	} {
+		if _, err := normaliseDatabaseAuthOptions(auth); err == nil {
+			t.Fatalf("normaliseDatabaseAuthOptions(%+v) error = nil", auth)
+		}
+	}
+
+	got, err := normaliseDatabaseAuthOptions(databaseAuthOptions{
+		Auth:              databaseAuthGCPIAM,
+		CloudSQLConnector: true,
+		GCloudInstance:    "project:region:instance",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.GCloudADCToken {
+		t.Fatal("GCloudADCToken = false, want true")
+	}
+}
+
+func TestPostgresConnectionOptionsKeepsManualGCloudAuthDirect(t *testing.T) {
+	manual := postgresConnectionOptions("postgres://user@localhost/app", databaseAuthOptions{
+		GCloudToken:    true,
+		GCloudInstance: "project:region:instance",
+	})
+	if manual.CloudSQLInstance != "" || manual.CloudSQLIAMAuthN {
+		t.Fatalf("manual connection options = %#v, want direct connection", manual)
+	}
+	connector := postgresConnectionOptions("postgres://user@localhost/app", databaseAuthOptions{
+		CloudSQLConnector: true,
+		GCloudInstance:    "project:region:instance",
+	})
+	if connector.CloudSQLInstance != "project:region:instance" || !connector.CloudSQLIAMAuthN {
+		t.Fatalf("connector options = %#v", connector)
+	}
+}
+
 func TestAzureDefaultCredentialPasswordProviderRequestsPostgresScope(t *testing.T) {
 	credential := &fakeAzureCredential{accessValue: "azure-sdk-access"}
 	password, err := (azureDefaultCredentialPasswordProvider{credential: credential}).Password(context.Background())

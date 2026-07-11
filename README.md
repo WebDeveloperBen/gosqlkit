@@ -105,6 +105,7 @@ gosqlkit migrate apply --aws-iam-token --aws-region us-east-1 --url "$AWS_RDS_PO
 gosqlkit migrate apply --aws-cli-token --aws-region us-east-1 --aws-profile dev --url "$AWS_RDS_POSTGRES_URL"
 gosqlkit migrate apply --gcloud-token --gcloud-instance app-prod --url "$CLOUD_SQL_POSTGRES_URL"
 gosqlkit migrate apply --gcloud-adc-token --gcloud-instance app-prod --url "$CLOUD_SQL_POSTGRES_URL"
+gosqlkit drift check --auth gcp-iam --cloud-sql-connector --gcloud-instance project:region:instance --url "$CLOUD_SQL_POSTGRES_URL"
 gosqlkit migrate apply --token-command "az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv"
 ```
 
@@ -245,6 +246,9 @@ sqlc generate
 - Google Cloud SQL PostgreSQL IAM login token generation with `--gcloud-token`
   / `--sandbox-gcloud-token`, or `--gcloud-adc-token` /
   `--sandbox-gcloud-adc-token` for Application Default Credentials
+- Native Cloud SQL Go Connector support with `--cloud-sql-connector` (and
+  source/sandbox variants) for automatic IAM authentication; an externally
+  managed Cloud SQL Auth Proxy continues to work through its PostgreSQL URL
 - Destructive-change detection with `--allow-destructive` override and
   `gosqlkit migrate plan` to preview the structured plan before writing, using
   styled terminal tables for humans and JSON for automation

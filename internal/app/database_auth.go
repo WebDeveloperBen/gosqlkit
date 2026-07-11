@@ -27,6 +27,7 @@ type databaseAuthOptions struct {
 	AWSProfile             string
 	AWSRegion              string
 	GCloudInstance         string
+	CloudSQLConnector      bool
 	AzureCLIToken          bool
 	AzureDefaultCredential bool
 	AWSCLIToken            bool
@@ -47,6 +48,13 @@ func postgresConnectionOptions(rawURL string, auth databaseAuthOptions) pgtoolin
 	return pgtooling.ConnectionOptions{
 		URL:              rawURL,
 		PasswordProvider: databasePasswordProvider(rawURL, auth),
+		CloudSQLInstance: func() string {
+			if auth.CloudSQLConnector {
+				return auth.GCloudInstance
+			}
+			return ""
+		}(),
+		CloudSQLIAMAuthN: auth.CloudSQLConnector,
 	}
 }
 
@@ -81,6 +89,14 @@ func refreshablePasswordProvider(provider pgtooling.TokenProvider) pgtooling.Pas
 
 func validateDatabaseAuthOptions(auth databaseAuthOptions) error {
 	mode := strings.TrimSpace(auth.Auth)
+	if auth.CloudSQLConnector {
+		if strings.TrimSpace(auth.GCloudInstance) == "" {
+			return errors.New("--cloud-sql-connector requires --gcloud-instance")
+		}
+		if mode != databaseAuthGCPIAM && !auth.GCloudADCToken {
+			return errors.New("--cloud-sql-connector requires --auth gcp-iam or --gcloud-adc-token")
+		}
+	}
 	if mode != "" {
 		if databaseAuthFlagCount(auth) != 0 {
 			return errors.New("--auth cannot be combined with legacy database token provider flags")

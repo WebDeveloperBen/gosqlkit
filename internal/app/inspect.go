@@ -22,6 +22,7 @@ type InspectOptions struct {
 	AWSProfile             string
 	AWSRegion              string
 	GCloudInstance         string
+	CloudSQLConnector      bool
 	DriftProjection        bool
 	JSON                   bool
 	AzureCLIToken          bool
@@ -60,6 +61,7 @@ func InspectWithConfig(config *Config, opts InspectOptions) (*InspectResult, err
 		AWSProfile:             opts.AWSProfile,
 		AWSRegion:              opts.AWSRegion,
 		GCloudInstance:         opts.GCloudInstance,
+		CloudSQLConnector:      opts.CloudSQLConnector,
 		AzureCLIToken:          opts.AzureCLIToken,
 		AzureDefaultCredential: opts.AzureDefaultCredential,
 		AWSCLIToken:            opts.AWSCLIToken,

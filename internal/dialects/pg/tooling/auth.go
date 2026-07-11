@@ -18,9 +18,9 @@ type TokenProvider interface {
 }
 
 type RefreshingPasswordProvider struct {
-	token         Token
 	provider      TokenProvider
 	now           func() time.Time
+	token         Token
 	refreshBefore time.Duration
 	mu            sync.Mutex
 }
