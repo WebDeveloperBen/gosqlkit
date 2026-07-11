@@ -55,6 +55,8 @@ func postgresConnectionOptions(rawURL string, auth databaseAuthOptions) pgtoolin
 			return ""
 		}(),
 		CloudSQLIAMAuthN: auth.CloudSQLConnector,
+		CloudSQLIAMUser:  auth.GCloudToken || auth.GCloudADCToken,
+		RequireTLS:       (auth.GCloudToken || auth.GCloudADCToken) && !auth.CloudSQLConnector,
 		ConnectAttempts:  3,
 		ConnectBackoff:   250 * time.Millisecond,
 	}

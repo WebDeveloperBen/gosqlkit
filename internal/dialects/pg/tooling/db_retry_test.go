@@ -49,3 +49,22 @@ func TestOpenWithOptionsDefaultsToOneAttempt(t *testing.T) {
 		t.Fatalf("provider calls = password %d, refresh %d; want 1, 0", provider.passwords, provider.refreshes)
 	}
 }
+
+func TestCloudSQLIAMUsernameRemovesServiceAccountSuffix(t *testing.T) {
+	if got := cloudSQLIAMUsername("deploy@project.iam.gserviceaccount.com"); got != "deploy@project.iam" {
+		t.Fatalf("username = %q", got)
+	}
+	if got := cloudSQLIAMUsername("iam-user"); got != "iam-user" {
+		t.Fatalf("username = %q", got)
+	}
+}
+
+func TestOpenWithOptionsRequiresTLSForManualCloudSQLIAM(t *testing.T) {
+	_, err := OpenWithOptions(context.Background(), ConnectionOptions{
+		URL:        "postgres://user@127.0.0.1:1/app?sslmode=disable",
+		RequireTLS: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires TLS") {
+		t.Fatalf("OpenWithOptions error = %v", err)
+	}
+}

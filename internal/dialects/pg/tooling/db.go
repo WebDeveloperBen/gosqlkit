@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/cloudsqlconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Executor interface {
@@ -35,6 +37,8 @@ type ConnectionOptions struct {
 	URL              string
 	CloudSQLInstance string
 	CloudSQLIAMAuthN bool
+	CloudSQLIAMUser  bool
+	RequireTLS       bool
 	ConnectAttempts  int
 	ConnectBackoff   time.Duration
 }
@@ -56,6 +60,16 @@ func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error)
 	config, err := pgx.ParseConfig(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse PostgreSQL URL %s: %w", RedactURL(rawURL), err)
+	}
+	if opts.RequireTLS {
+		if config.TLSConfig == nil || slices.ContainsFunc(config.Fallbacks, func(fallback *pgconn.FallbackConfig) bool {
+			return fallback.TLSConfig == nil
+		}) {
+			return nil, errors.New("Cloud SQL IAM database authentication requires TLS; set sslmode=require or use --cloud-sql-connector")
+		}
+	}
+	if opts.CloudSQLIAMUser {
+		config.User = cloudSQLIAMUsername(config.User)
 	}
 	var closeDialer func() error
 	if instance := strings.TrimSpace(opts.CloudSQLInstance); instance != "" {
@@ -119,6 +133,10 @@ func OpenWithOptions(ctx context.Context, opts ConnectionOptions) (*Conn, error)
 		}
 	}
 	return nil, errors.New("postgres connection attempts exhausted")
+}
+
+func cloudSQLIAMUsername(username string) string {
+	return strings.TrimSuffix(strings.TrimSpace(username), ".gserviceaccount.com")
 }
 
 func (c *Conn) Exec(ctx context.Context, sql string, args ...any) error {

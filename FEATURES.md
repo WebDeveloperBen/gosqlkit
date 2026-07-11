@@ -437,8 +437,8 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Refresh expiring tokens before retrying database connections during
   introspection, diff, replay, and apply operations.
 - `[x]` Avoid assuming tokens are reusable across hosts, regions, users, or instances.
-- `[ ]` Support provider-specific username formats.
-- `[ ]` Support provider-specific TLS/SSL requirements.
+- `[x]` Support Cloud SQL IAM service-account username normalisation.
+- `[x]` Enforce TLS for manual Cloud SQL IAM authentication.
 - `[x]` Support direct connections, externally managed Cloud SQL Auth Proxy
   endpoints, and native Cloud SQL Go Connector connections.
 - `[x]` Keep database auth plumbing isolated from the schema DSL and renderer.
