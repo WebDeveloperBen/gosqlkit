@@ -7,17 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/webdeveloperben/gosqlkit/kit"
 	"golang.org/x/oauth2"
 )
 
-type Token struct {
-	ExpiresAt time.Time
-	Value     string
-}
-
-type TokenProvider interface {
-	Token(context.Context) (Token, error)
-}
+type (
+	Token         = kit.AccessToken
+	TokenProvider = kit.TokenProvider
+)
 
 type OAuth2TokenProvider struct {
 	Source oauth2.TokenSource

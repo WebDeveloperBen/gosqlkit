@@ -435,7 +435,8 @@ Database connectivity is only needed for future introspection, drift checks, and
 - `[x]` Support Google Cloud SQL Go Connector based automatic IAM auth.
 - `[x]` Support Google `gcloud` OAuth2 token acquisition for local development.
 - `[x]` Support custom token command execution for other providers.
-- `[ ]` Support custom token-provider plugins/interfaces for providers not built in.
+- `[x]` Support custom token-provider interfaces through public `kit.TokenProvider`
+  implementations and cross-platform `--token-command` provider plugins.
 - `[x]` Avoid storing OAuth2/Entra/IAM access tokens in generated files, snapshots, logs, or migration output.
 - `[x]` Redact credentials and tokens in diagnostics.
 - `[x]` Acquire short-lived tokens immediately before opening database connections.
