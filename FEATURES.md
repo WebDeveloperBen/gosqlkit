@@ -22,7 +22,9 @@ Legend:
 - `[x]` CLI generation workflow for package-driven and config-driven SQL and
   snapshot generation, output writing, stale checks, dialect overrides, and
   previous-snapshot tracking.
-- `[~]` Migration diff workflow.
+- `[x]` PostgreSQL migration diff workflow with live and snapshot sources,
+  structured plans, dependency/risk metadata, destructive guards, rename and
+  alter planning, reversible runner output, and fail-closed unsupported changes.
 - `[x]` Review-first destructive-change handling.
 - `[x]` Snapshot metadata for stable diffs and rename support.
 
