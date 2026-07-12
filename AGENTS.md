@@ -167,9 +167,16 @@ because that is the user-facing import path. It can't move to `internal/`.
 
 ### Adding a new dialect
 
+The **SQLite dialect is the worked reference** for this: `internal/dialects/
+sqlite/` and `sqlite/` were built by mirroring the PostgreSQL structure but
+modelling only the subset SQLite supports. Follow it as the concrete example of
+the steps below. See [SQLITE.md](SQLITE.md) for its feature board.
+
 1. Create `internal/dialects/<dialect>/` with `schema/` and `render/`
    sub-packages mirroring `internal/dialects/pg/`. The schema package owns
    both the model types (with JSON tags) and the `JSON()` snapshot function.
+   Reuse `internal/ast` types via shadow-embed for the shared table/column/
+   constraint/index core (see `internal/dialects/sqlite/sqliteschema`).
 2. Create a top-level `<dialect>/` package for the public DSL (must stay
    outside `internal/` — it's the user import path).
 3. Register the provider with `kit` via `init()` in the public DSL package.
@@ -652,11 +659,25 @@ update of this file:
   indexes.
   `migrate apply` records successful versions in the goose-compatible
   `goose_db_version` table and skips already applied versions.
-- **Next tracks**: remaining extension-provided PostgreSQL types such as
-  PostGIS `geometry`, and the first non-PostgreSQL provider.
-  See FEATURES.md for the open `[ ]` items.
+- **SQLite (second dialect, in progress)**: the dialect boundary is proven. The
+  public `sqlite/` DSL, `internal/dialects/sqlite/{sqliteschema,render,plan}`,
+  kit provider registration, `examples/sqlite/` with goldens, and the migration
+  planner (incl. the generalised table-rebuild) are landed and green. `generate`,
+  `snapshot`, `migrate create`, and `migrate plan` work for `dialect: sqlite`.
+  SQLite reuses `internal/ast` and the shared `internal/migrate/{plan,goose,
+  golangmigrate}`; the generic diff helpers were lifted into `internal/migrate/
+  plan` and PostgreSQL refactored onto them (refactor-then-reuse). SQLite models
+  the subset SQLite supports (no schemas/enums/roles/RLS/sequences/domains/
+  matviews); see [SQLITE.md](SQLITE.md) for the full board and the **Resuming**
+  handoff for the remaining tooling work.
+- **Next tracks**: SQLite tooling — PRAGMA introspection, drift, sandbox replay,
+  and `migrate apply` behind a new dialect-neutral `DialectTooling` app seam
+  (SQLITE.md Phase 6), then the opt-in `modernc.org/sqlite` integration test
+  (Phase 7). For PostgreSQL: remaining extension-provided types such as PostGIS
+  `geometry`. See FEATURES.md and SQLITE.md for the open `[ ]` items.
 
-When you change the state, update FEATURES.md first, then this section.
+When you change the state, update FEATURES.md (and SQLITE.md for SQLite) first,
+then this section.
 
 ---
 
@@ -678,5 +699,11 @@ When you change the state, update FEATURES.md first, then this section.
 | `internal/ast/schema.go`                | shared schema core structs (carry JSON tags)      |
 | `internal/dialects/pg/pgschema/schema.go` | PG schema envelope + snapshot JSON function     |
 | `internal/dialects/pg/render/postgres.go` | PG SQL rendering + all validation               |
-| `examples/basic/`                       | end-to-end example + sqlc config                  |
-| `internal/dialects/pg/render/testdata/` | renderer golden files                             |
+| `internal/migrate/plan/`                | shared change/plan IR + `SnapshotPlanner` + generic diff helpers |
+| `sqlite/registry.go`                    | SQLite provider + in-memory schema registry       |
+| `sqlite/{column,table,schema,defaults,options}.go` | SQLite public DSL             |
+| `internal/dialects/sqlite/sqliteschema/`| SQLite schema envelope + snapshot JSON (shadow-embeds `ast`) |
+| `internal/dialects/sqlite/render/`      | SQLite SQL rendering + validation + statement renderers |
+| `internal/dialects/sqlite/plan/`        | SQLite migration diff planner incl. table-rebuild |
+| `examples/basic/` (PG), `examples/sqlite/` | end-to-end examples + goldens                  |
+| `internal/dialects/*/render/testdata/`  | renderer golden files                             |

@@ -12,8 +12,8 @@ import (
 
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	pgplan "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/plan"
-	sqliteplan "github.com/webdeveloperben/gosqlkit/internal/dialects/sqlite/plan"
 	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
+	sqliteplan "github.com/webdeveloperben/gosqlkit/internal/dialects/sqlite/plan"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"

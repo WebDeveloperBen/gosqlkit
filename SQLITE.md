@@ -60,6 +60,119 @@ Decisions locked for this build:
 - **Integration test driver**: `modernc.org/sqlite` (pure-Go, CGo-free) as a
   **test-only** dependency behind an opt-in build tag, mirroring the Docker
   Testcontainers PostgreSQL suite. SQLite needs no container (embedded).
+- **Code-sharing strategy (Hybrid)**: extract the genuinely-generic pieces into
+  shared packages and **refactor PostgreSQL onto them first** (its test suite is
+  the safety net), then build SQLite onto the same shared spine. Write
+  dialect-specific SQL rendering, catalogue/PRAGMA introspection, and the driver
+  connection layer fresh. **Do not** force a generic `DiffObjects[T]` planner
+  abstraction yet — revisit at dialect #3 (rule of three). This was chosen after
+  an architecture review (see "Resuming" below for the concrete Phase 6 seam).
+
+---
+
+## Resuming in a New Session (handoff)
+
+**Everything below Phase 5 is done and green** (`task test` = all pass, clean
+`gofumpt`/`golangci-lint`). A future session picks up at **Phase 6 (tooling)**.
+Read AGENTS.md §3 ("Adding a new dialect") and §11 first, then this section.
+
+### What already works
+
+- `gosqlkit generate` / `snapshot` / `migrate create` / `migrate plan` with
+  `dialect: sqlite` (see `examples/sqlite/`). Generated DDL applies on a real
+  `sqlite3` binary.
+- The migration planner (`internal/dialects/sqlite/plan/`) implements
+  `migrateplan.SnapshotPlanner` and is wired into `internal/app/migrate.go`'s
+  `snapshotPlanner()` switch (`case "sqlite", "sqlite3"`).
+- Shared generic helpers already lifted into `internal/migrate/plan`
+  (`sort.go`): `SortChangesByDependencies`, `MapBy`, `SortedBy`. PG's planner was
+  refactored to delegate to them (`internal/dialects/pg/plan/{plan,keys}.go`).
+- SQLite capabilities currently `true`: `Tables, ForeignKeys, Checks, Indexes,
+  Snapshots, Views, Triggers, RenderSQL, SnapshotJSON, MigrationPlan`
+  (`sqlite/registry.go`). Phase 6 flips `InspectDatabase, DriftCheck,
+  MigrationApply, SandboxReplay`.
+
+### Phase 6 plan — tooling (introspection, drift, sandbox replay, apply)
+
+The app layer's tooling paths are currently **PostgreSQL-typed** (they pass
+`pgschema.Schema` around and call `pgtooling` directly). The planner avoided this
+by being snapshot-JSON-centric (`PlanSnapshotDiff([]byte,[]byte)`). Phase 6 makes
+tooling snapshot-JSON-centric the same way.
+
+1. **Add a `DialectTooling` seam** (mirrors `migrateplan.SnapshotPlanner`).
+   Suggested location: a shared interface consumed by the app layer, e.g.
+
+   ```go
+   type Tooling interface {
+       Dialect() string
+       InspectSnapshot(ctx, ConnectOptions) ([]byte, error) // returns snapshot JSON
+       Replay(ctx, ConnectOptions, runner string, migrations) (*ReplayResult, error)
+       Apply(ctx, ConnectOptions, runner string, migrations) (*ApplyResult, error)
+   }
+   ```
+
+   Dispatch via a `dialectTooling(dialect)` switch in the app layer (same shape
+   as `snapshotPlanner`). This replaces the direct `pgtooling` calls at these
+   sites (verified locations, reference by function name not line):
+   - `internal/app/inspect.go`: `switch dialect(config.Dialect)` +
+     `inspectPostgresSnapshot`.
+   - `internal/app/drift.go`: `inspectPostgres` / `inspectPostgresWithOptions`,
+     and `driftDifferences(desired, database pgschema.Schema)`.
+   - `internal/app/migrate.go`: `migratePlanSourceSnapshot` (live source),
+     `replayPostgresSandbox`, `applyPostgresMigrations`.
+
+2. **Extract the generic drift comparison** (cheap win, clearly generic) from
+   `internal/app/drift_diff.go` into a shared package (e.g. `internal/drift`):
+   `compareDriftCollection[T]`, `driftMapBy[T]`, `driftEqual`,
+   `driftChangedFields`. Refactor PG's `driftDifferences` onto it; SQLite reuses
+   it. Keep the per-dialect **drift projection/normalisation** in each dialect
+   (PG's `projectDrift*` stays PG; SQLite writes its own — affinity aliases,
+   rowid PK, default collation).
+
+3. **Extract the replay/apply orchestration** from
+   `internal/dialects/pg/tooling/replay.go` (`Replay`, `Apply`, and the
+   version-table flow) into shared `internal/migrate` with a small dialect hook
+   for the **version-table DDL + parameter placeholders** (PG uses `GENERATED …
+   IDENTITY` and `$1`; SQLite uses `INTEGER PRIMARY KEY AUTOINCREMENT` and `?`).
+   The migration loop itself is dialect-neutral (`exec.Exec(stmt)`).
+
+4. **Build `internal/dialects/sqlite/tooling/`** (write fresh — sharing would be
+   wrong):
+   - `db.go`: connect via `database/sql` + `modernc.org/sqlite` (driver name
+     `"sqlite"`; DSN like `file:...?_pragma=foreign_keys(1)`). No network auth —
+     the shared auth/token providers are N/A for SQLite; `--auth` reports them
+     unsupported.
+   - `introspect.go`: build a `sqliteschema.Schema` from `sqlite_schema`,
+     `pragma_table_info`/`pragma_table_xinfo` (columns, generated, pk),
+     `pragma_index_list`/`pragma_index_info`, `pragma_foreign_key_list`, and by
+     parsing `sqlite_schema.sql` for CHECK constraints, `COLLATE`, `WITHOUT
+     ROWID`, `STRICT`, and trigger/view bodies.
+   - `replay.go` / apply: reuse the shared orchestration + SQLite version-table
+     DDL; enforce `PRAGMA foreign_keys` posture.
+   - Wire all of the above into the `DialectTooling` dispatch and flip the four
+     capabilities in `sqlite/registry.go`.
+
+### Phase 7 plan — integration test + docs + verify
+
+- Add `modernc.org/sqlite` as a **test-only** dependency, an opt-in integration
+  test (build tag, mirroring `task integration`) that applies the generated
+  schema, introspects, drift-checks, and sandbox-replays against a real embedded
+  SQLite DB. Add a Taskfile `integration:sqlite` task.
+- Flip FEATURES.md "Testcontainers integration test per supported dialect" to
+  `[x]` (SQLite is embedded — note: no container needed).
+- Update AGENTS.md §11 and README "Current Features".
+- Run full `task verify` and ensure green.
+
+### Gotchas for Phase 6
+
+- SQLite disables FK enforcement by default — replay/apply must set `PRAGMA
+  foreign_keys=ON` (and the rebuild statements already toggle it OFF/ON).
+- `INTEGER PRIMARY KEY` is the rowid alias — introspection should recognise it
+  so drift doesn't see a phantom column change.
+- Drift projection must normalise SQLite type-affinity aliases (e.g. `INT` vs
+  `INTEGER`) and the fact that SQLite stores the original `CREATE` text.
+- The goose/`golang-migrate` file renderers are already dialect-neutral; only the
+  version-table DDL differs per dialect.
 
 ---
 
