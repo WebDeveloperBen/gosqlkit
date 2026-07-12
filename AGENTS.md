@@ -11,6 +11,9 @@ them as canonical:
 - [SPEC.md](SPEC.md) — the ADR: goals, non-goals, scope, architecture, phases.
 - [FEATURES.md](FEATURES.md) — the live feature checklist. Update checkboxes
   as things land. This is the source of truth for "what's done / what's next".
+- [SQLITE.md](SQLITE.md) — the live feature checklist for the **SQLite** dialect
+  build (full-parity target). The SQLite counterpart to FEATURES.md; update its
+  checkboxes as SQLite work lands.
 - [MIGRATIONS.md](MIGRATIONS.md) — the migration-generation decision record:
   cross-dialect planner, goose-compatible files, embedded metadata.
 - [README.md](README.md) — the user-facing intro and example.

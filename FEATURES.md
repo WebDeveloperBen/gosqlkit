@@ -65,7 +65,11 @@ Legend:
 - `[x]` PostgreSQL snapshots wrap shared table snapshots with PostgreSQL objects.
 - `[x]` Shared table/index core explicitly separated from all dialect-specific options.
 - `[x]` Move PostgreSQL-only index options out of the shared index model.
-- `[ ]` First non-PostgreSQL provider proving the boundary.
+- `[x]` First non-PostgreSQL provider proving the boundary. SQLite renders
+  canonical DDL and deterministic snapshots through the shared `kit`/`internal/ast`
+  core with its own `internal/dialects/sqlite/` machinery and public `sqlite/`
+  DSL; see [SQLITE.md](SQLITE.md) for the full SQLite feature board (migration
+  planner, introspection, drift, and apply are in progress there).
 - `[x]` Dialect capability checks in CLI commands where a command needs unsupported features.
 
 ## Schema Object Model

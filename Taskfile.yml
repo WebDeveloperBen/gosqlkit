@@ -76,6 +76,30 @@ tasks:
       - cmd: "cd examples/basic && go run ../../cmd/gosqlkit snapshot --check"
         ignore_error: false
 
+  generate:sqlite:
+    desc: Regenerate the checked-in SQLite example schema SQL
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit generate"
+        ignore_error: false
+
+  generate:sqlite:check:
+    desc: Check the checked-in SQLite example schema SQL is current
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit generate --check"
+        ignore_error: false
+
+  snapshot:sqlite:
+    desc: Regenerate the checked-in SQLite example schema snapshot JSON
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit snapshot"
+        ignore_error: false
+
+  snapshot:sqlite:check:
+    desc: Check the checked-in SQLite example schema snapshot JSON is current
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit snapshot --check"
+        ignore_error: false
+
   sqlc:check:
     desc: Validate the example schema and queries with sqlc in a temp directory
     cmds:
@@ -168,6 +192,8 @@ tasks:
     cmds:
       - task: generate:check
       - task: snapshot:check
+      - task: generate:sqlite:check
+      - task: snapshot:sqlite:check
 
   verify:sqlc:
     desc: Run the sqlc compatibility check
@@ -183,6 +209,8 @@ tasks:
       - "{{.BIN}} version"
       - "cd examples/basic && {{.BIN}} generate --check"
       - "cd examples/basic && {{.BIN}} snapshot --check"
+      - "cd examples/sqlite && {{.BIN}} generate --check"
+      - "cd examples/sqlite && {{.BIN}} snapshot --check"
       - "{{.BIN}} generate ./{{.EXAMPLE_SCHEMA}} > /dev/null"
       - "{{.BIN}} generate --out {{.EXAMPLE_SQL}} --check ./{{.EXAMPLE_SCHEMA}}"
 
