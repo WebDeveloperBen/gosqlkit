@@ -99,19 +99,11 @@ func sequenceOwnedByTable(ownedBy string) (string, bool) {
 }
 
 func mapBy[T any](items []T, key func(T) string) map[string]T {
-	out := make(map[string]T, len(items))
-	for _, item := range items {
-		out[key(item)] = item
-	}
-	return out
+	return migrateplan.MapBy(items, key)
 }
 
 func sortedBy[T any](items []T, key func(T) string) []T {
-	out := append([]T(nil), items...)
-	sort.SliceStable(out, func(i, j int) bool {
-		return key(out[i]) < key(out[j])
-	})
-	return out
+	return migrateplan.SortedBy(items, key)
 }
 
 func sortedStrings(items []string) []string {

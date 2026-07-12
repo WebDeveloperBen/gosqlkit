@@ -38,18 +38,19 @@ Reference implementations (already cloned locally while researching):
 
 ## Status
 
-- **Landed (build order steps 1–4): the dialect boundary is proven.** The public
-  `sqlite/` DSL, `internal/dialects/sqlite/{sqliteschema,render}`, kit provider
-  registration, `examples/sqlite/` with checked-in SQL + snapshot goldens, and
-  Taskfile wiring are all in place and green. Generated DDL is validated against
-  a real `sqlite3` binary. Sections **Product Boundary**, **Dialect Provider
-  Boundary**, **Tables**, **Columns**, **SQLite Types**, **Constraints**,
-  **Indexes**, **Views**, **Triggers**, **Validation**, and the core of
-  **Serialisation and Diff Readiness** are implemented (see per-item boxes).
-- **Remaining (build order steps 5–7):** migration planner (`plan/`, incl. the
-  table-rebuild), tooling (`tooling/`: introspection, drift, sandbox replay,
-  apply), and the opt-in `modernc.org/sqlite` integration test. These sections
-  are still `[ ]`.
+- **Landed (build order steps 1–5): schema generation + migration authoring.**
+  The public `sqlite/` DSL, `internal/dialects/sqlite/{sqliteschema,render,plan}`,
+  kit provider registration, `examples/sqlite/` with checked-in goldens, Taskfile
+  wiring, and the migration planner (all slices incl. the table-rebuild) are in
+  place and green. `gosqlkit generate`/`snapshot`/`migrate create`/`migrate plan`
+  work for SQLite. Generated DDL is validated against a real `sqlite3` binary.
+  The generic diff helpers (`SortChangesByDependencies`, `MapBy`, `SortedBy`)
+  were lifted into the shared `internal/migrate/plan` and PostgreSQL refactored
+  onto them (refactor-then-reuse; PG's suite stayed green).
+- **Remaining (build order steps 6–7):** tooling (`tooling/`: PRAGMA
+  introspection, drift, sandbox replay, `migrate apply`) behind a new
+  `DialectTooling` snapshot-JSON app seam, and the opt-in `modernc.org/sqlite`
+  integration test. These sections are still `[ ]`.
 
 Decisions locked for this build:
 
@@ -343,76 +344,85 @@ limited `ALTER TABLE`, which forces a **table-rebuild** for most changes.
 
 ### Slice 1: Authoring hardening
 
-- `[ ]` Baseline migration generation from the current schema.
-- `[ ]` Empty migration generation for manual SQL.
-- `[ ]` SQLite snapshot diffs for additive, destructive, rename, and
+- `[x]` Baseline migration generation from the current schema.
+- `[x]` Empty migration generation for manual SQL.
+- `[x]` SQLite snapshot diffs for additive, destructive, rename, and
   fail-closed replacement changes.
-- `[ ]` Embedded target snapshot metadata in generated migrations.
-- `[ ]` Migration directory validation (reuse runner-agnostic validators).
-- `[ ]` Fail-closed planner errors for unsupported details.
-- `[ ]` Fixture-style diff tests (additive) and error tests (unsupported).
+- `[x]` Embedded target snapshot metadata in generated migrations.
+- `[x]` Migration directory validation (reuses runner-agnostic validators).
+- `[x]` Fail-closed planner errors for unsupported details.
+- `[x]` Fixture-style diff tests (additive) and error tests (unsupported).
 
 ### Slice 2: Structured planner IR
 
-- `[ ]` Changes carry object kind + stable object key.
-- `[ ]` Create / drop / rename / alter / replace operations.
-- `[ ]` Dependency metadata.
-- `[ ]` Reversibility metadata.
-- `[ ]` Risk flags (`destructive`, `data-loss`, `manual-review`,
-  `requires-table-rebuild`, `non-transactional` where relevant).
-- `[ ]` Machine-readable plan summary without writing files.
-- `[ ]` Runner renderer consumes structured plan data.
+Reuses the shared `internal/migrate/plan` IR and `SnapshotPlanner` interface;
+the SQLite `Planner` plugs into the app's `snapshotPlanner` dispatch.
+
+- `[x]` Changes carry object kind + stable object key.
+- `[x]` Create / drop / rename / alter / replace operations.
+- `[x]` Dependency metadata.
+- `[x]` Reversibility metadata.
+- `[x]` Risk flags (`destructive`, `data-loss`, `lock-heavy`,
+  `requires-ddl-review`).
+- `[x]` Machine-readable plan summary without writing files (`migrate plan
+  --json`).
+- `[x]` Runner renderer consumes structured plan data.
 
 ### Slice 3: Safe additive coverage
 
-- `[ ]` `CREATE TABLE` for new tables.
-- `[ ]` `ADD COLUMN` for existing tables (respecting SQLite's ADD COLUMN limits:
-  no non-constant DEFAULT, no `STORED` generated on populated tables, NOT NULL
-  needs a DEFAULT).
-- `[ ]` `CREATE INDEX` / `CREATE UNIQUE INDEX` for new and existing tables.
-- `[ ]` `CREATE VIEW` / `CREATE TRIGGER`.
-- `[ ]` Best-effort down SQL for simple create operations.
-- `[ ]` Per-change down generation with explicit placeholders for irreversible
-  changes.
+- `[x]` `CREATE TABLE` for new tables.
+- `[x]` `ADD COLUMN` for existing tables (respecting SQLite's ADD COLUMN limits:
+  no non-constant DEFAULT, no `STORED` generated, no PK/UNIQUE, NOT NULL needs a
+  DEFAULT — unsafe adds fall back to a rebuild).
+- `[x]` `CREATE INDEX` / `CREATE UNIQUE INDEX` for new and existing tables.
+- `[x]` `CREATE VIEW` / `CREATE TRIGGER`.
+- `[x]` Best-effort down SQL for simple create operations.
+- `[x]` Per-change down generation with explicit placeholders for irreversible
+  changes (reuses shared runner rendering).
 
 ### Slice 4: Destructive-change guardrails
 
-- `[ ]` Detect table removals.
-- `[ ]` Detect column removals (`DROP COLUMN`, SQLite ≥ 3.35).
-- `[ ]` Detect index/view/trigger removals.
-- `[ ]` Detect column type / nullability / default / generated changes.
-- `[ ]` Detect PK / UNIQUE / FK / CHECK constraint changes.
-- `[ ]` Risk flags (destructive, data-loss, requires-table-rebuild).
-- `[ ]` Destructive changes fail by default with actionable diagnostics.
-- `[ ]` Explicit destructive-change override (`--allow-destructive`).
+- `[x]` Detect table removals.
+- `[x]` Detect column removals (via rebuild; data-loss flagged).
+- `[x]` Detect index/view/trigger removals.
+- `[x]` Detect column type / nullability / default / generated changes (rebuild).
+- `[x]` Detect PK / UNIQUE / FK / CHECK / table-option changes (rebuild).
+- `[x]` Risk flags (destructive, data-loss, lock-heavy, requires-ddl-review).
+- `[x]` Destructive changes fail by default with actionable diagnostics (app
+  layer guard, shared).
+- `[x]` Explicit destructive-change override (`--allow-destructive`, shared).
 
 ### Slice 5: Rename-aware diffing
 
-- `[ ]` Table rename planning (`ALTER TABLE … RENAME TO`).
-- `[ ]` Column rename planning (`ALTER TABLE … RENAME COLUMN`, SQLite ≥ 3.25).
-- `[ ]` Index rename planning (drop + create; SQLite cannot rename indexes).
-- `[ ]` View / trigger rename planning (drop + create).
-- `[ ]` Rename metadata validation against previous snapshot keys.
-- `[ ]` Rename-plus-alter combinations fail closed until semantic planning
+- `[x]` Table rename planning (`ALTER TABLE … RENAME TO`).
+- `[x]` Column rename planning (`ALTER TABLE … RENAME COLUMN`, SQLite ≥ 3.25).
+- `[x]` Index rename planning (drop + create; SQLite cannot rename indexes).
+- `[x]` View / trigger rename planning (drop + create).
+- `[x]` Rename metadata validation against previous snapshot keys.
+- `[x]` Rename-plus-alter combinations fail closed until semantic planning
   supports them.
 
 ### Slice 5b: Table-rebuild (the SQLite headline)
 
-The 12-step generalised `ALTER TABLE` procedure for changes SQLite cannot do
-in place (column type/constraint changes, drop/reorder columns pre-3.35, PK/FK/
-CHECK/UNIQUE constraint changes, adding STORED generated columns).
+The generalised `ALTER TABLE` procedure for changes SQLite cannot do in place
+(column type/constraint changes, drops, PK/FK/CHECK/UNIQUE constraint changes,
+STRICT/WITHOUT ROWID option changes, adding STORED generated columns).
 
-- `[ ]` Detect changes that require a rebuild vs. a direct `ALTER`.
-- `[ ]` Emit `PRAGMA foreign_keys=OFF;` … `PRAGMA foreign_keys=ON;` wrapping.
-- `[ ]` `CREATE TABLE <new>` with the target schema.
-- `[ ]` `INSERT INTO <new> (cols) SELECT cols FROM <old>` copy.
-- `[ ]` `DROP TABLE <old>`.
-- `[ ]` `ALTER TABLE <new> RENAME TO <old>`.
-- `[ ]` Recreate indexes, views, and triggers referencing the table.
-- `[ ]` `PRAGMA foreign_key_check` posture / risk flagging.
-- `[ ]` `requires-table-rebuild` + `data-loss`/`lock-heavy` risk metadata.
-- `[ ]` Fail-closed when a safe rebuild cannot be constructed (e.g. ambiguous
-  column mapping).
+- `[x]` Detect changes that require a rebuild vs. a direct `ALTER`.
+- `[x]` Emit `PRAGMA foreign_keys=OFF;` … `PRAGMA foreign_keys=ON;` wrapping.
+- `[x]` `CREATE TABLE <new>` with the target schema.
+- `[x]` `INSERT INTO <new> (cols) SELECT cols FROM <old>` copy (follows column
+  rename metadata; skips generated and brand-new columns).
+- `[x]` `DROP TABLE <old>`.
+- `[x]` `ALTER TABLE <new> RENAME TO <old>`.
+- `[x]` Recreate indexes and triggers on the rebuilt table (the rebuild owns
+  them in both directions; the trigger pass skips rebuilt tables). Views survive
+  the same-name swap.
+- `[x]` `lock-heavy` + `requires-ddl-review` risk metadata, plus
+  `destructive`/`data-loss` when columns are dropped.
+- `[x]` Best-effort reverse rebuild to the previous table definition.
+- `[later]` `PRAGMA foreign_key_check` verification posture (deferred to tooling
+  apply/replay).
 
 ### Slice 6: Sandbox replay and drift check
 
@@ -551,8 +561,10 @@ the unsupported ones.
    triggers) + provider registration + `internal/providers` wiring.
 4. `[x]` `examples/sqlite/` + generated SQL/snapshot goldens + Taskfile tasks.
    **← proves the dialect boundary; flips FEATURES.md line 68. DONE.**
-5. `[ ]` Migration planner (`plan/`): structured IR → additive → destructive
-   guards → rename → table-rebuild.
+5. `[x]` Migration planner (`plan/`): structured IR → additive → destructive
+   guards → rename → table-rebuild. **DONE** (`migrate create`/`migrate plan`
+   work for SQLite; generic diff helpers lifted into `internal/migrate/plan` and
+   PG refactored onto them).
 6. `[ ]` Tooling (`tooling/`): PRAGMA introspection → drift projection → sandbox
    replay → `migrate apply`.
 7. `[ ]` Opt-in `modernc.org/sqlite` integration test + docs (FEATURES.md,

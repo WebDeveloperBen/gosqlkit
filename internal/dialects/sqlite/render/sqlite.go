@@ -120,7 +120,12 @@ func renderTable(table sqliteschema.Table) (string, error) {
 	if comment := strings.TrimSpace(table.Comment); comment != "" {
 		writeComment(&b, comment)
 	}
+	b.WriteString(createTableStatement(table))
+	return b.String(), nil
+}
 
+func createTableStatement(table sqliteschema.Table) string {
+	var b strings.Builder
 	b.WriteString("CREATE TABLE ")
 	b.WriteString(table.Name)
 	b.WriteString(" (\n")
@@ -177,7 +182,7 @@ func renderTable(table sqliteschema.Table) (string, error) {
 		b.WriteString(strings.Join(options, ", "))
 	}
 	b.WriteString(";\n")
-	return b.String(), nil
+	return b.String()
 }
 
 func renderColumn(column sqliteschema.Column) string {
@@ -268,6 +273,12 @@ func renderView(view sqliteschema.View) string {
 	if comment := strings.TrimSpace(view.Comment); comment != "" {
 		writeComment(&b, comment)
 	}
+	b.WriteString(createViewStatement(view))
+	return b.String()
+}
+
+func createViewStatement(view sqliteschema.View) string {
+	var b strings.Builder
 	b.WriteString("CREATE ")
 	if view.Temporary {
 		b.WriteString("TEMP ")
@@ -290,6 +301,12 @@ func renderTrigger(trigger sqliteschema.Trigger) string {
 	if comment := strings.TrimSpace(trigger.Comment); comment != "" {
 		writeComment(&b, comment)
 	}
+	b.WriteString(createTriggerStatement(trigger))
+	return b.String()
+}
+
+func createTriggerStatement(trigger sqliteschema.Trigger) string {
+	var b strings.Builder
 	b.WriteString("CREATE TRIGGER ")
 	b.WriteString(trigger.Name)
 	b.WriteString("\n")

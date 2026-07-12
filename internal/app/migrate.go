@@ -12,6 +12,7 @@ import (
 
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	pgplan "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/plan"
+	sqliteplan "github.com/webdeveloperben/gosqlkit/internal/dialects/sqlite/plan"
 	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
@@ -804,6 +805,8 @@ func snapshotPlanner(value string) (migrateplan.SnapshotPlanner, error) {
 	switch dialect(value) {
 	case "postgres", "postgresql", "pg":
 		return pgplan.Planner{}, nil
+	case "sqlite", "sqlite3":
+		return sqliteplan.Planner{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported migration planner dialect %q", value)
 	}
