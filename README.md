@@ -16,9 +16,11 @@ application     runtime database access through its chosen driver
 ```
 
 Migration generation uses a cross-dialect planner with runner-compatible SQL
-output. PostgreSQL database tooling includes inspect, drift, sandbox replay,
-and apply; SQLite currently supports schema generation and snapshot-based
-migration planning. See [MIGRATIONS.md](MIGRATIONS.md) for design decisions.
+output. PostgreSQL tooling includes inspect, drift, sandbox replay, and apply.
+SQLite tooling supports local-file introspection, drift checks, live-source
+planning, isolated sandbox replay, and migration apply. See
+[MIGRATIONS.md](MIGRATIONS.md) for design decisions and [SQLITE.md](SQLITE.md)
+for SQLite-specific tooling boundaries.
 
 PostgreSQL is the first dialect; SQLite is also implemented as a distinct
 dialect with its own supported schema semantics. The core remains dialect
@@ -85,6 +87,29 @@ task integration
 task integration:postgres:matrix
 task integration:postgres:pgvector
 ```
+
+SQLite's file-backed tooling suite uses the pure-Go driver and does not require
+Docker:
+
+```bash
+task integration:sqlite
+```
+
+### SQLite database tooling
+
+With `dialect: sqlite` configured, tooling commands accept a local database
+file path or a `sqlite:` URL:
+
+```bash
+gosqlkit inspect --url ./app.db
+gosqlkit drift check --url ./app.db
+gosqlkit migrate plan --from-url ./app.db
+gosqlkit migrate check --sandbox-url sqlite::memory:
+gosqlkit migrate apply --url ./app.db
+```
+
+Sandbox replay always uses a temporary SQLite database; the supplied non-empty
+`--sandbox-url` enables replay but is not opened or modified.
 
 Create a baseline runner-compatible migration from the current schema when
 the migration directory is empty:
@@ -278,11 +303,13 @@ navigation.
   SQLite cannot express with direct `ALTER TABLE` operations.
 - CLI `generate`, `snapshot`, `migrate create`, and `migrate plan` support for
   SQLite projects; see [examples/sqlite](examples/sqlite).
-- SQLite inspection, drift checking, sandbox replay, migration apply, and
-  live-database migration sources are not yet available. Their work is tracked
-  in [sqlite-tooling](openspec/changes/sqlite-tooling/tasks.md). Additional
-  SQLite schema options are tracked in
-  [sqlite-schema-options](openspec/changes/sqlite-schema-options/tasks.md).
+- Local-file `inspect` and drift checking, including live SQLite sources for
+  `migrate create` and `migrate plan`.
+- Isolated temporary-database sandbox replay and `migrate apply` with Goose or
+  golang-migrate version-state semantics. The integration path uses
+  `modernc.org/sqlite` internally and runs with `task integration:sqlite`.
+- SQLite `IF NOT EXISTS` creation options for tables, indexes, and views;
+  `PreviousName()` metadata for table, column, index, view, and trigger renames.
 
 ## Example Project
 
@@ -293,10 +320,10 @@ SQL and feeds `sqlc`.
 
 `gosqlkit` does not provide an application runtime ORM or query layer, and it
 does not replace `sqlc` or the runtime database driver chosen by the
-application. It does generate and validate migrations, sandbox-check supported
-PostgreSQL migrations, and apply PostgreSQL migrations. SQLite tooling
-capabilities are documented in the SQLite contract and active changes linked
-above.
+application. It generates and validates migrations, supports inspect and drift
+checks, replays migrations in isolated sandboxes, and applies migrations for
+PostgreSQL and SQLite. SQLite uses a pure-Go internal tooling driver; the
+application remains responsible for its runtime database driver.
 
 ## Internal Architecture
 

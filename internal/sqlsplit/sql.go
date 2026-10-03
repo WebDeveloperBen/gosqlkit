@@ -1,6 +1,11 @@
 package sqlsplit
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+var createTriggerPattern = regexp.MustCompile(`(?is)^\s*(?:--[^\r\n]*(?:\r?\n|$)\s*|/\*.*?\*/\s*)*CREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER\b`)
 
 func Statements(sql string) []string {
 	var out []string
@@ -99,6 +104,46 @@ func Statements(sql string) []string {
 		out = append(out, statement)
 	}
 	return out
+}
+
+// StatementsWithTriggers splits SQL while keeping trigger bodies atomic.
+func StatementsWithTriggers(sql string) []string {
+	parts := Statements(sql)
+	statements := make([]string, 0, len(parts))
+	for i := 0; i < len(parts); i++ {
+		part := parts[i]
+		if !IsTriggerStatement(part) {
+			statements = append(statements, part)
+			continue
+		}
+		var trigger strings.Builder
+		trigger.WriteString(part)
+		for !triggerStatementEnd(part) {
+			i++
+			if i == len(parts) {
+				break
+			}
+			part = parts[i]
+			trigger.WriteByte('\n')
+			trigger.WriteString(part)
+		}
+		statements = append(statements, trigger.String())
+	}
+	return statements
+}
+
+// IsTriggerStatement reports whether a SQL fragment starts with CREATE TRIGGER.
+func IsTriggerStatement(statement string) bool {
+	return createTriggerPattern.MatchString(statement)
+}
+
+func triggerStatementEnd(statement string) bool {
+	statement = strings.TrimSpace(statement)
+	if len(statement) < len("END") || !strings.EqualFold(statement[:len("END")], "END") {
+		return false
+	}
+	rest := strings.TrimSpace(statement[len("END"):])
+	return rest == "" || strings.HasPrefix(rest, ";") || strings.HasPrefix(rest, "--") || strings.HasPrefix(rest, "/*")
 }
 
 func dollarQuoteTag(value string) (string, bool) {

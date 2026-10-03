@@ -10,6 +10,7 @@ type View struct {
 	ColumnAliases []string `json:"columnAliases,omitempty"`
 	DependsOn     []string `json:"dependsOn,omitempty"`
 	Temporary     bool     `json:"temporary,omitempty"`
+	IfNotExists   bool     `json:"ifNotExists,omitempty"`
 }
 
 func sortedViews(input []View) []View {

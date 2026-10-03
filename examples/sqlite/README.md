@@ -18,3 +18,15 @@ The schema exercises STRICT and WITHOUT ROWID tables, `INTEGER PRIMARY KEY
 AUTOINCREMENT`, generated (VIRTUAL) columns, `COLLATE NOCASE` columns and
 indexes, composite primary keys, foreign keys with actions and deferral, partial
 indexes, a view, a trigger, and a `PRAGMA` raw-SQL block.
+
+## File-backed integration suite
+
+Run from the repository root:
+
+```bash
+task integration:sqlite
+```
+
+The opt-in target builds the CLI once, then exercises the binary-backed SQLite
+workflow against file databases using `modernc.org/sqlite`. It does not require
+Docker and is separate from the default `task verify` gate.

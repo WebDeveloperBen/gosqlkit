@@ -25,6 +25,12 @@ func (Renderer) Render(plan migrate.Plan) ([]migrate.File, error) {
 		upStatements = []string{""}
 	}
 	downStatements := splitStatements(migrate.SQLStatements(plan.DownStatements, plan.DownSQL))
+	if strings.EqualFold(strings.TrimSpace(plan.Dialect), "sqlite") || strings.EqualFold(strings.TrimSpace(plan.Dialect), "sqlite3") {
+		upStatements = []string{strings.Join(upStatements, "\n")}
+		if len(downStatements) > 0 {
+			downStatements = []string{strings.Join(downStatements, "\n")}
+		}
+	}
 	if len(upStatements) > 1 && len(downStatements) > 0 && len(downStatements) != len(upStatements) {
 		return nil, fmt.Errorf("cannot safely pair %d down statements with %d split golang-migrate up statements", len(downStatements), len(upStatements))
 	}
@@ -106,7 +112,7 @@ func UpSQL(content string) string {
 func splitStatements(statements []string) []string {
 	out := make([]string, 0, len(statements))
 	for _, statement := range statements {
-		out = append(out, sqlsplit.Statements(statement)...)
+		out = append(out, sqlsplit.StatementsWithTriggers(statement)...)
 	}
 	return out
 }

@@ -1,7 +1,7 @@
 PRAGMA foreign_keys = ON;
 
 -- Application users.
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id integer PRIMARY KEY AUTOINCREMENT,
     email text NOT NULL UNIQUE COLLATE NOCASE,
     display_name text,
@@ -36,12 +36,12 @@ CREATE TABLE post_tags (
     CONSTRAINT post_tags_tag_fk FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
 
-CREATE INDEX posts_author_published_idx ON posts (author_id, published_at DESC) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS posts_author_published_idx ON posts (author_id, published_at DESC) WHERE status = 'published';
 
-CREATE UNIQUE INDEX posts_slug_unique ON posts (slug COLLATE NOCASE);
+CREATE UNIQUE INDEX IF NOT EXISTS posts_slug_unique ON posts (slug COLLATE NOCASE);
 
 -- Posts visible to readers.
-CREATE VIEW published_posts (id, author_id, slug, title, published_at) AS SELECT id, author_id, slug, title, published_at FROM posts WHERE status = 'published';
+CREATE VIEW IF NOT EXISTS published_posts (id, author_id, slug, title, published_at) AS SELECT id, author_id, slug, title, published_at FROM posts WHERE status = 'published';
 
 -- Keeps updated_at current on user edits.
 CREATE TRIGGER users_touch_updated_at

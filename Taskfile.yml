@@ -35,6 +35,16 @@ tasks:
     cmds:
       - GOSQLKIT_INTEGRATION=1 go test ./... -count=1
 
+  integration:sqlite:
+    desc: Build the CLI once and run file-backed SQLite integration tests (no Docker)
+    cmds:
+      - |
+        set -eu
+        binary="$(mktemp)"
+        trap 'rm -f "$binary"' EXIT
+        go build -o "$binary" ./cmd/gosqlkit
+        GOSQLKIT_SQLITE_BINARY="$binary" GOSQLKIT_SQLITE_INTEGRATION=1 go test ./internal/app -run '^(TestSQLiteCLI|TestSQLiteIntegrationWorkflow)' -count=1
+
   integration:postgres:matrix:
     desc: Run PostgreSQL integration tests across supported PostgreSQL images
     cmds:

@@ -36,6 +36,11 @@ func (v *ViewDef) Temporary() *ViewDef {
 	return v
 }
 
+func (v *ViewDef) IfNotExists() *ViewDef {
+	v.def.IfNotExists = true
+	return v
+}
+
 func (v *ViewDef) DependsOn(dependencies ...string) *ViewDef {
 	v.def.DependsOn = append(v.def.DependsOn, dependencies...)
 	return v
@@ -43,6 +48,11 @@ func (v *ViewDef) DependsOn(dependencies ...string) *ViewDef {
 
 func (v *ViewDef) Comment(text string) *ViewDef {
 	v.def.Comment = text
+	return v
+}
+
+func (v *ViewDef) PreviousName(name string) *ViewDef {
+	v.def.PreviousName = name
 	return v
 }
 
@@ -111,6 +121,11 @@ func (t *TriggerDef) Body(statements ...string) *TriggerDef {
 
 func (t *TriggerDef) Comment(text string) *TriggerDef {
 	t.def.Comment = text
+	return t
+}
+
+func (t *TriggerDef) PreviousName(name string) *TriggerDef {
+	t.def.PreviousName = name
 	return t
 }
 

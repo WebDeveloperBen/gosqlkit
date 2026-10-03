@@ -52,6 +52,29 @@ func TestRendererRendersSingleAnnotatedFile(t *testing.T) {
 	}
 }
 
+func TestRendererKeepsSQLiteTriggerBodiesAtomic(t *testing.T) {
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:      "sqlite trigger",
+		Dialect:   "sqlite",
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		UpStatements: []migrate.Statement{{SQL: `CREATE TABLE events (id INTEGER);
+CREATE TRIGGER events_after_insert AFTER INSERT ON events FOR EACH ROW BEGIN
+INSERT INTO events VALUES (NEW.id + 1);
+END;
+INSERT INTO events VALUES (1);`}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	statements, err := goose.UpStatements(files[0].Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statements) != 3 || !strings.Contains(statements[1], "BEGIN") || !strings.Contains(statements[1], "INSERT INTO events VALUES (NEW.id + 1);") || !strings.Contains(statements[1], "END;") {
+		t.Fatalf("SQLite trigger migration statements = %#v", statements)
+	}
+}
+
 func TestRendererPrefersStructuredStatements(t *testing.T) {
 	files, err := (goose.Renderer{}).Render(migrate.Plan{
 		Name:           "Add Column",

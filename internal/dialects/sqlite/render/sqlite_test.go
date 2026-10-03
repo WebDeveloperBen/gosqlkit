@@ -16,8 +16,9 @@ func col(name, typ string) sqliteschema.Column {
 
 func goldenSchema() sqliteschema.Schema {
 	users := sqliteschema.Table{
-		Table:  ast.Table{Name: "users", Comment: "Application users."},
-		Strict: true,
+		Table:       ast.Table{Name: "users", Comment: "Application users."},
+		Strict:      true,
+		IfNotExists: true,
 		Columns: []sqliteschema.Column{
 			{Column: ast.Column{Name: "id", Type: "integer", PrimaryKey: true}, AutoIncrement: true},
 			{Column: ast.Column{Name: "email", Type: "text", NotNull: true, Unique: true, Collation: "NOCASE"}},
@@ -56,14 +57,16 @@ func goldenSchema() sqliteschema.Schema {
 		},
 		Indexes: []sqliteschema.Index{
 			{
-				Index: ast.Index{Name: "posts_author_created_idx", Where: "status <> 'deleted'"},
+				Index:       ast.Index{Name: "posts_author_created_idx", Where: "status <> 'deleted'"},
+				IfNotExists: true,
 				Columns: []sqliteschema.IndexColumn{
 					{IndexColumn: ast.IndexColumn{Expression: "author_id"}},
 					{IndexColumn: ast.IndexColumn{Expression: "created_at", Order: "DESC"}},
 				},
 			},
 			{
-				Index: ast.Index{Name: "posts_title_unique", Unique: true},
+				Index:       ast.Index{Name: "posts_title_unique", Unique: true},
+				IfNotExists: true,
 				Columns: []sqliteschema.IndexColumn{
 					{IndexColumn: ast.IndexColumn{Expression: "title"}, Collation: "NOCASE"},
 				},
@@ -92,9 +95,10 @@ func goldenSchema() sqliteschema.Schema {
 		Tables: []sqliteschema.Table{posts, users, postTags, tags},
 		Views: []sqliteschema.View{
 			{
-				Name:    "active_posts",
-				Comment: "Posts that are published.",
-				Query:   "SELECT id, title FROM posts WHERE status = 'published'",
+				Name:        "active_posts",
+				Comment:     "Posts that are published.",
+				Query:       "SELECT id, title FROM posts WHERE status = 'published'",
+				IfNotExists: true,
 			},
 		},
 		Triggers: []sqliteschema.Trigger{

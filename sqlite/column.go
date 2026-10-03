@@ -130,6 +130,11 @@ func (c *Column) Comment(text string) *Column {
 	return c
 }
 
+func (c *Column) PreviousName(name string) *Column {
+	c.def.PreviousName = name
+	return c
+}
+
 func (c *Column) apply(table *sqliteschema.Table) {
 	table.Columns = append(table.Columns, c.def)
 }

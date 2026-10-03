@@ -127,6 +127,9 @@ func renderTable(table sqliteschema.Table) (string, error) {
 func createTableStatement(table sqliteschema.Table) string {
 	var b strings.Builder
 	b.WriteString("CREATE TABLE ")
+	if table.IfNotExists {
+		b.WriteString("IF NOT EXISTS ")
+	}
 	b.WriteString(table.Name)
 	b.WriteString(" (\n")
 
@@ -234,6 +237,9 @@ func renderIndex(tableName string, index sqliteschema.Index) string {
 		b.WriteString("UNIQUE ")
 	}
 	b.WriteString("INDEX ")
+	if index.IfNotExists {
+		b.WriteString("IF NOT EXISTS ")
+	}
 	b.WriteString(index.Name)
 	b.WriteString(" ON ")
 	b.WriteString(tableName)
@@ -284,6 +290,9 @@ func createViewStatement(view sqliteschema.View) string {
 		b.WriteString("TEMP ")
 	}
 	b.WriteString("VIEW ")
+	if view.IfNotExists {
+		b.WriteString("IF NOT EXISTS ")
+	}
 	b.WriteString(view.Name)
 	if len(view.ColumnAliases) > 0 {
 		b.WriteString(" (")

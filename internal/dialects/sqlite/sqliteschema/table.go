@@ -12,6 +12,7 @@ type Table struct {
 	ast.Table
 	WithoutRowID bool `json:"withoutRowid,omitempty"`
 	Strict       bool `json:"strict,omitempty"`
+	IfNotExists  bool `json:"ifNotExists,omitempty"`
 }
 
 type Column struct {

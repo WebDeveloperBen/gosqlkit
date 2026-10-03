@@ -64,8 +64,18 @@ func (d *Definition) Strict() *Definition {
 	return d
 }
 
+func (d *Definition) IfNotExists() *Definition {
+	d.def.IfNotExists = true
+	return d
+}
+
 func (d *Definition) Comment(text string) *Definition {
 	d.def.Comment = text
+	return d
+}
+
+func (d *Definition) PreviousName(name string) *Definition {
+	d.def.PreviousName = name
 	return d
 }
 
@@ -173,6 +183,16 @@ func (c *IndexColumnDef) Desc() *IndexColumnDef {
 func (c *IndexColumnDef) Collate(name string) *IndexColumnDef {
 	c.def.Collation = name
 	return c
+}
+
+func (i *IndexDef) IfNotExists() *IndexDef {
+	i.def.IfNotExists = true
+	return i
+}
+
+func (i *IndexDef) PreviousName(name string) *IndexDef {
+	i.def.PreviousName = name
+	return i
 }
 
 func (i *IndexDef) Where(predicate string) *IndexDef {

@@ -187,11 +187,26 @@ func (p planner) dropIndex(tableName string, index sqliteschema.Index) {
 	).WithReverse(migrateplan.SQL(render.CreateIndex(tableName, index))))
 }
 
+func (p planner) renameIndex(tableName string, old, index sqliteschema.Index) {
+	p.addWith(migrateplan.NewChange(
+		migrateplan.OperationReplace,
+		migrateplan.Ref(migrateplan.ObjectKindIndex, index.Name),
+		fmt.Sprintf("rename index %s to %s", old.Name, index.Name),
+		migrateplan.SQL("DROP INDEX "+old.Name+";"),
+		migrateplan.SQL(render.CreateIndex(tableName, index)),
+	).WithDependencies(migrateplan.Ref(migrateplan.ObjectKindTable, tableName)).
+		WithReverse(
+			migrateplan.SQL("DROP INDEX "+index.Name+";"),
+			migrateplan.SQL(render.CreateIndex(tableName, old)),
+		))
+}
+
 // viewComparable strips rename metadata so a pure rename is not also seen as a
 // definition change.
 func viewComparable(view sqliteschema.View) sqliteschema.View {
 	view.Name = ""
 	view.PreviousName = ""
+	view.IfNotExists = false
 	return view
 }
 

@@ -29,7 +29,7 @@
       "before": true
     }
   ],
-  "snapshotId": "a43c587d1400425189a4948b7ca6c87c5d1874bccf10985180a5bb9eab3005a0",
+  "snapshotId": "095ec24ff890f0b7637daddd7b7ba52bf1244e2d03a2198b8c2a22b4404382e3",
   "tableMetadata": {
     "post_tags": {},
     "posts": {},
@@ -156,7 +156,8 @@
             }
           ],
           "name": "posts_author_published_idx",
-          "where": "status = 'published'"
+          "where": "status = 'published'",
+          "ifNotExists": true
         },
         {
           "columns": [
@@ -166,7 +167,8 @@
             }
           ],
           "name": "posts_slug_unique",
-          "unique": true
+          "unique": true,
+          "ifNotExists": true
         }
       ],
       "name": "posts",
@@ -237,7 +239,8 @@
       ],
       "name": "users",
       "comment": "Application users.",
-      "strict": true
+      "strict": true,
+      "ifNotExists": true
     }
   ],
   "triggerMetadata": {
@@ -281,7 +284,8 @@
       ],
       "dependsOn": [
         "posts"
-      ]
+      ],
+      "ifNotExists": true
     }
   ]
 }

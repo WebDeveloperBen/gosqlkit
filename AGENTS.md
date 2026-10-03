@@ -579,9 +579,9 @@ verify — let it run.
   now decoupled. Keep them decoupled. See section 6.
 - **Importing CLI packages from DSL/renderer/ast** breaks layering. Don't.
 - **Adding a database driver to the public DSL/runtime path** violates the "no
-  ORM, no runtime" scope. Internal tooling may use `pgx` for sandbox replay
-  and future introspection, but application runtime access stays with the
-  user's `sqlc`/`pgx` layer.
+  ORM, no runtime" scope. Internal tooling may use dialect-specific drivers
+  (`pgx` for PostgreSQL, `modernc.org/sqlite` for SQLite); application runtime
+  access stays with the user's selected driver and `sqlc` layer.
 
 ---
 
@@ -628,5 +628,8 @@ examples, and runnable Taskfile targets.
 | `internal/dialects/sqlite/sqliteschema/`| SQLite schema envelope + snapshot JSON (shadow-embeds `ast`) |
 | `internal/dialects/sqlite/render/`      | SQLite SQL rendering + validation + statement renderers |
 | `internal/dialects/sqlite/plan/`        | SQLite migration diff planner incl. table-rebuild |
+| `internal/dialects/sqlite/tooling/` | SQLite database connections, introspection, and migration runners |
+| `internal/app/database_tooling.go` | dialect-neutral database snapshot boundary |
+| `internal/app/{drift_sqlite,migrate_sqlite}.go` | SQLite drift projection and isolated sandbox workflows |
 | `examples/basic/` (PG), `examples/sqlite/` | end-to-end examples + goldens                  |
 | `internal/dialects/*/render/testdata/`  | renderer golden files                             |

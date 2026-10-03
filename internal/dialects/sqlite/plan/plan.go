@@ -30,6 +30,9 @@ func SnapshotDiff(previousJSON, currentJSON []byte) (*migrateplan.Plan, error) {
 		return nil, err
 	}
 
+	if err := validatePreviousNames(previous, current); err != nil {
+		return nil, err
+	}
 	p := planner{
 		plan:             &migrateplan.Plan{},
 		previousTriggers: previous.Triggers,
@@ -68,9 +71,9 @@ func decodeDocument(data []byte, label string) (sqliteschema.Document, error) {
 
 type planner struct {
 	plan             *migrateplan.Plan
+	rebuiltTables    map[string]bool
 	previousTriggers []sqliteschema.Trigger
 	currentTriggers  []sqliteschema.Trigger
-	rebuiltTables    map[string]bool
 }
 
 func (p planner) addWith(change migrateplan.Change) {

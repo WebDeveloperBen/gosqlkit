@@ -16,8 +16,8 @@ type CICmd struct {
 type CISchemaCmd struct {
 	Config                        string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	Dir                           string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
-	SandboxURL                    string `help:"PostgreSQL URL for replaying migrations into a disposable sandbox database."`
-	SandboxURLEnv                 string `name:"sandbox-url-env" help:"Environment variable containing the sandbox PostgreSQL URL."`
+	SandboxURL                    string `help:"Non-empty database URL to enable isolated replay; SQLite always uses a separate temporary database."`
+	SandboxURLEnv                 string `name:"sandbox-url-env" help:"Environment variable whose non-empty value enables sandbox replay."`
 	SandboxTokenCommand           string `name:"sandbox-token-command" help:"Command that prints a sandbox database auth token to stdout. The token is used as the PostgreSQL password."`
 	SandboxAWSProfile             string `name:"sandbox-aws-profile" help:"AWS profile for sandbox RDS/Aurora IAM database authentication."`
 	SandboxAWSRegion              string `name:"sandbox-aws-region" help:"AWS region for sandbox RDS/Aurora IAM database authentication. Defaults to the AWS config chain when omitted."`

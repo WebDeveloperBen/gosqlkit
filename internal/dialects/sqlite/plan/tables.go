@@ -87,22 +87,19 @@ func (p planner) renameTable(old, current sqliteschema.Table) error {
 
 func (p planner) alterTable(old, current sqliteschema.Table) error {
 	if columnsComparableEqual(old, current) && constraintsAndOptionsEqual(old, current) {
-		p.diffIndexes(old, current)
-		return nil
+		return p.diffIndexes(old, current)
 	}
 	if added, ok := addOnlyColumns(old, current); ok {
 		for _, column := range added {
 			p.addColumn(current.Name, column)
 		}
-		p.diffIndexes(old, current)
-		return nil
+		return p.diffIndexes(old, current)
 	}
 	if renames, ok := renameOnlyColumns(old, current); ok {
 		for _, rename := range renames {
 			p.renameColumn(current.Name, rename.from, rename.to)
 		}
-		p.diffIndexes(old, current)
-		return nil
+		return p.diffIndexes(old, current)
 	}
 	p.rebuildTable(old, current)
 	return nil
@@ -128,9 +125,24 @@ func (p planner) renameColumn(table, from, to string) {
 		WithReverse(migrateplan.SQL(fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s;", table, to, from))))
 }
 
-func (p planner) diffIndexes(old, current sqliteschema.Table) {
+func (p planner) diffIndexes(old, current sqliteschema.Table) error {
 	oldIdx := migrateplan.MapBy(old.Indexes, indexName)
 	for _, index := range migrateplan.SortedBy(current.Indexes, indexName) {
+		if index.PreviousName != "" {
+			oldIndex, found := oldIdx[index.PreviousName]
+			if !found || index.PreviousName == index.Name {
+				return unsupported(fmt.Sprintf("index %q declares unmatched previousName %q", index.Name, index.PreviousName))
+			}
+			if _, found := oldIdx[index.Name]; found {
+				return unsupported(fmt.Sprintf("index rename %q -> %q targets an existing previous index", oldIndex.Name, index.Name))
+			}
+			if !jsonEqual(indexComparable(oldIndex), indexComparable(index)) {
+				return unsupported(fmt.Sprintf("index rename %q -> %q combined with definition changes is not supported", oldIndex.Name, index.Name))
+			}
+			p.renameIndex(current.Name, oldIndex, index)
+			delete(oldIdx, index.PreviousName)
+			continue
+		}
 		prevIndex, ok := oldIdx[index.Name]
 		if !ok {
 			p.createIndex(current.Name, index)
@@ -145,6 +157,7 @@ func (p planner) diffIndexes(old, current sqliteschema.Table) {
 	for _, name := range mapKeys(oldIdx) {
 		p.dropIndex(current.Name, oldIdx[name])
 	}
+	return nil
 }
 
 // rebuildTable performs the generalised 12-step ALTER TABLE for changes SQLite
@@ -392,6 +405,7 @@ func indexName(index sqliteschema.Index) string { return index.Name }
 func indexComparable(index sqliteschema.Index) sqliteschema.Index {
 	index.Name = ""
 	index.PreviousName = ""
+	index.IfNotExists = false
 	return index
 }
 
@@ -399,6 +413,7 @@ func tableComparable(table sqliteschema.Table) sqliteschema.Table {
 	table.Name = ""
 	table.PreviousName = ""
 	table.Comment = ""
+	table.IfNotExists = false
 	return table
 }
 

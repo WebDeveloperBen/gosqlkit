@@ -18,6 +18,7 @@ var Users = sqlite.Table(
 	sqlite.Text("updated_at").NotNull().DefaultCurrentTimestamp(),
 ).
 	Strict().
+	IfNotExists().
 	Comment("Application users.")
 
 var UsersTouchUpdatedAt = sqlite.Trigger("users_touch_updated_at", "users").
@@ -40,12 +41,12 @@ var Posts = sqlite.Table(
 	sqlite.Text("published_at"),
 	sqlite.Text("created_at").NotNull().DefaultCurrentTimestamp(),
 	sqlite.Check("posts_status_check", "status IN ('draft', 'published', 'archived')"),
-	sqlite.UniqueIndexOn("posts_slug_unique", sqlite.IndexColumn("slug").Collate(sqlite.NoCase)),
+	sqlite.UniqueIndexOn("posts_slug_unique", sqlite.IndexColumn("slug").Collate(sqlite.NoCase)).IfNotExists(),
 	sqlite.IndexOn(
 		"posts_author_published_idx",
 		sqlite.IndexColumn("author_id"),
 		sqlite.IndexColumn("published_at").Desc(),
-	).Where("status = 'published'"),
+	).Where("status = 'published'").IfNotExists(),
 )
 
 var Tags = sqlite.Table(
@@ -73,4 +74,5 @@ var PublishedPosts = sqlite.View("published_posts").
 	As("SELECT id, author_id, slug, title, published_at FROM posts WHERE status = 'published'").
 	Columns("id", "author_id", "slug", "title", "published_at").
 	DependsOn("posts").
-	Comment("Posts visible to readers.")
+	Comment("Posts visible to readers.").
+	IfNotExists()
