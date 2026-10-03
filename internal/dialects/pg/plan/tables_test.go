@@ -461,6 +461,45 @@ func TestSnapshotDiffProducesIndexDependencyAndReverse(t *testing.T) {
 	}
 }
 
+func TestSnapshotDiffMarksConcurrentIndexNonTransactional(t *testing.T) {
+	previous := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
+		}},
+	})
+	current := snapshot(t, pgschema.Document{
+		Dialect: "postgresql",
+		Version: pgschema.SnapshotVersion,
+		Tables: []pgschema.Table{{
+			Table: ast.Table{
+				Name:    "users",
+				Columns: []ast.Column{{Name: "email", Type: "text"}},
+			},
+			Indexes: []pgschema.Index{{
+				Index:        ast.Index{Name: "users_email_idx"},
+				Columns:      []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "email"}}},
+				Concurrently: true,
+			}},
+		}},
+	})
+
+	planned, err := plan.SnapshotDiff(previous, current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(planned.Changes) != 1 || !planned.Changes[0].HasRisk(migrateplan.RiskNonTransactional) {
+		t.Fatalf("concurrent index change risks = %#v, want non-transactional", planned.Changes)
+	}
+	if !strings.Contains(planned.Changes[0].Statements[0].SQL, "CREATE INDEX CONCURRENTLY") {
+		t.Fatalf("concurrent index SQL = %#v", planned.Changes[0].Statements)
+	}
+}
+
 func TestSnapshotDiffProducesCommentDependencyAndReverse(t *testing.T) {
 	previous := snapshot(t, pgschema.Document{
 		Dialect: "postgresql",

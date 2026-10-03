@@ -18,7 +18,7 @@ import (
 
 type MigrateCmd struct {
 	Plan    MigratePlanCmd    `cmd:"" help:"Print the structured migration plan without writing files."`
-	Apply   MigrateApplyCmd   `cmd:"" help:"Apply pending migrations to a PostgreSQL database."`
+	Apply   MigrateApplyCmd   `cmd:"" help:"Apply pending migrations to a configured database."`
 	Check   MigrateCheckCmd   `cmd:"" help:"Validate migration files."`
 	Refresh MigrateRefreshCmd `cmd:"" help:"Author a migration that refreshes a materialized view."`
 	Create  MigrateCreateCmd  `cmd:"" help:"Create a migration file."`
@@ -31,9 +31,9 @@ type MigrateCreateCmd struct {
 	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
 	Name                       string `arg:"" help:"Migration name."`
 	FromGCloudInstance         string `name:"from-gcloud-instance" help:"Cloud SQL instance ID for source database authentication."`
-	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
+	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source database URL or file path."`
 	Config                     string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
-	FromURL                    string `name:"from-url" help:"PostgreSQL URL for the source schema. When set, creates a migration from the live database to the desired schema."`
+	FromURL                    string `name:"from-url" help:"Database URL or file path for the source schema. When set, creates a migration from that live database to the desired schema."`
 	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
 	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	FromCloudSQLConnector      bool   `name:"from-cloud-sql-connector" help:"Use the Cloud SQL Go Connector with automatic IAM authentication for the source database."`
@@ -162,8 +162,8 @@ func printCreatedFiles(w io.Writer, result *app.MigrateCreateResult) error {
 type MigrateCheckCmd struct {
 	Config                        string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	Dir                           string `help:"Migration directory to validate. Overrides config migrations.dir." type:"path"`
-	SandboxURL                    string `help:"PostgreSQL URL for replaying migrations into a disposable sandbox database."`
-	SandboxURLEnv                 string `name:"sandbox-url-env" help:"Environment variable containing the sandbox PostgreSQL URL."`
+	SandboxURL                    string `help:"Non-empty database URL to enable isolated migration replay; SQLite uses a separate temporary database."`
+	SandboxURLEnv                 string `name:"sandbox-url-env" help:"Environment variable whose non-empty value enables sandbox replay."`
 	SandboxAuth                   string `name:"sandbox-auth" help:"Sandbox database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	SandboxTokenCommand           string `name:"sandbox-token-command" help:"Command that prints a sandbox database auth token to stdout. The token is used as the PostgreSQL password."`
 	SandboxAWSProfile             string `name:"sandbox-aws-profile" help:"AWS profile for sandbox RDS/Aurora IAM database authentication."`
@@ -230,8 +230,8 @@ type MigrateApplyCmd struct {
 	Config                 string `help:"Path to gosqlkit.yaml config file. If omitted, searches current dir and parents." type:"path"`
 	Dir                    string `help:"Migration directory to apply. Overrides config migrations.dir." type:"path"`
 	Runner                 string `help:"Migration runner file format: goose or golang-migrate."`
-	URL                    string `help:"PostgreSQL URL for the target database. Defaults to DATABASE_URL when omitted."`
-	URLEnv                 string `name:"url-env" help:"Environment variable containing the PostgreSQL URL."`
+	URL                    string `help:"Database URL or file path for the target database. Defaults to DATABASE_URL when omitted."`
+	URLEnv                 string `name:"url-env" help:"Environment variable containing the database URL or file path."`
 	Auth                   string `help:"Database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	TokenCommand           string `name:"token-command" help:"Command that prints a database auth token to stdout. The token is used as the PostgreSQL password."`
 	AWSProfile             string `name:"aws-profile" help:"AWS profile for RDS/Aurora IAM database authentication."`
@@ -302,8 +302,8 @@ type MigratePlanCmd struct {
 	FromAWSProfile             string `name:"from-aws-profile" help:"AWS profile for source RDS/Aurora IAM database authentication."`
 	Runner                     string `help:"Migration runner file format: goose or golang-migrate."`
 	Snapshot                   string `help:"Snapshot file to diff against. Defaults to the config snapshot output."`
-	FromURL                    string `name:"from-url" help:"PostgreSQL URL for the source schema. When set, plans from the live database instead of the latest migration snapshot."`
-	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source PostgreSQL URL."`
+	FromURL                    string `name:"from-url" help:"Database URL or file path for the source schema. When set, plans from the live database instead of the latest migration snapshot."`
+	FromURLEnv                 string `name:"from-url-env" help:"Environment variable containing the source database URL or file path."`
 	FromAuth                   string `name:"from-auth" help:"Source database authentication mode: password, token-command, azure-entra, aws-iam, or gcp-iam."`
 	FromTokenCommand           string `name:"from-token-command" help:"Command that prints the source database auth token to stdout."`
 	FromAWSRegion              string `name:"from-aws-region" help:"AWS region for source RDS/Aurora IAM database authentication."`

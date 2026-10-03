@@ -1,0 +1,291 @@
+{
+  "columnMetadata": {
+    "post_tags.post_id": {},
+    "post_tags.tag_id": {},
+    "posts.author_id": {},
+    "posts.body": {},
+    "posts.created_at": {},
+    "posts.id": {},
+    "posts.published_at": {},
+    "posts.slug": {},
+    "posts.status": {},
+    "posts.title": {},
+    "posts.view_count": {},
+    "tags.id": {},
+    "tags.name": {},
+    "users.created_at": {},
+    "users.display_name": {},
+    "users.email": {},
+    "users.id": {},
+    "users.search_name": {},
+    "users.updated_at": {}
+  },
+  "dialect": "sqlite",
+  "rawSQL": [
+    {
+      "name": "enable_foreign_keys",
+      "sql": "PRAGMA foreign_keys = ON;",
+      "down": "PRAGMA foreign_keys = OFF;",
+      "before": true
+    }
+  ],
+  "snapshotId": "095ec24ff890f0b7637daddd7b7ba52bf1244e2d03a2198b8c2a22b4404382e3",
+  "tableMetadata": {
+    "post_tags": {},
+    "posts": {},
+    "tags": {},
+    "users": {
+      "comment": "Application users."
+    }
+  },
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "post_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "tag_id",
+          "type": "integer",
+          "notNull": true
+        }
+      ],
+      "name": "post_tags",
+      "primaryKeys": [
+        {
+          "name": "post_tags_pk",
+          "columns": [
+            "post_id",
+            "tag_id"
+          ]
+        }
+      ],
+      "foreignKeys": [
+        {
+          "name": "post_tags_post_fk",
+          "referencedTable": "posts",
+          "onDelete": "cascade",
+          "columns": [
+            "post_id"
+          ],
+          "referencedColumns": [
+            "id"
+          ]
+        },
+        {
+          "name": "post_tags_tag_fk",
+          "referencedTable": "tags",
+          "onDelete": "cascade",
+          "initially": "deferred",
+          "columns": [
+            "tag_id"
+          ],
+          "referencedColumns": [
+            "id"
+          ],
+          "deferrable": true
+        }
+      ]
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "autoIncrement": true
+        },
+        {
+          "references": {
+            "table": "users",
+            "column": "id",
+            "onDelete": "cascade"
+          },
+          "name": "author_id",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "body",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'draft'",
+          "notNull": true
+        },
+        {
+          "name": "view_count",
+          "type": "integer",
+          "default": "0",
+          "notNull": true
+        },
+        {
+          "name": "published_at",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "default": "CURRENT_TIMESTAMP",
+          "notNull": true
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            {
+              "expression": "author_id"
+            },
+            {
+              "expression": "published_at",
+              "order": "DESC"
+            }
+          ],
+          "name": "posts_author_published_idx",
+          "where": "status = 'published'",
+          "ifNotExists": true
+        },
+        {
+          "columns": [
+            {
+              "collation": "NOCASE",
+              "expression": "slug"
+            }
+          ],
+          "name": "posts_slug_unique",
+          "unique": true,
+          "ifNotExists": true
+        }
+      ],
+      "name": "posts",
+      "checks": [
+        {
+          "name": "posts_status_check",
+          "expression": "status IN ('draft', 'published', 'archived')"
+        }
+      ]
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "collation": "NOCASE",
+          "notNull": true,
+          "unique": true
+        }
+      ],
+      "name": "tags",
+      "withoutRowid": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "autoIncrement": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "collation": "NOCASE",
+          "notNull": true,
+          "unique": true
+        },
+        {
+          "name": "display_name",
+          "type": "text"
+        },
+        {
+          "generated": {
+            "as": "lower(email)",
+            "type": "virtual"
+          },
+          "name": "search_name",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "default": "CURRENT_TIMESTAMP",
+          "notNull": true
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "default": "CURRENT_TIMESTAMP",
+          "notNull": true
+        }
+      ],
+      "name": "users",
+      "comment": "Application users.",
+      "strict": true,
+      "ifNotExists": true
+    }
+  ],
+  "triggerMetadata": {
+    "users.users_touch_updated_at": {}
+  },
+  "triggers": [
+    {
+      "name": "users_touch_updated_at",
+      "target": "users",
+      "timing": "after",
+      "when": "old.updated_at = new.updated_at",
+      "body": "UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = new.id;",
+      "comment": "Keeps updated_at current on user edits.",
+      "events": [
+        "update"
+      ],
+      "updateOfColumns": [
+        "email",
+        "display_name"
+      ],
+      "forEachRow": true
+    }
+  ],
+  "version": 1,
+  "viewMetadata": {
+    "published_posts": {
+      "comment": "Posts visible to readers."
+    }
+  },
+  "views": [
+    {
+      "name": "published_posts",
+      "query": "SELECT id, author_id, slug, title, published_at FROM posts WHERE status = 'published'",
+      "comment": "Posts visible to readers.",
+      "columnAliases": [
+        "id",
+        "author_id",
+        "slug",
+        "title",
+        "published_at"
+      ],
+      "dependsOn": [
+        "posts"
+      ],
+      "ifNotExists": true
+    }
+  ]
+}

@@ -1,29 +1,30 @@
 # gosqlkit
 
-`gosqlkit` is the **schema declaration layer** for Go applications that use
-PostgreSQL. It is the Go-native equivalent of Drizzle Kit's schema declarative
-piece — you define your database schema in Go, and `gosqlkit` generates
-deterministic, reviewable SQL and structured snapshots.
+`gosqlkit` is a Go-native schema declaration and migration workflow for
+PostgreSQL and SQLite. Define database schemas in Go; generate deterministic,
+reviewable SQL, structured snapshots, and runner-compatible migrations.
 
-It is intentionally **not an ORM**, **not a query builder**, and **not a
-migration runner**. The toolchain is intentionally split:
+It is intentionally **not an ORM** or **query builder**. `sqlc` owns query code
+generation, and applications choose their runtime database driver.
 
 ```text
-gosqlkit        schema declarations -> snapshot JSON -> canonical SQL
+gosqlkit        schema declarations -> snapshots -> canonical SQL
+gosqlkit        migration plan/create/check/apply for supported dialect tools
 sqlc            SQL queries -> type-safe Go query code
-gosqlkit migrate snapshot diff -> reviewable migration SQL
-goose/golang-migrate runner-compatible migration files
-pgx             runtime PostgreSQL driver
+goose/golang-migrate runner-compatible migration files and version state
+application     runtime database access through its chosen driver
 ```
 
-`gosqlkit` owns the schema layer. `sqlc` owns query code generation and is the
-runtime data-access layer alongside `pgx`. Migration generation uses a
-`gosqlkit` cross-dialect planner with runner-compatible SQL output. See
-[MIGRATIONS.md](MIGRATIONS.md) for the migration design.
+Migration generation uses a cross-dialect planner with runner-compatible SQL
+output. PostgreSQL tooling includes inspect, drift, sandbox replay, and apply.
+SQLite tooling supports local-file introspection, drift checks, live-source
+planning, isolated sandbox replay, and migration apply. See
+[MIGRATIONS.md](MIGRATIONS.md) for design decisions and [SQLITE.md](SQLITE.md)
+for SQLite-specific tooling boundaries.
 
-PostgreSQL is the first implemented dialect; the core is dialect-neutral so
-SQLite, MySQL, MSSQL, and other engines can be added as separate dialect
-packages under `internal/dialects/`.
+PostgreSQL is the first dialect; SQLite is also implemented as a distinct
+dialect with its own supported schema semantics. The core remains dialect
+neutral so additional engines can be added without emulating PostgreSQL.
 
 ## Example
 
@@ -86,6 +87,29 @@ task integration
 task integration:postgres:matrix
 task integration:postgres:pgvector
 ```
+
+SQLite's file-backed tooling suite uses the pure-Go driver and does not require
+Docker:
+
+```bash
+task integration:sqlite
+```
+
+### SQLite database tooling
+
+With `dialect: sqlite` configured, tooling commands accept a local database
+file path or a `sqlite:` URL:
+
+```bash
+gosqlkit inspect --url ./app.db
+gosqlkit drift check --url ./app.db
+gosqlkit migrate plan --from-url ./app.db
+gosqlkit migrate check --sandbox-url sqlite::memory:
+gosqlkit migrate apply --url ./app.db
+```
+
+Sandbox replay always uses a temporary SQLite database; the supplied non-empty
+`--sandbox-url` enables replay but is not opened or modified.
 
 Create a baseline runner-compatible migration from the current schema when
 the migration directory is empty:
@@ -165,6 +189,12 @@ sqlc generate
 
 ## Current Features
 
+Behavior contracts: [PostgreSQL](openspec/specs/postgres-schema-workflow/spec.md),
+[SQLite](openspec/specs/sqlite-schema-workflow/spec.md). OpenSpec is the
+capability and implementation-status source; see [FEATURES.md](FEATURES.md) for
+navigation.
+
+### PostgreSQL
 - All common PostgreSQL scalar types (uuid, text, varchar, integer, smallint,
   bigint, serial, smallserial, bigserial, real, double precision, boolean,
   numeric, char, date, time, timetz, timestamp, timestamptz, interval, json,
@@ -196,9 +226,9 @@ sqlc generate
   not model, rendered before or after the structured schema, additive-only in
   migration planning, with optional `.Down()` reverse SQL for down migrations
 - Schema-qualified rendering
-- Deterministic SQL and snapshot JSON output with stable snapshot IDs
-- Snapshot metadata maps (schema, table, column, view, role, function, trigger, policy) with
-  schema-qualified keys for future diffing
+- Deterministic SQL and snapshot JSON with stable snapshot IDs and metadata
+  maps (schema, table, column, view, role, function, trigger, policy) keyed for
+  migration planning and drift comparison
 - Rename annotations (previousName) across supported schema objects, including
   trigger rename planning and manual-review extension replacement detection
 - Dialect registry with PostgreSQL as the first provider
@@ -206,7 +236,8 @@ sqlc generate
 - Empty runner-compatible migration files for manual SQL
 - Baseline runner-compatible migration generation from the current schema, with
   target snapshots embedded in `gosqlkit` metadata
-- Conservative additive PostgreSQL diff migrations from embedded snapshots
+- Structured PostgreSQL migration plans from embedded snapshots, with per-change
+  risk metadata, destructive guards, and best-effort reverse SQL
 - Migration directory checks for timestamped SQL files, embedded metadata,
   snapshot lineage, goose `Up` / `Down` annotations, and `golang-migrate`
   `.up.sql` metadata
@@ -264,6 +295,22 @@ sqlc generate
   SQL is intentionally withheld for PostgreSQL enum rebuilds
 - `sqlc` compatibility example
 
+### SQLite
+
+- SQLite-native schema declarations, deterministic SQL rendering, and
+  versioned snapshots.
+- Snapshot-based migration planning, including table rebuilds for changes
+  SQLite cannot express with direct `ALTER TABLE` operations.
+- CLI `generate`, `snapshot`, `migrate create`, and `migrate plan` support for
+  SQLite projects; see [examples/sqlite](examples/sqlite).
+- Local-file `inspect` and drift checking, including live SQLite sources for
+  `migrate create` and `migrate plan`.
+- Isolated temporary-database sandbox replay and `migrate apply` with Goose or
+  golang-migrate version-state semantics. The integration path uses
+  `modernc.org/sqlite` internally and runs with `task integration:sqlite`.
+- SQLite `IF NOT EXISTS` creation options for tables, indexes, and views;
+  `PreviousName()` metadata for table, column, index, view, and trigger renames.
+
 ## Example Project
 
 See [examples/basic](examples/basic) for a schema that generates PostgreSQL
@@ -271,28 +318,29 @@ SQL and feeds `sqlc`.
 
 ## Boundaries
 
-`gosqlkit` does not generate runtime models, build queries, apply migrations,
-or hide SQL. It is the schema layer only — you still use `sqlc` for query code
-generation and `pgx` for runtime database access. Migration generation is
-planned as a versioned, review-first workflow documented in
-[MIGRATIONS.md](MIGRATIONS.md).
+`gosqlkit` does not provide an application runtime ORM or query layer, and it
+does not replace `sqlc` or the runtime database driver chosen by the
+application. It generates and validates migrations, supports inspect and drift
+checks, replays migrations in isolated sandboxes, and applies migrations for
+PostgreSQL and SQLite. SQLite uses a pure-Go internal tooling driver; the
+application remains responsible for its runtime database driver.
 
 ## Internal Architecture
 
 ```text
-pg/                              public PostgreSQL DSL (user import path)
+pg/                              public PostgreSQL DSL
+sqlite/                          public SQLite DSL
 kit/                             dialect-neutral provider registry
 internal/ast/                    shared schema core (carries JSON tags = snapshot)
-internal/dialects/pg/            PostgreSQL internal machinery:
-  pgschema/                      PG schema envelope + snapshot JSON function
-  render/                        PG SQL renderer + validation
+internal/dialects/pg/            PostgreSQL schema, renderer, planner, tooling
+internal/dialects/sqlite/        SQLite schema, renderer, planner
 internal/cli/                    Kong CLI commands
 internal/app/                    use cases + config file parsing
 cmd/gosqlkit/                    process entrypoint
 ```
 
-Adding a new dialect = add `internal/dialects/<name>/` with `schema/` and
-`render/` sub-packages, plus a top-level `<name>/` package for the public DSL.
+Each dialect has a public DSL and dialect-specific schema and rendering
+machinery; see [AGENTS.md](AGENTS.md) for the full layering rules.
 
 ## Testing
 

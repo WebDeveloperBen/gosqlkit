@@ -225,3 +225,63 @@ CREATE TABLE users (id uuid);
 		t.Fatalf("UpSQL() mismatch\nwant:\n%q\n\ngot:\n%q", want, got)
 	}
 }
+
+func TestRendererKeepsSQLiteTriggerBodiesAtomic(t *testing.T) {
+	files, err := (golangmigrate.Renderer{}).Render(migrate.Plan{
+		Name:      "Create SQLite Trigger",
+		Dialect:   "sqlite",
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		UpStatements: []migrate.Statement{{
+			SQL: "CREATE TRIGGER audit AFTER INSERT ON users FOR EACH ROW BEGIN INSERT INTO events (id) VALUES (NEW.id); UPDATE counters SET count = count + 1; END;",
+		}},
+		DownStatements: []migrate.Statement{{SQL: "DROP TRIGGER audit;"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 || !strings.Contains(files[0].Content, "UPDATE counters SET count = count + 1;") || !strings.Contains(files[0].Content, "END;") {
+		t.Fatalf("trigger migration was not kept atomic: %#v", files)
+	}
+}
+
+func TestRendererKeepsSQLiteForeignKeyRebuildAtomic(t *testing.T) {
+	files, err := (golangmigrate.Renderer{}).Render(migrate.Plan{
+		Name:      "Rebuild SQLite Table",
+		Dialect:   "sqlite",
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		UpStatements: []migrate.Statement{
+			{SQL: "PRAGMA foreign_keys=OFF;"},
+			{SQL: "CREATE TABLE users_gosqlkit_new (id INTEGER PRIMARY KEY);"},
+			{SQL: "INSERT INTO users_gosqlkit_new (id) SELECT id FROM users;"},
+			{SQL: "DROP TABLE users;"},
+			{SQL: "ALTER TABLE users_gosqlkit_new RENAME TO users;"},
+			{SQL: "PRAGMA foreign_keys=ON;"},
+		},
+		DownStatements: []migrate.Statement{
+			{SQL: "PRAGMA foreign_keys=OFF;"},
+			{SQL: "CREATE TABLE users_gosqlkit_new (id INTEGER PRIMARY KEY);"},
+			{SQL: "INSERT INTO users_gosqlkit_new (id) SELECT id FROM users;"},
+			{SQL: "DROP TABLE users;"},
+			{SQL: "ALTER TABLE users_gosqlkit_new RENAME TO users;"},
+			{SQL: "PRAGMA foreign_keys=ON;"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("SQLite rebuild migration files = %d, want one up/down pair", len(files))
+	}
+	for _, fragment := range []string{
+		"PRAGMA foreign_keys=OFF;",
+		"CREATE TABLE users_gosqlkit_new",
+		"INSERT INTO users_gosqlkit_new",
+		"DROP TABLE users;",
+		"ALTER TABLE users_gosqlkit_new RENAME TO users;",
+		"PRAGMA foreign_keys=ON;",
+	} {
+		if !strings.Contains(files[0].Content, fragment) || !strings.Contains(files[1].Content, fragment) {
+			t.Fatalf("atomic rebuild files omit %q: %#v", fragment, files)
+		}
+	}
+}

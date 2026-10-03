@@ -65,11 +65,11 @@ func TestGenerateRejectsUnknownDialect(t *testing.T) {
 	var stdout bytes.Buffer
 	_, err := Generate(GenerateOptions{
 		Package: "./examples/basic/schema",
-		Dialect: "sqlite",
+		Dialect: "oracle",
 		Root:    mustModuleDir(t),
 		Stdout:  &stdout,
 	})
-	if err == nil || !strings.Contains(err.Error(), `unknown dialect "sqlite"`) {
+	if err == nil || !strings.Contains(err.Error(), `unknown dialect "oracle"`) {
 		t.Fatalf("expected unknown dialect error, got %v", err)
 	}
 }

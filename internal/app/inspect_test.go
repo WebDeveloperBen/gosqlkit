@@ -146,13 +146,13 @@ func TestInspectRejectsConflictingTokenProviders(t *testing.T) {
 
 func TestInspectRejectsUnknownDialect(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://example")
-	_, err := InspectWithConfig(inspectTestConfig(t, "sqlite"), InspectOptions{
+	_, err := InspectWithConfig(inspectTestConfig(t, "oracle"), InspectOptions{
 		inspectPG: func(context.Context, string) (pgschema.Schema, error) {
 			t.Fatal("inspectPG should not be called")
 			return pgschema.Schema{}, nil
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), `unknown dialect "sqlite"`) {
+	if err == nil || !strings.Contains(err.Error(), `unknown dialect "oracle"`) {
 		t.Fatalf("expected unknown dialect error, got %v", err)
 	}
 }

@@ -3,17 +3,16 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
-	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	"github.com/webdeveloperben/gosqlkit/kit"
 )
 
 type InspectOptions struct {
 	Stdout                 io.Writer
 	inspectPG              driftInspectFunc
+	inspectSQLite          sqliteInspectFunc
 	URL                    string
 	URLEnv                 string
 	Auth                   string
@@ -69,45 +68,32 @@ func InspectWithConfig(config *Config, opts InspectOptions) (*InspectResult, err
 		GCloudADCToken:         opts.GCloudADCToken,
 		GCloudToken:            opts.GCloudToken,
 	}
-	auth, err = normaliseDatabaseAuthOptions(auth)
-	if err != nil {
-		return nil, err
+	if !isSQLiteDialect(config.Dialect) {
+		auth, err = normaliseDatabaseAuthOptions(auth)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	switch dialect(config.Dialect) {
-	case "postgres", "postgresql", "pg":
-		return inspectPostgresSnapshot(config, opts, databaseURL, auth)
-	default:
-		return nil, fmt.Errorf("unsupported inspect dialect %q", config.Dialect)
-	}
+	return inspectDatabaseSnapshot(config, opts, databaseURL, auth)
 }
 
-func inspectPostgresSnapshot(config *Config, opts InspectOptions, databaseURL string, auth databaseAuthOptions) (*InspectResult, error) {
+func inspectDatabaseSnapshot(config *Config, opts InspectOptions, databaseURL string, auth databaseAuthOptions) (*InspectResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	var schema pgschema.Schema
-	var err error
-	if opts.inspectPG != nil {
-		schema, err = opts.inspectPG(ctx, databaseURL)
-	} else {
-		schema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(databaseURL, auth))
-	}
+	tooling, err := newDatabaseTooling(config.Dialect, databaseURL, auth, opts.inspectPG, opts.inspectSQLite)
 	if err != nil {
 		return nil, err
 	}
-
+	snapshot, err := tooling.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if opts.DriftProjection {
-		schema = projectDriftSchema(schema)
-	}
-
-	raw, err := pgschema.JSON("postgresql", schema)
-	if err != nil {
-		return nil, err
-	}
-	snapshot, err := injectSnapshotIDs(string(raw), "")
-	if err != nil {
-		return nil, err
+		snapshot, err = projectDatabaseSnapshot(snapshot, tooling.Dialect())
+		if err != nil {
+			return nil, err
+		}
 	}
 	snapshotID, err := snapshotIDFromJSON(snapshot)
 	if err != nil {
@@ -129,7 +115,7 @@ func inspectPostgresSnapshot(config *Config, opts InspectOptions, databaseURL st
 	return &InspectResult{
 		Out:             out,
 		SnapshotID:      snapshotID,
-		Dialect:         "postgresql",
+		Dialect:         tooling.Dialect(),
 		DriftProjection: opts.DriftProjection,
 	}, nil
 }

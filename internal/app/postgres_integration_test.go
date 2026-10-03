@@ -280,6 +280,187 @@ func TestPostgresIntegrationWorkflow(t *testing.T) {
 		}
 	})
 
+	t.Run("transactional apply rollback preserves PostgreSQL runner recovery state", func(t *testing.T) {
+		for _, tc := range []struct {
+			renderer migrate.Renderer
+			name     string
+			runner   string
+		}{
+			{name: "goose", runner: migrate.RunnerGoose, renderer: goose.Renderer{}},
+			{name: "golang-migrate", runner: migrate.RunnerGolangMigrate, renderer: golangmigrate.Renderer{}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				dsn := newPostgresIntegrationDatabase(t, ctx)
+				config := &Config{
+					Dialect: "postgres",
+					Migrations: MigrationSpec{
+						Dir:    filepath.Join(t.TempDir(), "migrations"),
+						Runner: tc.runner,
+					},
+				}
+				if err := os.MkdirAll(config.Migrations.Dir, 0o750); err != nil {
+					t.Fatal(err)
+				}
+				upSQL := []string{"CREATE TABLE transactional_rollback (id integer);"}
+				if tc.runner == migrate.RunnerGoose {
+					upSQL = append(upSQL, "INSERT INTO unavailable_table VALUES (1);")
+				}
+				writeIntegrationPlan(t, config.Migrations.Dir, tc.renderer, migrate.Plan{
+					Name:      "transaction rollback",
+					Dialect:   "postgresql",
+					CreatedAt: time.Date(2026, 7, 8, 12, 40, 0, 0, time.UTC),
+					Changes:   []migrate.Change{{Op: "manual", Object: migrate.ObjectRef{Kind: "schema", Key: "schema"}}},
+					UpSQL:     upSQL,
+				})
+				conn := openPostgres(t, ctx, dsn)
+				defer func() {
+					_ = conn.Close(context.Background())
+				}()
+				if tc.runner == migrate.RunnerGolangMigrate {
+					if err := conn.Exec(ctx, "CREATE TABLE schema_migrations (version bigint NOT NULL PRIMARY KEY, dirty boolean NOT NULL CHECK (dirty));"); err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				if _, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn}); err == nil {
+					t.Fatal("MigrateApply succeeded despite runner-state commit failure")
+				}
+				rows, err := conn.Query(ctx, "SELECT to_regclass('public.transactional_rollback') IS NULL;")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !rows.Next() {
+					t.Fatal("rollback table query returned no row")
+				}
+				var tableAbsent bool
+				if err := rows.Scan(&tableAbsent); err != nil {
+					t.Fatal(err)
+				}
+				rows.Close()
+				if !tableAbsent {
+					t.Fatal("migration DDL survived failed runner-state commit")
+				}
+				if tc.runner == migrate.RunnerGoose {
+					rows, err := conn.Query(ctx, "SELECT count(*) FROM goose_db_version WHERE version_id = 20260708124000;")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer rows.Close()
+					if !rows.Next() {
+						t.Fatal("Goose state query returned no row")
+					}
+					var count int64
+					if err := rows.Scan(&count); err != nil {
+						t.Fatal(err)
+					}
+					if count != 0 {
+						t.Fatalf("failed Goose migration has %d version rows", count)
+					}
+				} else {
+					assertGolangMigrateVersion(t, ctx, conn, 20260708124000, true)
+				}
+			})
+		}
+	})
+
+	t.Run("non-transactional PostgreSQL failure leaves repairable runner state", func(t *testing.T) {
+		for _, tc := range []struct {
+			renderer migrate.Renderer
+			name     string
+			runner   string
+		}{
+			{name: "goose", runner: migrate.RunnerGoose, renderer: goose.Renderer{}},
+			{name: "golang-migrate", runner: migrate.RunnerGolangMigrate, renderer: golangmigrate.Renderer{}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				dsn := newPostgresIntegrationDatabase(t, ctx)
+				config := &Config{
+					Dialect: "postgres",
+					Migrations: MigrationSpec{
+						Dir:    filepath.Join(t.TempDir(), "migrations"),
+						Runner: tc.runner,
+					},
+				}
+				if err := os.MkdirAll(config.Migrations.Dir, 0o750); err != nil {
+					t.Fatal(err)
+				}
+				writeIntegrationPlan(t, config.Migrations.Dir, tc.renderer, migrate.Plan{
+					Name:      "concurrent index recovery",
+					Dialect:   "postgresql",
+					CreatedAt: time.Date(2026, 7, 8, 12, 41, 0, 0, time.UTC),
+					Changes: []migrate.Change{{
+						Op:     "create",
+						Object: migrate.ObjectRef{Kind: "index", Key: "recovery_users_email_idx"},
+						Risks:  []string{"non-transactional"},
+					}},
+					UpSQL: []string{
+						"CREATE INDEX CONCURRENTLY recovery_users_email_idx ON recovery_users (email);",
+						"INSERT INTO unavailable_table VALUES (1);",
+					},
+				})
+				conn := openPostgres(t, ctx, dsn)
+				defer func() {
+					_ = conn.Close(context.Background())
+				}()
+				if err := conn.Exec(ctx, "CREATE TABLE recovery_users (email text);"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := MigrateApplyWithConfig(config, MigrateApplyOptions{URL: dsn}); err == nil {
+					t.Fatal("MigrateApply succeeded despite the failing statement")
+				}
+				rows, err := conn.Query(ctx, "SELECT to_regclass('public.recovery_users_email_idx') IS NOT NULL;")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !rows.Next() {
+					t.Fatal("index state query returned no row")
+				}
+				var indexExists bool
+				if err := rows.Scan(&indexExists); err != nil {
+					t.Fatal(err)
+				}
+				rows.Close()
+				if !indexExists {
+					t.Fatal("successful non-transactional index creation was rolled back")
+				}
+				if tc.runner == migrate.RunnerGoose {
+					rows, err := conn.Query(ctx, "SELECT is_applied FROM goose_db_version WHERE version_id = 20260708124100 ORDER BY id DESC LIMIT 1;")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer rows.Close()
+					if !rows.Next() {
+						t.Fatal("failed Goose migration has no recovery row")
+					}
+					var applied bool
+					if err := rows.Scan(&applied); err != nil {
+						t.Fatal(err)
+					}
+					if applied {
+						t.Fatal("failed Goose migration is marked applied")
+					}
+				} else {
+					rows, err := conn.Query(ctx, "SELECT version, dirty FROM schema_migrations ORDER BY version DESC LIMIT 1;")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer rows.Close()
+					if !rows.Next() {
+						t.Fatal("failed golang-migrate migration has no version row")
+					}
+					var version int64
+					var dirty bool
+					if err := rows.Scan(&version, &dirty); err != nil {
+						t.Fatal(err)
+					}
+					if version <= 0 || !dirty {
+						t.Fatalf("golang-migrate recovery state = (%d, %t), want a positive dirty version", version, dirty)
+					}
+				}
+			})
+		}
+	})
+
 	t.Run("extension owned objects are filtered", func(t *testing.T) {
 		dsn := newPostgresIntegrationDatabase(t, ctx)
 		conn := openPostgres(t, ctx, dsn)

@@ -13,6 +13,7 @@ import (
 	"github.com/webdeveloperben/gosqlkit/internal/dialects/pg/pgschema"
 	pgplan "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/plan"
 	pgtooling "github.com/webdeveloperben/gosqlkit/internal/dialects/pg/tooling"
+	sqliteplan "github.com/webdeveloperben/gosqlkit/internal/dialects/sqlite/plan"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
@@ -23,6 +24,7 @@ import (
 type MigrateCreateOptions struct {
 	CreatedAt                  time.Time
 	inspectPG                  driftInspectFunc
+	inspectSQLite              sqliteInspectFunc
 	RenameDecider              RenameDecisionFunc
 	FromURLEnv                 string
 	FromTokenCommand           string
@@ -79,6 +81,8 @@ type RenameDecisionFunc func([]RenameCandidate) ([]RenameDecision, error)
 type MigrateCheckOptions struct {
 	sandboxReplay                 sandboxReplayFunc
 	sandboxInspect                driftInspectFunc
+	sandboxReplaySQLite           sandboxReplayFunc
+	sandboxInspectSQLite          sqliteInspectFunc
 	Dir                           string
 	SandboxURL                    string
 	SandboxURLEnv                 string
@@ -143,6 +147,7 @@ type migrateApplyFunc func(context.Context, string, string, []migrate.Migration)
 
 type MigratePlanOptions struct {
 	inspectPG                  driftInspectFunc
+	inspectSQLite              sqliteInspectFunc
 	Dir                        string
 	Runner                     string
 	Snapshot                   string
@@ -260,7 +265,7 @@ func plannedMigration(config *Config, dir string, opts MigrateCreateOptions) (mi
 	}
 	if hasLiveMigrationSource(opts.FromURL, opts.FromURLEnv) {
 		source, sourceID, err := migratePlanSourceSnapshot(config, MigratePlanOptions{
-			inspectPG: opts.inspectPG, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromAuth: opts.FromAuth, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromCloudSQLConnector: opts.FromCloudSQLConnector, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
+			inspectPG: opts.inspectPG, inspectSQLite: opts.inspectSQLite, FromURL: opts.FromURL, FromURLEnv: opts.FromURLEnv, FromAuth: opts.FromAuth, FromTokenCommand: opts.FromTokenCommand, FromAWSProfile: opts.FromAWSProfile, FromAWSRegion: opts.FromAWSRegion, FromGCloudInstance: opts.FromGCloudInstance, FromCloudSQLConnector: opts.FromCloudSQLConnector, FromAzureCLIToken: opts.FromAzureCLIToken, FromAzureDefaultCredential: opts.FromAzureDefaultCredential, FromAWSCLIToken: opts.FromAWSCLIToken, FromAWSIAMToken: opts.FromAWSIAMToken, FromGCloudADCToken: opts.FromGCloudADCToken, FromGCloudToken: opts.FromGCloudToken,
 		})
 		if err != nil {
 			return migrate.Plan{}, err
@@ -422,9 +427,11 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 		GCloudADCToken:         opts.SandboxGCloudADCToken,
 		GCloudToken:            opts.SandboxGCloudToken,
 	}
-	sandboxAuth, err = normaliseDatabaseAuthOptions(sandboxAuth)
-	if err != nil {
-		return nil, err
+	if !isSQLiteDialect(config.Dialect) {
+		sandboxAuth, err = normaliseDatabaseAuthOptions(sandboxAuth)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if sandboxURL != "" {
 		if err := requireDialectCapability(dialect(config.Dialect), kit.CapabilitySandboxReplay); err != nil {
@@ -450,7 +457,7 @@ func MigrateCheckWithConfig(config *Config, opts MigrateCheckOptions) (*MigrateC
 	if sandboxURL != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, sandboxAuth, migrations, opts.sandboxReplay, opts.sandboxInspect)
+		sandbox, err := migrateCheckSandbox(ctx, config, sandboxURL, sandboxAuth, migrations, opts.sandboxReplay, opts.sandboxInspect, opts.sandboxReplaySQLite, opts.sandboxInspectSQLite)
 		if err != nil {
 			return nil, err
 		}
@@ -484,9 +491,11 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 		GCloudADCToken:         opts.GCloudADCToken,
 		GCloudToken:            opts.GCloudToken,
 	}
-	auth, err = normaliseDatabaseAuthOptions(auth)
-	if err != nil {
-		return nil, err
+	if !isSQLiteDialect(config.Dialect) {
+		auth, err = normaliseDatabaseAuthOptions(auth)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	dir := opts.Dir
@@ -510,8 +519,12 @@ func MigrateApplyWithConfig(config *Config, opts MigrateApplyOptions) (*MigrateA
 
 	apply := opts.apply
 	if apply == nil {
-		apply = func(ctx context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
-			return applyPostgresMigrations(ctx, postgresConnectionOptions(databaseURL, auth), runner, migrations)
+		if isSQLiteDialect(config.Dialect) {
+			apply = applySQLiteMigrations
+		} else {
+			apply = func(ctx context.Context, databaseURL, runner string, migrations []migrate.Migration) (*MigrateApplyResult, error) {
+				return applyPostgresMigrations(ctx, postgresConnectionOptions(databaseURL, auth), runner, migrations)
+			}
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -636,26 +649,19 @@ func migratePlanSourceSnapshot(config *Config, opts MigratePlanOptions) ([]byte,
 		return latest.Metadata.TargetSnapshot, latest.Metadata.ToSnapshotID, nil
 	}
 	auth := databaseAuthOptions{Auth: opts.FromAuth, TokenCommand: opts.FromTokenCommand, AWSProfile: opts.FromAWSProfile, AWSRegion: opts.FromAWSRegion, GCloudInstance: opts.FromGCloudInstance, CloudSQLConnector: opts.FromCloudSQLConnector, AzureCLIToken: opts.FromAzureCLIToken, AzureDefaultCredential: opts.FromAzureDefaultCredential, AWSCLIToken: opts.FromAWSCLIToken, AWSIAMToken: opts.FromAWSIAMToken, GCloudADCToken: opts.FromGCloudADCToken, GCloudToken: opts.FromGCloudToken}
-	auth, err = normaliseDatabaseAuthOptions(auth)
-	if err != nil {
-		return nil, "", err
+	if !isSQLiteDialect(config.Dialect) {
+		auth, err = normaliseDatabaseAuthOptions(auth)
+		if err != nil {
+			return nil, "", err
+		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	var schema pgschema.Schema
-	if opts.inspectPG != nil {
-		schema, err = opts.inspectPG(ctx, fromURL)
-	} else {
-		schema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(fromURL, auth))
-	}
+	tooling, err := newDatabaseTooling(config.Dialect, fromURL, auth, opts.inspectPG, opts.inspectSQLite)
 	if err != nil {
 		return nil, "", err
 	}
-	raw, err := pgschema.JSON("postgresql", schema)
-	if err != nil {
-		return nil, "", err
-	}
-	snapshot, err := injectSnapshotIDs(string(raw), "")
+	snapshot, err := tooling.Snapshot(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -695,7 +701,10 @@ func validateMigrationFiles(runner string, migrations []migrate.Migration) error
 	}
 }
 
-func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string, auth databaseAuthOptions, migrations []migrate.Migration, replay sandboxReplayFunc, inspect driftInspectFunc) (*SandboxReplayResult, error) {
+func migrateCheckSandbox(ctx context.Context, config *Config, sandboxURL string, auth databaseAuthOptions, migrations []migrate.Migration, replay sandboxReplayFunc, inspect driftInspectFunc, replaySQLite sandboxReplayFunc, inspectSQLite sqliteInspectFunc) (*SandboxReplayResult, error) {
+	if isSQLiteDialect(config.Dialect) {
+		return migrateCheckSQLiteSandbox(ctx, config, sandboxURL, migrations, replaySQLite, inspectSQLite)
+	}
 	if len(migrations) == 0 {
 		return nil, errors.New("no migrations to replay")
 	}
@@ -804,6 +813,8 @@ func snapshotPlanner(value string) (migrateplan.SnapshotPlanner, error) {
 	switch dialect(value) {
 	case "postgres", "postgresql", "pg":
 		return pgplan.Planner{}, nil
+	case "sqlite", "sqlite3":
+		return sqliteplan.Planner{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported migration planner dialect %q", value)
 	}

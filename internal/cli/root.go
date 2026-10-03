@@ -14,13 +14,13 @@ import (
 type CLI struct {
 	Version VersionCmd `cmd:"" help:"Print the gosqlkit version and exit."`
 	GlobalFlags
-	CI         CICmd         `cmd:"" name:"ci" help:"Run CI-friendly schema and database checks."`
-	Drift      DriftCmd      `cmd:"" help:"Check database schema drift."`
-	Generate   GenerateCmd   `cmd:"" help:"Generate deterministic SQL from a Go schema package."`
-	Inspect    InspectCmd    `cmd:"" help:"Inspect a database and emit snapshot JSON."`
-	Migrate    MigrateCmd    `cmd:"" help:"Create and check schema migrations."`
-	Snapshot   SnapshotCmd   `cmd:"" help:"Generate deterministic schema snapshot JSON from a Go schema package."`
 	Completion CompletionCmd `cmd:"" help:"Generate shell completion scripts."`
+	Snapshot   SnapshotCmd   `cmd:"" help:"Generate deterministic schema snapshot JSON from a Go schema package."`
+	Generate   GenerateCmd   `cmd:"" help:"Generate deterministic SQL from a Go schema package."`
+	Migrate    MigrateCmd    `cmd:"" help:"Create and check schema migrations."`
+	CI         CICmd         `cmd:"" name:"ci" help:"Run CI-friendly schema and database checks."`
+	Inspect    InspectCmd    `cmd:"" help:"Inspect a database and emit snapshot JSON."`
+	Drift      DriftCmd      `cmd:"" help:"Check database schema drift."`
 }
 
 type GlobalFlags struct {

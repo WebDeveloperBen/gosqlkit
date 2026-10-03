@@ -148,6 +148,10 @@ func (c *Conn) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, er
 	return c.conn.Query(ctx, sql, args...)
 }
 
+func (c *Conn) Begin(ctx context.Context) (pgx.Tx, error) {
+	return c.conn.Begin(ctx)
+}
+
 func (c *Conn) Close(ctx context.Context) error {
 	err := c.conn.Close(ctx)
 	if c.closeDialer != nil {

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -17,6 +16,7 @@ import (
 
 type DriftCheckOptions struct {
 	inspectPG              driftInspectFunc
+	inspectSQLite          sqliteInspectFunc
 	URL                    string
 	URLEnv                 string
 	Auth                   string
@@ -68,48 +68,55 @@ func DriftCheckWithConfig(config *Config, opts DriftCheckOptions) (*DriftCheckRe
 		GCloudADCToken:         opts.GCloudADCToken,
 		GCloudToken:            opts.GCloudToken,
 	}
-	auth, err = normaliseDatabaseAuthOptions(auth)
-	if err != nil {
-		return nil, err
+	if !isSQLiteDialect(config.Dialect) {
+		auth, err = normaliseDatabaseAuthOptions(auth)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	desiredSnapshot, _, err := renderSnapshotWithConfig(config, "")
 	if err != nil {
 		return nil, err
 	}
-	var desiredDoc pgschema.Document
-	if err := json.Unmarshal([]byte(desiredSnapshot), &desiredDoc); err != nil {
-		return nil, fmt.Errorf("parse desired snapshot: %w", err)
+	tooling, err := newDatabaseTooling(config.Dialect, databaseURL, auth, opts.inspectPG, opts.inspectSQLite)
+	if err != nil {
+		return nil, err
 	}
-	desiredProjection := projectDriftDocument(desiredDoc)
-	desiredID, err := driftSnapshotID(desiredProjection)
+	desiredProjection, err := projectDatabaseSnapshot(desiredSnapshot, tooling.Dialect())
+	if err != nil {
+		return nil, fmt.Errorf("project desired snapshot for drift: %w", err)
+	}
+	desiredID, err := snapshotIDFromJSON(desiredProjection)
 	if err != nil {
 		return nil, fmt.Errorf("build desired drift snapshot: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	var databaseSchema pgschema.Schema
-	if opts.inspectPG != nil {
-		databaseSchema, err = opts.inspectPG(ctx, databaseURL)
-	} else {
-		databaseSchema, err = inspectPostgresWithOptions(ctx, postgresConnectionOptions(databaseURL, auth))
-	}
+	databaseSnapshot, err := tooling.Snapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	databaseProjection := projectDriftSchema(databaseSchema)
-	databaseID, err := driftSnapshotID(databaseProjection)
+	databaseProjection, err := projectDatabaseSnapshot(databaseSnapshot, tooling.Dialect())
+	if err != nil {
+		return nil, fmt.Errorf("project database snapshot for drift: %w", err)
+	}
+	databaseID, err := snapshotIDFromJSON(databaseProjection)
 	if err != nil {
 		return nil, fmt.Errorf("build database drift snapshot: %w", err)
 	}
+	differences, err := databaseSnapshotDifferences(desiredProjection, databaseProjection, tooling.Dialect())
+	if err != nil {
+		return nil, err
+	}
 
 	result := &DriftCheckResult{
-		Dialect:            "postgresql",
+		Dialect:            tooling.Dialect(),
 		DesiredSnapshotID:  desiredID,
 		DatabaseSnapshotID: databaseID,
 		Drift:              desiredID != databaseID,
-		Differences:        driftDifferences(desiredProjection, databaseProjection),
+		Differences:        differences,
 	}
 	if result.Drift {
 		return result, fmt.Errorf("database schema drift detected: database snapshot %q does not match desired snapshot %q", databaseID, desiredID)

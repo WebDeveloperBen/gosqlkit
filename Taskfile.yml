@@ -35,6 +35,16 @@ tasks:
     cmds:
       - GOSQLKIT_INTEGRATION=1 go test ./... -count=1
 
+  integration:sqlite:
+    desc: Build the CLI once and run file-backed SQLite integration tests (no Docker)
+    cmds:
+      - |
+        set -eu
+        binary="$(mktemp)"
+        trap 'rm -f "$binary"' EXIT
+        go build -o "$binary" ./cmd/gosqlkit
+        GOSQLKIT_SQLITE_BINARY="$binary" GOSQLKIT_SQLITE_INTEGRATION=1 go test ./internal/app -run '^(TestSQLiteCLI|TestSQLiteIntegrationWorkflow)' -count=1
+
   integration:postgres:matrix:
     desc: Run PostgreSQL integration tests across supported PostgreSQL images
     cmds:
@@ -74,6 +84,30 @@ tasks:
     desc: Check the checked-in example schema snapshot JSON is current
     cmds:
       - cmd: "cd examples/basic && go run ../../cmd/gosqlkit snapshot --check"
+        ignore_error: false
+
+  generate:sqlite:
+    desc: Regenerate the checked-in SQLite example schema SQL
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit generate"
+        ignore_error: false
+
+  generate:sqlite:check:
+    desc: Check the checked-in SQLite example schema SQL is current
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit generate --check"
+        ignore_error: false
+
+  snapshot:sqlite:
+    desc: Regenerate the checked-in SQLite example schema snapshot JSON
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit snapshot"
+        ignore_error: false
+
+  snapshot:sqlite:check:
+    desc: Check the checked-in SQLite example schema snapshot JSON is current
+    cmds:
+      - cmd: "cd examples/sqlite && go run ../../cmd/gosqlkit snapshot --check"
         ignore_error: false
 
   sqlc:check:
@@ -168,6 +202,8 @@ tasks:
     cmds:
       - task: generate:check
       - task: snapshot:check
+      - task: generate:sqlite:check
+      - task: snapshot:sqlite:check
 
   verify:sqlc:
     desc: Run the sqlc compatibility check
@@ -183,6 +219,8 @@ tasks:
       - "{{.BIN}} version"
       - "cd examples/basic && {{.BIN}} generate --check"
       - "cd examples/basic && {{.BIN}} snapshot --check"
+      - "cd examples/sqlite && {{.BIN}} generate --check"
+      - "cd examples/sqlite && {{.BIN}} snapshot --check"
       - "{{.BIN}} generate ./{{.EXAMPLE_SCHEMA}} > /dev/null"
       - "{{.BIN}} generate --out {{.EXAMPLE_SQL}} --check ./{{.EXAMPLE_SCHEMA}}"
 
