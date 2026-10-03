@@ -647,18 +647,18 @@ func (p planner) indexes(previous, current pgschema.Table) error {
 			}
 			table := tableKey(current)
 			key := table + "." + index.Name
-			p.addWith(
-				migrateplan.NewChange(
-					migrateplan.OperationCreate,
-					migrateplan.Ref(migrateplan.ObjectKindIndex, key),
-					"create index "+key,
-					migrateplan.SQL(stmt),
-				).WithDependencies(
-					migrateplan.Ref(migrateplan.ObjectKindTable, table),
-				).WithReverse(
-					migrateplan.SQL("DROP INDEX " + renderQualified(current.Schema, index.Name) + ";"),
-				),
-			)
+			change := migrateplan.NewChange(
+				migrateplan.OperationCreate,
+				migrateplan.Ref(migrateplan.ObjectKindIndex, key),
+				"create index "+key,
+				migrateplan.SQL(stmt),
+			).WithDependencies(migrateplan.Ref(migrateplan.ObjectKindTable, table))
+			if index.Concurrently {
+				change = change.WithRisks(migrateplan.RiskNonTransactional)
+			}
+			p.addWith(change.WithReverse(
+				migrateplan.SQL("DROP INDEX " + renderQualified(current.Schema, index.Name) + ";"),
+			))
 			continue
 		}
 		oldWithoutTablespace := old

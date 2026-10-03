@@ -124,7 +124,9 @@ ordering, opclasses, storage parameters, and extension-owned object filters.
 For migration replay, split goose `Up` SQL after section extraction and split
 `golang-migrate` `.up.sql` files directly so non-transactional statements such
 as `CREATE INDEX CONCURRENTLY` are not forced into a single batch, while
-function bodies and quoted semicolons remain intact.
+function bodies and quoted semicolons remain intact. Goose files whose plan
+contains a non-transactional risk carry Goose's native `NO TRANSACTION`
+annotation so external Goose does not wrap those statements.
 
 ## Non-Goals
 
@@ -164,6 +166,19 @@ For `golang-migrate`, `schema_migrations` is treated as current state rather
 than append-only history: apply fails when the current row is dirty, marks the
 target version dirty before execution, and records the target version clean
 after successful execution.
+
+For PostgreSQL, transaction-compatible migration statements and the successful
+runner-state update commit in one transaction. A failed transactional migration
+rolls back its DDL and state change. `golang-migrate`'s dirty marker is committed
+before execution and remains dirty on failure.
+
+PostgreSQL statements that cannot run in a transaction execute directly. Goose
+records the version as unapplied before execution and marks it applied only
+after success; `golang-migrate` retains its dirty version if execution fails.
+These markers require manual inspection and repair before retrying: prior
+non-transactional statements may have taken effect, so failure is not an atomic
+rollback. Opaque `raw_sql` that cannot be classified for transaction safety is
+rejected before migration execution.
 
 ## Migration File Layout
 

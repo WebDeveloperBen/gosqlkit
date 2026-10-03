@@ -98,3 +98,30 @@ func TestIntrospectRejectsUnmodeledIndexExpression(t *testing.T) {
 		t.Fatalf("expected actionable expression-index error, got %v", err)
 	}
 }
+
+func TestIntrospectExcludesTemporaryViews(t *testing.T) {
+	ctx := context.Background()
+	conn, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = conn.Close()
+	}()
+	for _, statement := range []string{
+		"CREATE TABLE users (id INTEGER PRIMARY KEY)",
+		"CREATE VIEW persistent_user_ids AS SELECT id FROM users",
+		"CREATE TEMP VIEW session_user_ids AS SELECT id FROM users",
+	} {
+		if _, err := conn.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	schema, err := Introspect(ctx, conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(schema.Views) != 1 || schema.Views[0].Name != "persistent_user_ids" {
+		t.Fatalf("introspected views = %#v, want only persistent_user_ids", schema.Views)
+	}
+}

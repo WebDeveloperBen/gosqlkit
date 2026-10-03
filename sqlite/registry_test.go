@@ -106,6 +106,38 @@ func TestCreationOptionsAppearInSQLiteSnapshot(t *testing.T) {
 	}
 }
 
+func TestTemporaryViewRemainsInGeneratedSQLAndSnapshot(t *testing.T) {
+	sqlite.Reset()
+	t.Cleanup(sqlite.Reset)
+
+	sqlite.Table("users", sqlite.Integer("id").PrimaryKey())
+	sqlite.View("session_user_ids").As("SELECT id FROM users").Temporary()
+
+	rendered, err := sqlite.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rendered, "CREATE TEMP VIEW session_user_ids AS SELECT id FROM users;") {
+		t.Fatalf("generated SQL omitted temporary view:\n%s", rendered)
+	}
+	snapshot, err := sqlite.SnapshotJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Views []struct {
+			Name      string `json:"name"`
+			Temporary bool   `json:"temporary"`
+		} `json:"views"`
+	}
+	if err := json.Unmarshal(snapshot, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Views) != 1 || document.Views[0].Name != "session_user_ids" || !document.Views[0].Temporary {
+		t.Fatalf("temporary view missing from snapshot: %s", snapshot)
+	}
+}
+
 func TestPreviousNameBuildersAppearInSQLiteSnapshot(t *testing.T) {
 	sqlite.Reset()
 	t.Cleanup(sqlite.Reset)

@@ -227,13 +227,21 @@ func introspectCollations(ctx context.Context, queryer Queryer) ([]pgschema.Coll
 	if hasRules {
 		rulesSelect = "COALESCE(c.collicurules, '')"
 	}
+	localeSelect := "''"
+	hasICULocale, err := hasCatalogColumn(ctx, queryer, "pg_catalog", "pg_collation", "colliculocale")
+	if err != nil {
+		return nil, err
+	}
+	if hasICULocale {
+		localeSelect = "COALESCE(c.colliculocale, '')"
+	}
 
 	rows, err := queryer.Query(ctx, fmt.Sprintf(`
 SELECT n.nspname,
        c.collname,
        c.collprovider::text,
        c.collisdeterministic,
-       COALESCE(c.colliculocale, ''),
+       %s,
        COALESCE(c.collcollate, ''),
        COALESCE(c.collctype, ''),
        %s,
@@ -250,7 +258,7 @@ WHERE n.nspname NOT LIKE 'pg_%%'
       AND dep.objid = c.oid
       AND dep.deptype = 'e'
   )
-ORDER BY n.nspname, c.collname`, rulesSelect))
+ORDER BY n.nspname, c.collname`, localeSelect, rulesSelect))
 	if err != nil {
 		return nil, fmt.Errorf("introspect collations: %w", err)
 	}

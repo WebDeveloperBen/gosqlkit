@@ -101,3 +101,18 @@ func TestSQLiteDriftProjectionNormalizesAffinityRowIDAndCatalogFormatting(t *tes
 		t.Fatalf("SQLite equivalent schema projections differ:\nwant %#v\ngot  %#v", projected, actual)
 	}
 }
+
+func TestSQLiteTemporaryViewsDoNotCreateDrift(t *testing.T) {
+	declared := sqliteschema.Schema{Views: []sqliteschema.View{{
+		Name:      "session_user_ids",
+		Query:     "SELECT id FROM users",
+		Temporary: true,
+	}}}
+	differences := sqliteDriftDifferences(projectSQLiteDriftSchema(declared), projectSQLiteDriftSchema(sqliteschema.Schema{}))
+	if len(differences) != 0 {
+		t.Fatalf("temporary view produced persistent-object drift: %#v", differences)
+	}
+	if len(declared.Views) != 1 || !declared.Views[0].Temporary {
+		t.Fatalf("declared temporary view was lost: %#v", declared.Views)
+	}
+}

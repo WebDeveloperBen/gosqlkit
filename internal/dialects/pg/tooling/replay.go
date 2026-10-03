@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/golangmigrate"
 	"github.com/webdeveloperben/gosqlkit/internal/migrate/goose"
@@ -35,6 +36,7 @@ type ApplyResult struct {
 type Database interface {
 	Executor
 	Queryer
+	Begin(context.Context) (pgx.Tx, error)
 }
 
 func Replay(ctx context.Context, exec Executor, opts ReplayOptions) (*ReplayResult, error) {
@@ -122,13 +124,27 @@ func applyGoose(ctx context.Context, db Database, migrations []migrate.Migration
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", migration.Path, err)
 		}
-		for _, statement := range statements {
-			if err := db.Exec(ctx, statement); err != nil {
-				return nil, fmt.Errorf("%s: apply goose up: %w", migration.Path, err)
-			}
+		nonTransactional, err := migrationNonTransactional(migration, statements)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", migration.Path, err)
 		}
-		if err := db.Exec(ctx, "INSERT INTO goose_db_version (version_id, is_applied) VALUES ($1, true);", version); err != nil {
-			return nil, fmt.Errorf("%s: record goose version: %w", migration.Path, err)
+		if nonTransactional {
+			if err := db.Exec(ctx, "INSERT INTO goose_db_version (version_id, is_applied) VALUES ($1, false);", version); err != nil {
+				return nil, fmt.Errorf("%s: mark goose version unapplied: %w", migration.Path, err)
+			}
+			for _, statement := range statements {
+				if err := db.Exec(ctx, statement); err != nil {
+					return nil, fmt.Errorf("%s: apply goose up: %w", migration.Path, err)
+				}
+			}
+			if err := db.Exec(ctx, "UPDATE goose_db_version SET is_applied = true WHERE id = (SELECT max(id) FROM goose_db_version WHERE version_id = $1);", version); err != nil {
+				return nil, fmt.Errorf("%s: record goose version: %w", migration.Path, err)
+			}
+		} else if err := executeTransactionalMigration(ctx, db, statements, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, "INSERT INTO goose_db_version (version_id, is_applied) VALUES ($1, true);", version)
+			return err
+		}); err != nil {
+			return nil, fmt.Errorf("%s: apply goose up transaction: %w", migration.Path, err)
 		}
 		applied[version] = true
 		result.Applied++
@@ -159,22 +175,61 @@ func applyGolangMigrate(ctx context.Context, db Database, migrations []migrate.M
 			result.Skipped++
 			continue
 		}
+		statements := SplitSQLStatements(golangmigrate.UpSQL(migration.Content))
+		nonTransactional, err := migrationNonTransactional(migration, statements)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", migration.Path, err)
+		}
 		if err := setGolangMigrateVersion(ctx, db, version, true); err != nil {
 			return nil, fmt.Errorf("%s: mark golang-migrate version dirty: %w", migration.Path, err)
 		}
-		for _, statement := range SplitSQLStatements(golangmigrate.UpSQL(migration.Content)) {
-			if err := db.Exec(ctx, statement); err != nil {
-				return nil, fmt.Errorf("%s: apply golang-migrate up: %w", migration.Path, err)
+		if nonTransactional {
+			for _, statement := range statements {
+				if err := db.Exec(ctx, statement); err != nil {
+					return nil, fmt.Errorf("%s: apply golang-migrate up: %w", migration.Path, err)
+				}
 			}
-		}
-		if err := setGolangMigrateVersion(ctx, db, version, false); err != nil {
-			return nil, fmt.Errorf("%s: record golang-migrate version: %w", migration.Path, err)
+			if err := setGolangMigrateVersion(ctx, db, version, false); err != nil {
+				return nil, fmt.Errorf("%s: record golang-migrate version: %w", migration.Path, err)
+			}
+		} else if err := executeTransactionalMigration(ctx, db, statements, func(tx pgx.Tx) error {
+			return writeGolangMigrateVersion(ctx, tx, version, false)
+		}); err != nil {
+			return nil, fmt.Errorf("%s: apply golang-migrate up transaction (version remains dirty): %w", migration.Path, err)
 		}
 		currentVersion = version
 		result.Applied++
 		result.LastFile = migration.Name
 	}
 	return result, nil
+}
+
+func executeTransactionalMigration(ctx context.Context, db Database, statements []string, finalize func(pgx.Tx) error) (retErr error) {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin migration transaction: %w", err)
+	}
+	defer func() {
+		if retErr != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("rollback migration transaction: %w", rollbackErr))
+			}
+		}
+	}()
+	for _, statement := range statements {
+		if _, err := tx.Exec(ctx, statement); err != nil {
+			return fmt.Errorf("execute migration statement: %w", err)
+		}
+	}
+	if finalize != nil {
+		if err := finalize(tx); err != nil {
+			return fmt.Errorf("record migration state: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit migration transaction: %w", err)
+	}
+	return nil
 }
 
 func ensureGooseVersionTable(ctx context.Context, exec Executor) error {
@@ -246,11 +301,17 @@ func golangMigrateVersion(ctx context.Context, queryer Queryer) (int64, bool, er
 	return version, dirty, nil
 }
 
-func setGolangMigrateVersion(ctx context.Context, exec Executor, version int64, dirty bool) error {
-	if err := exec.Exec(ctx, "TRUNCATE schema_migrations;"); err != nil {
+func setGolangMigrateVersion(ctx context.Context, db Database, version int64, dirty bool) error {
+	return executeTransactionalMigration(ctx, db, nil, func(tx pgx.Tx) error {
+		return writeGolangMigrateVersion(ctx, tx, version, dirty)
+	})
+}
+
+func writeGolangMigrateVersion(ctx context.Context, tx pgx.Tx, version int64, dirty bool) error {
+	if _, err := tx.Exec(ctx, "TRUNCATE schema_migrations;"); err != nil {
 		return fmt.Errorf("truncate golang-migrate version table: %w", err)
 	}
-	if err := exec.Exec(ctx, "INSERT INTO schema_migrations (version, dirty) VALUES ($1, $2);", version, dirty); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations (version, dirty) VALUES ($1, $2);", version, dirty); err != nil {
 		return fmt.Errorf("write golang-migrate version table: %w", err)
 	}
 	return nil

@@ -52,6 +52,34 @@ func TestRendererRendersSingleAnnotatedFile(t *testing.T) {
 	}
 }
 
+func TestRendererMarksNonTransactionalMigrationsForGoose(t *testing.T) {
+	files, err := (goose.Renderer{}).Render(migrate.Plan{
+		Name:      "concurrent index",
+		Dialect:   "postgresql",
+		CreatedAt: time.Date(2026, 7, 6, 14, 30, 0, 0, time.UTC),
+		Changes: []migrate.Change{{
+			Risks: []string{"non-transactional"},
+		}},
+		UpStatements: []migrate.Statement{{SQL: "CREATE INDEX CONCURRENTLY users_email_idx ON users (email);"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := files[0].Content
+	noTransaction := strings.Index(content, "-- +goose NO TRANSACTION")
+	up := strings.Index(content, "-- +goose Up")
+	if noTransaction < 0 || up < 0 || noTransaction > up {
+		t.Fatalf("non-transactional annotation is missing or misplaced:\n%s", content)
+	}
+	statements, err := goose.UpStatements(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statements) != 1 || statements[0] != "CREATE INDEX CONCURRENTLY users_email_idx ON users (email);" {
+		t.Fatalf("Goose Up statements = %#v", statements)
+	}
+}
+
 func TestRendererKeepsSQLiteTriggerBodiesAtomic(t *testing.T) {
 	files, err := (goose.Renderer{}).Render(migrate.Plan{
 		Name:      "sqlite trigger",

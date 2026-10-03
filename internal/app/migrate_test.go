@@ -241,6 +241,61 @@ func TestMigrateCreateWithConfigWritesDiffMigration(t *testing.T) {
 	}
 }
 
+func TestDiffMigrationPersistsConcurrentIndexRiskInMetadata(t *testing.T) {
+	previousSnapshot, err := snapshotJSONForSchema(pgschema.Schema{Tables: []pgschema.Table{{
+		Table: ast.Table{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousID, err := snapshotIDFromJSON(previousSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSnapshot, err := snapshotJSONForSchema(pgschema.Schema{Tables: []pgschema.Table{{
+		Table: ast.Table{
+			Name:    "users",
+			Columns: []ast.Column{{Name: "email", Type: "text"}},
+		},
+		Indexes: []pgschema.Index{{
+			Index:        ast.Index{Name: "users_email_idx"},
+			Columns:      []pgschema.IndexColumn{{IndexColumn: ast.IndexColumn{Expression: "email"}}},
+			Concurrently: true,
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentID, err := snapshotIDFromJSON(currentSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := diffMigrationPlan(
+		&Config{Dialect: "postgresql"},
+		MigrateCreateOptions{Name: "concurrent index", CreatedAt: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+		migrate.Migration{Metadata: migrate.Metadata{ToSnapshotID: previousID, TargetSnapshot: []byte(previousSnapshot)}},
+		currentSnapshot,
+		currentID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := (goose.Renderer{}).Render(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := migrate.ParseMetadata(files[0].Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metadata.Changes) != 1 || len(metadata.Changes[0].Risks) != 1 || metadata.Changes[0].Risks[0] != string(migrateplan.RiskNonTransactional) {
+		t.Fatalf("migration metadata risks = %#v, want non-transactional concurrent-index risk", metadata.Changes)
+	}
+}
+
 func TestMigrateCreateWithConfigRejectsUnsupportedRunnerOverride(t *testing.T) {
 	config := &Config{
 		Dialect: "postgresql",

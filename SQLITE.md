@@ -86,6 +86,13 @@ foreign-key enforcement on its connections; table rebuilds handle SQLite's
 connection-scoped foreign-key pragma outside active transactions and restore
 the configured posture.
 
+For guarded table rebuilds, the rebuild statements, `PRAGMA foreign_key_check`,
+and the successful runner-state update execute in one transaction. A failed
+rebuild rolls back before foreign-key enforcement is restored and verified.
+Temporary views remain in generated SQL and declared snapshots, but are not
+included in persistent database inspection or drift comparison: each tooling
+command uses its own connection, and SQLite `TEMP` views are connection-local.
+
 ## Verification
 
 The normal `task verify` gate runs unit tests, build, formatting, generated

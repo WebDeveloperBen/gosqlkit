@@ -158,78 +158,157 @@ type sqlExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-type migrationExecutor struct {
-	conn *Conn
-}
-
-func (e migrationExecutor) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return e.conn.Exec(ctx, query, args...)
-}
-
-// executeMigration wraps ordinary migrations atomically. PRAGMA foreign_keys is
-// connection-scoped and cannot be changed in a transaction, so rebuild migrations
-// that toggle it run statement-by-statement outside one. Enforcement is restored
-// even when a statement fails; restoration errors are joined without losing the
-// original migration failure.
-func executeMigration(ctx context.Context, conn *Conn, statements []string, finalize func(sqlExecutor) error) (retErr error) {
+func executeMigration(ctx context.Context, conn *Conn, statements []string, finalize func(sqlExecutor) error) error {
 	statements = nonemptyStatements(statements)
-	usesFKPragma := false
-	for _, statement := range statements {
-		if isForeignKeyPragma(statement) {
-			usesFKPragma = true
-			break
-		}
+	body, usesFKGuard, err := splitForeignKeyGuard(statements)
+	if err != nil {
+		return err
 	}
-	if !usesFKPragma {
-		tx, err := conn.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("begin migration transaction: %w", err)
-		}
-		defer func() {
-			if retErr != nil {
-				if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
-					retErr = errors.Join(retErr, fmt.Errorf("rollback migration: %w", rollbackErr))
-				}
-			}
-		}()
-		for _, statement := range statements {
-			if _, err := tx.ExecContext(ctx, statement); err != nil {
-				return fmt.Errorf("execute SQL statement: %w", err)
-			}
-		}
-		if finalize != nil {
-			if err := finalize(tx); err != nil {
-				return fmt.Errorf("record migration state: %w", err)
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration transaction: %w", err)
-		}
-		return nil
+	if !usesFKGuard {
+		return executeTransactionalMigration(ctx, conn, statements, finalize, false)
 	}
 
-	for _, statement := range statements {
-		if _, err := conn.Exec(ctx, statement); err != nil {
-			retErr = fmt.Errorf("execute SQL statement: %w", err)
-			break
-		}
-	}
-	if retErr == nil && finalize != nil {
-		if err := finalize(migrationExecutor{conn}); err != nil {
-			retErr = fmt.Errorf("record migration state: %w", err)
-		}
-	}
-	if _, err := conn.Exec(ctx, "PRAGMA foreign_keys = ON"); err != nil {
-		retErr = errors.Join(retErr, fmt.Errorf("restore SQLite foreign-key enforcement: %w", err))
+	var migrationErr error
+	if _, err := conn.Exec(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
+		migrationErr = fmt.Errorf("disable SQLite foreign-key enforcement: %w", err)
 	} else {
-		var restored int
-		if err := conn.QueryRow(ctx, "PRAGMA foreign_keys").Scan(&restored); err != nil {
-			retErr = errors.Join(retErr, fmt.Errorf("verify restored SQLite foreign-key enforcement: %w", err))
-		} else if restored != 1 {
-			retErr = errors.Join(retErr, errors.New("SQLite foreign-key enforcement remained disabled after migration"))
+		migrationErr = executeTransactionalMigration(ctx, conn, body, finalize, true)
+	}
+	restoreErr := restoreForeignKeys(context.WithoutCancel(ctx), conn)
+	return errors.Join(migrationErr, restoreErr)
+}
+
+func executeTransactionalMigration(ctx context.Context, conn *Conn, statements []string, finalize func(sqlExecutor) error, checkFK bool) (retErr error) {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin migration transaction: %w", err)
+	}
+	defer func() {
+		if retErr != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+				retErr = errors.Join(retErr, fmt.Errorf("rollback migration: %w", rollbackErr))
+			}
+		}
+	}()
+	for _, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("execute SQL statement: %w", err)
 		}
 	}
-	return retErr
+	if checkFK {
+		if err := checkForeignKeys(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if finalize != nil {
+		if err := finalize(tx); err != nil {
+			return fmt.Errorf("record migration state: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration transaction: %w", err)
+	}
+	return nil
+}
+
+func checkForeignKeys(ctx context.Context, tx *sql.Tx) (retErr error) {
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return fmt.Errorf("check SQLite foreign keys: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close SQLite foreign-key check rows: %w", err))
+		}
+	}()
+	if rows.Next() {
+		var table string
+		var rowID any
+		var parent string
+		var foreignKey int
+		if err := rows.Scan(&table, &rowID, &parent, &foreignKey); err != nil {
+			return fmt.Errorf("read SQLite foreign-key check result: %w", err)
+		}
+		return fmt.Errorf("SQLite foreign-key check failed: table %q rowid %v references %q (foreign-key index %d)", table, rowID, parent, foreignKey)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read SQLite foreign-key check results: %w", err)
+	}
+	return nil
+}
+
+func restoreForeignKeys(ctx context.Context, conn *Conn) error {
+	if _, err := conn.Exec(ctx, "PRAGMA foreign_keys=ON"); err != nil {
+		return fmt.Errorf("restore SQLite foreign-key enforcement: %w", err)
+	}
+	var restored int
+	if err := conn.QueryRow(ctx, "PRAGMA foreign_keys").Scan(&restored); err != nil {
+		return fmt.Errorf("verify restored SQLite foreign-key enforcement: %w", err)
+	}
+	if restored != 1 {
+		return errors.New("SQLite foreign-key enforcement remained disabled after migration")
+	}
+	return nil
+}
+
+func splitForeignKeyGuard(statements []string) ([]string, bool, error) {
+	type pragma struct {
+		index   int
+		enabled bool
+	}
+	var guards []pragma
+	for index, statement := range statements {
+		isPragma, enabled, err := parseForeignKeyPragma(statement)
+		if err != nil {
+			return nil, false, err
+		}
+		if isPragma {
+			guards = append(guards, pragma{index: index, enabled: enabled})
+		}
+	}
+	if len(guards) == 0 {
+		return statements, false, nil
+	}
+	if len(guards) == 1 && guards[0].enabled {
+		return statements, false, nil
+	}
+	if len(guards) != 2 || guards[0].index >= guards[1].index ||
+		guards[0].enabled || !guards[1].enabled {
+		return nil, false, fmt.Errorf("unsupported SQLite foreign-key pragma guard; expected PRAGMA foreign_keys=OFF before and PRAGMA foreign_keys=ON after migration statements (guards: %v, statements: %d)", guards, len(statements))
+	}
+	body := make([]string, 0, len(statements)-2)
+	for index, statement := range statements {
+		if index != guards[0].index && index != guards[1].index {
+			body = append(body, statement)
+		}
+	}
+	return body, true, nil
+}
+
+func parseForeignKeyPragma(statement string) (bool, bool, error) {
+	normalized := strings.ToUpper(strings.Join(strings.Fields(strings.TrimSpace(statement)), ""))
+	normalized = strings.TrimSuffix(normalized, ";")
+	const prefix = "PRAGMAFOREIGN_KEYS"
+	if !strings.HasPrefix(normalized, prefix) {
+		return false, false, nil
+	}
+	value := strings.TrimPrefix(normalized, prefix)
+	switch {
+	case strings.HasPrefix(value, "="):
+		value = strings.TrimPrefix(value, "=")
+	case strings.HasPrefix(value, "(") && strings.HasSuffix(value, ")"):
+		value = strings.TrimSuffix(strings.TrimPrefix(value, "("), ")")
+	default:
+		return true, false, fmt.Errorf("unsupported SQLite foreign-key pragma %q", statement)
+	}
+	switch value {
+	case "OFF":
+		return true, false, nil
+	case "ON":
+		return true, true, nil
+	default:
+		return true, false, fmt.Errorf("unsupported SQLite foreign-key pragma value in %q", statement)
+	}
 }
 
 func upStatements(runner string, migration migrate.Migration) ([]string, error) {
@@ -258,16 +337,6 @@ func nonemptyStatements(statements []string) []string {
 		}
 	}
 	return out
-}
-
-func isForeignKeyPragma(statement string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(statement))
-	upper = strings.TrimSuffix(upper, ";")
-	upper = strings.ReplaceAll(upper, " ", "")
-	upper = strings.ReplaceAll(upper, "\t", "")
-	upper = strings.ReplaceAll(upper, "\r", "")
-	upper = strings.ReplaceAll(upper, "\n", "")
-	return strings.HasPrefix(upper, "PRAGMAFOREIGN_KEYS=") || strings.HasPrefix(upper, "PRAGMAFOREIGN_KEYS(")
 }
 
 func ensureGooseTable(ctx context.Context, conn *Conn) error {
