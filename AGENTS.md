@@ -4,22 +4,21 @@ Guidance for AI agents (and humans) working in `gosqlkit`. Read this before
 touching the codebase. It captures the project's intent, architecture, the
 non-obvious patterns that will bite you, and the verification workflow.
 
-This file is intentionally **not** a duplicate of the product spec. For the
-full product direction, feature list, and status, read these first and treat
-them as canonical:
+This file is intentionally **not** a duplicate of product requirements or
+implementation status. Use these sources:
 
-- [SPEC.md](SPEC.md) — the ADR: goals, non-goals, scope, architecture, phases.
-- [FEATURES.md](FEATURES.md) — the live feature checklist. Update checkboxes
-  as things land. This is the source of truth for "what's done / what's next".
-- [SQLITE.md](SQLITE.md) — the live feature checklist for the **SQLite** dialect
-  build (full-parity target). The SQLite counterpart to FEATURES.md; update its
-  checkboxes as SQLite work lands.
-- [MIGRATIONS.md](MIGRATIONS.md) — the migration-generation decision record:
-  cross-dialect planner, goose-compatible files, embedded metadata.
-- [README.md](README.md) — the user-facing intro and example.
+- [SPEC.md](SPEC.md) — project goals, non-goals, and architectural decisions.
+- [MIGRATIONS.md](MIGRATIONS.md) — migration-generation decisions.
+- `openspec/specs/` — published capability requirements.
+- `openspec/changes/` — active proposals, designs, and ordered implementation tasks.
+- [README.md](README.md) — user-facing feature summary and examples.
+- [FEATURES.md](FEATURES.md) — OpenSpec navigation, not a completion checklist.
+- [SQLITE.md](SQLITE.md) — SQLite architecture context, not a status board.
 
-If AGENTS.md ever disagrees with SPEC.md or FEATURES.md, those win. Update
-AGENTS.md to match.
+Use `openspec list --specs --json`, `openspec list --json`, and
+`openspec status --change <name> --json` to discover contracts and active work.
+If guidance disagrees, update the relevant OpenSpec capability or change; do
+not recreate a competing checkbox roadmap.
 
 ---
 
@@ -74,12 +73,11 @@ schema-management surface looks like — **not** as an implementation blueprint.
     JSON, arrays, dates, timestamps.
   - Sequences with increment/min/max/start/cache/cycle/ownership.
 - The serializer pattern: schema is collected into a **structured snapshot**
-  before any diffing, and the snapshot is the diff input — not the rendered
-  SQL text. `gosqlkit` already does this (`internal/dialects/pg/pgschema`'s
-  `JSON` function); future diff work builds on it.
-- Stable object identity and metadata maps for rename detection and
-  destructive-change guards (planned, see FEATURES.md "Serialisation and Diff
-  Readiness").
+  before diffing, and the snapshot is the diff input — not rendered SQL text.
+  `gosqlkit` uses this model for migration planning and drift checks.
+- Stable object identity and metadata maps support rename detection and
+  destructive-change guards. See the published PostgreSQL and SQLite capability
+  specs under `openspec/specs/`.
 
 ### Do **not** borrow from Drizzle
 
@@ -167,10 +165,10 @@ because that is the user-facing import path. It can't move to `internal/`.
 
 ### Adding a new dialect
 
-The **SQLite dialect is the worked reference** for this: `internal/dialects/
-sqlite/` and `sqlite/` were built by mirroring the PostgreSQL structure but
-modelling only the subset SQLite supports. Follow it as the concrete example of
-the steps below. See [SQLITE.md](SQLITE.md) for its feature board.
+The **SQLite dialect** is the worked reference: `internal/dialects/sqlite/`
+and `sqlite/` model the subset SQLite supports. See [SQLITE.md](SQLITE.md) for
+architectural context and the published SQLite capability spec under
+`openspec/specs/`.
 
 1. Create `internal/dialects/<dialect>/` with `schema/` and `render/`
    sub-packages mirroring `internal/dialects/pg/`. The schema package owns
@@ -334,8 +332,9 @@ object.
    if `TestPostgresRender` should cover it (the test builds the schema
    directly via `internal/ast`/`internal/dialects/pg/pgschema`, so update its
    input too).
-6. **FEATURES.md** — flip the relevant `[ ]` to `[x]` and add tests to the
-   "Testing Requirements" section if applicable.
+6. **OpenSpec** — update the relevant capability requirement when durable
+   behavior changes, and complete the corresponding active change task. Do not
+   duplicate implementation status in `FEATURES.md` or `SQLITE.md`.
 7. **Verify** — run the full suite (section 7).
 
 ### Where validation goes (recap)
@@ -423,7 +422,7 @@ verify:cli) into a pre-commit hook. Run `task setup` once to install it.
 
 ## 8. Code conventions
 
-- **Go version**: see `go.mod` (currently 1.26.5). Don't lower it.
+- **Go version**: see `go.mod` (currently 1.26.6). Don't lower it.
 - **Formatting**: `gofumpt` (stricter than `gofmt`). Run `task fmt` before
   committing. `gofumpt` is the toolchain entry in `go.mod`.
 - **No code comments** unless explicitly requested. The codebase is
@@ -455,42 +454,41 @@ predictable and reviewable.
 
 ### 9.1 Always read the context docs first
 
-Before any change, read [SPEC.md](SPEC.md), [FEATURES.md](FEATURES.md), and
-[README.md](README.md). They are short and canonical. AGENTS.md is the
-**how**, not the **what**.
+Before changes, discover relevant published contracts and active tasks with
+OpenSpec. Read [SPEC.md](SPEC.md) for product decisions and [README.md](README.md)
+for the user-facing surface. `FEATURES.md` is navigation, `SQLITE.md` is
+architecture context, and this file documents **how**, not the current status.
+
+Codex discovers repository skills from `.agents/skills/` and supports explicit
+`$skill-name` invocation ([Codex skill documentation](https://developers.openai.com/codex/skills)).
+Use `$openspec-explore`, `$openspec-propose`, `$openspec-apply-change`,
+`$openspec-update-change`, `$openspec-sync-specs`, or
+`$openspec-archive-change`; each skill drives the corresponding `openspec`
+CLI workflow. Files in `.agents/commands/opsx/` are client-specific prompt
+assets, not a universal Codex slash-command registry. Codex users should use
+the matching discovered skill or invoke `openspec` directly.
 
 ### 9.2 Pick the right track
 
-FEATURES.md "Recommended Build Order" and the open `[ ]` items are the
-backlog. When asked to "continue" or "pick up implementation", the remaining
-tracks are roughly:
+When asked to continue implementation, inspect `openspec list --json` and the
+ordered tasks of relevant active changes with
+`openspec status --change <name> --json`. Do not infer a backlog from stale
+checklists or old phase descriptions. If no active change covers the requested
+work, compare the published capability spec with code, tests, examples, and
+Taskfile behavior before proposing or implementing a new change.
 
-1. **Schema DSL coverage** — missing scalar types, arrays, identity,
-   generated columns, sequences, composite types, domains, safe default
-   helpers, deferrable/exclusion constraints, comments, named index helpers.
-   (Largely landed; check FEATURES.md for residual `[ ]`.)
-2. **Snapshot metadata + diff readiness** — stable snapshot IDs, previous
-   snapshot ID, schema/table/column/view/role/function/trigger/policy metadata maps, stable
-   object keys, rename annotations, squashed/normalised diff representation.
-   Prerequisite for high-quality migration diffing. Mostly landed; rename-aware
-   diffing (Slice 5) and column-modification / replacement planning are the
-   remaining open pieces.
-3. **Database connectivity + introspection + diff** — cross-dialect migration
-   IR, dialect planners, sandbox validation, drift checks, and provider-pluggable
-   token auth for Azure/AWS/GCP. Largest track (Slices 6 and 7).
-4. **Advanced PG objects** — remaining PostgreSQL objects such as raw SQL
-   schema blocks and the first non-PostgreSQL provider.
-
-When direction is ambiguous, ask the user which track rather than guessing.
-A wrong track wastes more time than a quick clarifying question.
+When product direction is ambiguous, ask the user which capability or goal to
+pursue rather than guessing. A wrong track wastes more time than a quick
+clarifying question.
 
 ### 9.3 One model, one render pass
 
 A feature touches: model (with JSON tag) -> DSL -> render -> validate ->
-example -> golden -> FEATURES.md. The model is the single source of truth —
-the snapshot is just `json.Marshal` of the model with deterministic sorting,
-so there is no separate snapshot layer to keep in sync. Skipping the render
-step means the feature exists in the model/snapshot but never reaches SQL.
+example -> golden -> OpenSpec capability requirement/task. The model is the
+single source of truth — the snapshot is just `json.Marshal` of the model with
+deterministic sorting, so there is no separate snapshot layer to keep in sync.
+Skipping the render step means the feature exists in the model/snapshot but
+never reaches SQL.
 
 ### 9.4 Regenerate, don't hand-edit golden files
 
@@ -550,15 +548,16 @@ verify — let it run.
 
 ### 9.10 Updating the docs
 
-- **FEATURES.md** — flip checkboxes as features land. Add new rows under the
-  right section. This is the live status board.
-- **SPEC.md** — only when the decision changes. This is an ADR, not a
-  changelog.
-- **README.md** — user-facing examples and the feature summary. Keep the
-  "Current Features" list in sync with FEATURES.md's `[x]` items.
-- **AGENTS.md** — when a pattern or working rule changes, or when a new
-  non-obvious gotcha is discovered. Don't bloat it; if it grows past ~600
-  lines, split or trim.
+- **OpenSpec capability specs** — canonical durable behavior requirements.
+  Active changes own ordered implementation tasks; use OpenSpec list/status
+  commands rather than duplicating checkboxes elsewhere.
+- **SPEC.md / MIGRATIONS.md** — update only when a product or migration
+  decision changes; these are decision records, not status logs.
+- **README.md** — maintain accurate user-facing examples and feature claims;
+  link to the published OpenSpec capabilities.
+- **FEATURES.md / SQLITE.md** — navigation and architecture context only, not
+  implementation-status boards.
+- **AGENTS.md** — update architecture or working conventions when they change.
 
 ---
 
@@ -586,98 +585,22 @@ verify — let it run.
 
 ---
 
-## 11. Current state at a glance
+## 11. Product and implementation status
 
-See [FEATURES.md](FEATURES.md) for the canonical checklist. As of the last
-update of this file:
+Published OpenSpec capability specs define expected behavior. Active OpenSpec
+changes contain the ordered work tasks. Discover them with:
 
-- **Landed**: Phase 1 (schema DSL + SQL generation) and Phase 2 (sqlc
-  compatibility) are complete. The DSL covers tables, columns (all common PG
-  scalar types + arrays + pgvector vector types + identity + generated), constraints (PK, unique
-  with `NULLS NOT DISTINCT`, FK with deferrable, checks, exclusion), indexes
-  (full advanced surface, including pgvector methods and opclasses), schemas, extensions with version pinning, cascade,
-  comments, and upgrade planning, enums, sequences, composite types, domains,
-  partitioned tables with partition children and bounds, roles, functions,
-  triggers, RLS policies, views, materialized views, comments, safe
-  default helpers, custom-type escape hatch, and raw SQL schema blocks
-  (`pg.RawSQL`, rendered before/after the structured schema, additive-only in
-  the planner).
-  CLI has `generate`, `snapshot` (each with `--out`, `--check`, and `--prev`
-  for snapshot), `inspect` (with `--url`, `--url-env`, `--token-command`,
-  `--out`, and `--drift-projection`), `version`, `migrate create` (with `--empty`, `--no-down`,
-  `--allow-destructive`), `migrate refresh <matview>` (with `--concurrently`;
-  authors an explicit, risk-flagged materialized-view refresh migration),
-  `migrate plan` (with `--json` and `--quiet`),
-  `migrate check` (with `--json`, `--quiet`, and optional `--sandbox-url` /
-  `--sandbox-url-env`),
-  `migrate apply` (with `--url`, `--url-env`, `--json`, and `--quiet`), and
-  `drift check` (with `--url`, `--url-env`, `--json`, and `--quiet`).
-  Database-backed commands default to `DATABASE_URL` when `--url` is omitted
-  and support custom token-as-password commands through `--token-command` /
-  `--sandbox-token-command`, Azure CLI and DefaultAzureCredential token
-  providers, AWS SDK/CLI IAM token providers, and gcloud Cloud SQL IAM login
-  token providers.
-  Snapshot JSON is versioned, dialect-tagged, includes stable snapshot IDs
-  (SHA-256), metadata maps (schema/table/column/view/role/function/trigger/policy), and rename
-  annotations (previousName on all objects).
-  Migration planner emits structured changes with per-change risk flags
-  (`destructive`, `data-loss`, `lock-heavy`, `manual-review`,
-  `requires-ddl-review`) and best-effort per-change reverse SQL with explicit
-  placeholders for irreversible changes. Destructive changes (drops, RLS
-  disables, comment removals, enum value removals, and column type changes)
-  fail by default and require `--allow-destructive` to author when executable
-  SQL exists. Column type, default, nullability, generated
-  expression, and identity changes are planned as structured `ALTER COLUMN`
-  changes with risk metadata; inline column constraint/reference mutations
-  still fail closed. Enum value removals are detected as manual-review
-  replacement changes and intentionally emit no automatic SQL. Renames (table,
-  column, constraint, index, enum/type, sequence, view, materialized view,
-  function, trigger, policy, role, schema) are planned as `ALTER ... RENAME TO`
-  with a reverse `RENAME TO old_name`; extension rename metadata is detected
-  as a manual-review replacement because PostgreSQL cannot rename extensions.
-  Mismatched `previousName` and rename-plus-alter combinations fail closed.
-  PostgreSQL sandbox replay is implemented: `migrate check --sandbox-url` opens a
-  tooling-only `pgx` connection, replays committed goose `Up` sections into a
-  disposable database, and verifies the latest embedded target snapshot ID
-  matches the current generated schema snapshot, then introspects the replayed
-  database and compares it to the embedded target snapshot. PostgreSQL drift
-  checking is implemented with `drift check --url`; the introspector covers
-  namespaces, extensions and extension versions, roles, collations, enums,
-  composite types, domains, standalone sequences, functions, tables,
-  partitioning metadata, partition-child bounds, tablespace assignments,
-  columns, comments, RLS flags, table constraints, standalone indexes,
-  policies, triggers, grants, views, and materialized views. Drift projection normalises rename metadata, non-persistent index
-  flags, identity-backed sequences, extension-owned objects, dependency hints,
-  and PostgreSQL defaults. `task integration` runs the Docker-backed PostgreSQL
-  Testcontainers suite for generated schema apply, catalogue introspection,
-  drift detection, sandbox replay, and `migrate apply` version tracking.
-  `task integration:postgres:pgvector` runs the pgvector type apply,
-  insertion, extension-owned type attribution, introspection, and drift
-  comparison path against a pgvector image.
-  Drift check results include object-level diagnostics for missing, extra, and
-  changed schema objects, including table-nested columns, constraints, and
-  indexes.
-  `migrate apply` records successful versions in the goose-compatible
-  `goose_db_version` table and skips already applied versions.
-- **SQLite (second dialect, in progress)**: the dialect boundary is proven. The
-  public `sqlite/` DSL, `internal/dialects/sqlite/{sqliteschema,render,plan}`,
-  kit provider registration, `examples/sqlite/` with goldens, and the migration
-  planner (incl. the generalised table-rebuild) are landed and green. `generate`,
-  `snapshot`, `migrate create`, and `migrate plan` work for `dialect: sqlite`.
-  SQLite reuses `internal/ast` and the shared `internal/migrate/{plan,goose,
-  golangmigrate}`; the generic diff helpers were lifted into `internal/migrate/
-  plan` and PostgreSQL refactored onto them (refactor-then-reuse). SQLite models
-  the subset SQLite supports (no schemas/enums/roles/RLS/sequences/domains/
-  matviews); see [SQLITE.md](SQLITE.md) for the full board and the **Resuming**
-  handoff for the remaining tooling work.
-- **Next tracks**: SQLite tooling — PRAGMA introspection, drift, sandbox replay,
-  and `migrate apply` behind a new dialect-neutral `DialectTooling` app seam
-  (SQLITE.md Phase 6), then the opt-in `modernc.org/sqlite` integration test
-  (Phase 7). For PostgreSQL: remaining extension-provided types such as PostGIS
-  `geometry`. See FEATURES.md and SQLITE.md for the open `[ ]` items.
+```bash
+openspec list --specs --json
+openspec list --json
+openspec status --change <name> --json
+```
 
-When you change the state, update FEATURES.md (and SQLITE.md for SQLite) first,
-then this section.
+`FEATURES.md` points to published capabilities; `SQLITE.md` records SQLite
+architecture context. Neither is a second implementation checklist.
+`README.md` summarizes the user-facing surface. `SPEC.md` and `MIGRATIONS.md`
+remain decision records. Verify shipped behavior against implementation, tests,
+examples, and runnable Taskfile targets.
 
 ---
 

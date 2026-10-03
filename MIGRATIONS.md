@@ -1,8 +1,8 @@
 # Migration Generation Design
 
-This document records the current migration-generation direction for
-`gosqlkit`. It is the decision note for how Go schema files become reviewable
-database migrations across PostgreSQL first, and other dialects later.
+This document records the migration-generation decisions for `gosqlkit`: a
+cross-dialect plan model, dialect-specific planning, and runner-compatible
+artifacts for PostgreSQL and SQLite.
 
 ## Decision
 
@@ -27,9 +27,9 @@ The migration configuration lets a project choose `goose` or
 `golang-migrate`. Unsupported runner values should fail validation rather than
 silently producing the wrong file layout.
 
-Migration application should stay compatible with supported runner layouts.
-`gosqlkit migrate apply` may wrap application, but it should not be a
-prerequisite for using generated migrations.
+Migration application stays compatible with supported runner layouts.
+`gosqlkit migrate apply` is an optional wrapper around the same files, not a
+prerequisite for using goose or another runner.
 
 ## Why This Path
 
@@ -255,17 +255,18 @@ must stay independent of the runner format.
 Applied migration state is environment-specific and belongs in the database,
 not in Git.
 
-When using goose, goose's migration table is the source of applied state. If
-`gosqlkit` later owns application directly, it should create its own migration
-history table, such as `gosqlkit_schema_migrations`.
+`gosqlkit migrate apply` records successful versions in the selected runner's
+standard table (`goose_db_version` or `schema_migrations`). It does not create a
+second project-specific migration history table.
 
 Git should contain migrations that are available to apply. It should not
 contain a JSON list of migrations that have been applied, because development,
 staging, and production are often intentionally at different versions.
 
-## Current State Inputs
+## Migration Source Decisions
 
-Migration creation should support three source modes.
+Migration creation can use the latest embedded migration snapshot or an
+explicit live database source; snapshot-based input remains the default.
 
 1. **Previous migration metadata**
 
@@ -281,10 +282,10 @@ Migration creation should support three source modes.
 
 3. **Live database introspection**
 
-   Used for drift checks and reconciliation. Compare a live database's
-   introspected snapshot to the desired snapshot. This should not be the
-   default authoring path because it depends on access to a specific
-   environment.
+Live introspection supports PostgreSQL drift checks and explicit migration
+sources. It should not be the default authoring path because it depends on
+access to a specific environment. SQLite live-source planning is tracked in the
+active [`sqlite-tooling` change](openspec/changes/sqlite-tooling/tasks.md).
 
 ## Sandbox Databases
 
@@ -302,14 +303,10 @@ embedded temporary PostgreSQL process, or an explicitly configured dev URL. For
 SQLite, it may be an in-memory database. Other dialects can choose the
 smallest realistic engine setup that validates their DDL.
 
-PostgreSQL sandbox validation is now covered by an opt-in Testcontainers suite:
-`task integration` starts PostgreSQL, applies the generated example schema,
-introspects the live database, verifies no false drift, verifies intentional
-drift is detected, creates a baseline goose migration, replays it into a fresh
-database, and compares the replayed database to the embedded target snapshot.
-`task integration:postgres:matrix` repeats the PostgreSQL app integration
-suite against PostgreSQL 15, 16, and 17 images by default; set
-`GOSQLKIT_POSTGRES_IMAGES` to tune the CI matrix.
+PostgreSQL sandbox replay behavior and validation are specified in the
+[PostgreSQL workflow contract](openspec/specs/postgres-schema-workflow/spec.md).
+SQLite sandbox replay remains part of the active
+[`sqlite-tooling` change](openspec/changes/sqlite-tooling/tasks.md).
 
 ## Internal Architecture
 
@@ -427,35 +424,14 @@ We are not adopting Atlas's `atlas.sum` file by default. It is a useful
 integrity mechanism, but it intentionally creates merge conflicts and adds a
 second committed file to maintain.
 
-Instead, `gosqlkit migrate check` should validate:
-
-- `[x]` Migration filenames are timestamped.
-- `[x]` Embedded metadata is parseable.
-- `[x]` Embedded target snapshot IDs match `toSnapshotId` when target snapshots
-  are present.
-- `[x]` Goose files contain exactly one `-- +goose Up` annotation, at most one
-  `-- +goose Down` annotation, and `Down` appears after `Up`.
-- `[x]` `golang-migrate` files store metadata in `.up.sql` files and ignore
-  `.down.sql` files for snapshot lineage scanning.
-- `[x]` External `golang-migrate` Docker CLI applies generated PostgreSQL files
-  against a real PostgreSQL database.
-- `[x]` Adjacent snapshot lineage is coherent when both sides declare
-  snapshot IDs.
-- No migration appears before the latest applied migration for a target
-  database.
-- `[x]` Replaying migrations in a sandbox reaches the expected final snapshot
-  when a PostgreSQL sandbox URL is provided.
-- `[x]` Manual edits do not break declared snapshot lineage; PostgreSQL replay
-  splits goose `Up` SQL and `golang-migrate` `.up.sql` files into executable
-  statements without breaking function bodies, quoted strings, quoted
-  identifiers, or comments.
-
-If later experience shows that projects need stronger directory integrity, we
-can add an optional hash file. It should not be the default UX.
+Migration metadata, runner annotations, snapshot lineage, and sandbox replay
+are part of the migration workflow. Their current behavior is specified in the
+published PostgreSQL capability contract; implementation work for other
+dialects belongs in the corresponding active OpenSpec change.
 
 ## Commands
 
-Planned command shape:
+Example command shape:
 
 ```bash
 gosqlkit migrate create <name>
@@ -484,294 +460,17 @@ migrations:
 Omitting `runner` is equivalent to `goose`. Supported values are `goose` and
 `golang-migrate`.
 
-Current implementation status:
+## Current Contracts and Work
 
-- `migrate create <name>` creates a baseline migration from the current schema
-  when the migration directory has no existing migrations. The generated
-  metadata embeds both `toSnapshotId` and the target snapshot JSON.
-- `migrate create <name> --empty` creates an empty runner-compatible migration
-  for manual SQL.
-- `migrate create <name>` with existing migrations uses the latest migration's
-  embedded target snapshot as the previous state and currently supports
-  conservative additive PostgreSQL changes: new schemas, extensions, enums,
-  appended enum values, new tables, new columns, standalone indexes, and
-  table/column comments, plus primary-key, unique, foreign-key, and check
-  constraints on existing tables, and exclusion constraints on new and
-  existing tables. It also supports enabling/forcing table RLS and creating
-  RLS policies, plus creating roles, sequences, composite types, domains, and
-  functions.
-- Destructive changes and unsupported modifications fail closed with an
-  explicit planner error.
-- `migrate check` validates timestamped SQL filenames, embedded metadata, and
-  goose annotations, plus adjacent snapshot lineage when both migrations
-  declare snapshot IDs.
-- Fixture tests cover supported additive v0 diff operations and the current
-  unsupported/destructive planner error categories.
-- The internal planner IR now carries typed object references, typed
-  dependencies, reversibility, risk flags, and per-change forward/reverse SQL
-  statements while preserving the v0 statement slice used by compatibility
-  paths.
-- The goose renderer consumes runner-neutral structured SQL statements from
-  migration plans, with raw SQL slices retained only as a compatibility
-  fallback.
-- Safe additive PostgreSQL diff coverage includes standalone index creation on
-  new and existing tables, with table dependencies and reverse `DROP INDEX`
-  statements recorded in the structured plan.
-- Safe additive PostgreSQL diff coverage includes table and column comment
-  creation, with reverse `COMMENT ... IS NULL` statements recorded in the
-  structured plan.
-- Safe additive PostgreSQL diff coverage includes table-level primary-key,
-  unique, foreign-key, and check constraint creation on existing tables, with
-  table dependencies and reverse `ALTER TABLE ... DROP CONSTRAINT` statements
-  recorded in the structured plan.
-- Safe additive PostgreSQL diff coverage includes exclusion constraints on new
-  and existing tables, including method, element, partial predicate, and
-  deferrability options. Existing-table additions record reverse
-  `ALTER TABLE ... DROP CONSTRAINT` statements.
-- Safe additive PostgreSQL diff coverage includes enabling and forcing table
-  RLS, with reverse `DISABLE ROW LEVEL SECURITY` and
-  `NO FORCE ROW LEVEL SECURITY` statements. Disabling either state remains a
-  destructive change and fails closed.
-- Safe additive PostgreSQL diff coverage includes RLS policy creation, with
-  table dependencies and reverse `DROP POLICY ... ON ...` statements.
-- Safe additive PostgreSQL diff coverage includes role creation, with reverse
-  `DROP ROLE` statements.
-- Safe additive PostgreSQL diff coverage includes sequence creation, with
-  reverse `DROP SEQUENCE` statements. `OWNED BY` is emitted as a separate
-  post-table `ALTER SEQUENCE ... OWNED BY ...` change so sequence defaults can
-  be available before table creation while ownership waits for the referenced
-  column to exist.
-- Safe additive PostgreSQL diff coverage includes composite type creation,
-  with reverse `DROP TYPE` statements.
-- Safe additive PostgreSQL diff coverage includes domain creation, with reverse
-  `DROP DOMAIN` statements.
-- Safe additive PostgreSQL diff coverage includes function creation and
-  function comments, keyed by identity arguments for overloaded functions, with
-  reverse `DROP FUNCTION` and `COMMENT ... IS NULL` statements.
-- Safe additive PostgreSQL diff coverage includes trigger creation and trigger
-  comments, with dependencies on the trigger target and trigger function and
-  reverse `DROP TRIGGER` / `COMMENT ... IS NULL` statements.
-- Safe additive PostgreSQL diff coverage includes view and materialized view
-  creation and comments, with dependency refs from `DependsOn` and reverse
-  `DROP VIEW` / `DROP MATERIALIZED VIEW` statements.
-- Safe additive PostgreSQL diff coverage now records best-effort down SQL for
-  simple create/add operations: schemas, extensions, enums, tables, columns,
-  constraints, indexes, comments, RLS enable/force, policies, roles,
-  sequences, composite types, domains, functions, triggers, views, and
-  materialized views. PostgreSQL enum value appends are marked manual-review
-  and remain intentionally non-reversible.
-- Planner changes are dependency-sorted before rendering, so referenced roles,
-  parent tables, trigger functions, view dependencies, sequence ownership
-  targets, and other known prerequisites are emitted before dependent changes.
-- Column modification planning now emits structured PostgreSQL `ALTER COLUMN`
-  changes for type, default, nullability, generated expression, and identity
-  changes. Risk metadata follows the Atlas/Drizzle-style semantic operation
-  split: type changes are destructive/data-loss/lock-heavy by default,
-  `SET NOT NULL` is marked lock-heavy/requires-backfill, and generated or
-  identity changes require manual DDL review. Inline column constraint or
-  reference mutations still fail closed.
-- PostgreSQL enum value removals are detected as structured replacement
-  changes with destructive/data-loss/manual-review risk metadata. The planner
-  intentionally emits no automatic SQL for this path because PostgreSQL
-  requires a rebuild-style workflow; `migrate plan --json` reports the change,
-  while `migrate create` refuses to author it until manual migration support
-  can safely model the rebuild.
-- Trigger renames are planned with `ALTER TRIGGER ... ON ... RENAME TO ...`
-  and reverse SQL. Extension rename metadata is detected as a structured
-  manual-review replacement with no automatic SQL because PostgreSQL supports
-  extension update/schema/member alteration but not extension renaming.
-- Sandbox replay is implemented for PostgreSQL tooling commands. `gosqlkit
-  migrate check --sandbox-url ...` validates migration metadata, extracts
-  goose `Up` sections, applies committed migrations to the supplied
-  disposable PostgreSQL database, checks that the latest embedded target
-  snapshot ID matches the current generated schema snapshot, introspects the
-  replayed database, and compares the projected replay snapshot to the
-  embedded migration target snapshot.
-- PostgreSQL drift checking is implemented with `gosqlkit drift check --url ...`.
-  The introspection pass maps PostgreSQL catalog objects into the same
-  snapshot-compatible model used by generated schemas: namespaces,
-  extensions, roles, enums, composite types, domains, standalone sequences,
-  functions, tables, columns, comments, RLS flags, primary keys, unique
-  constraints, foreign keys, checks, standalone indexes, policies, triggers,
-  views, and materialized views. The comparison projects both desired and
-  database state through the same normalisation layer for authoring-only
-  rename metadata, dependency hints, non-persistent index flags such as
-  `CONCURRENTLY`, identity-backed sequences, extension-owned objects, and
-  PostgreSQL defaults.
-
-## Next Migration Engine Slices
-
-Ship the migration engine as reviewable vertical slices. Each slice should
-leave the CLI usable, fail closed for unsupported changes, and add fixture
-tests before broadening the planner.
-
-### Slice 1: Authoring V0 Hardening
-
-Goal: make the staged `migrate create` / `migrate check` workflow safe enough
-to release as the first migration-authoring loop.
-
-Scope:
-
-- Keep baseline migration generation from the current schema.
-- Keep empty goose migration generation for manual SQL.
-- Keep conservative additive PostgreSQL diffs from embedded target snapshots.
-- Fail closed for unsupported table details that are not rendered yet, such as
-  indexes, comments, RLS, exclusions, policies, triggers, and rename metadata.
-- Add fixture tests for supported additive changes and unsupported/destructive
-  changes.
-- Keep generated metadata stable and parseable after manual review.
-
-Acceptance criteria:
-
-- `gosqlkit migrate create init_schema` works in an empty migration directory.
-- `gosqlkit migrate create add_column` works after a baseline when the change
-  is one of the supported additive operations.
-- Unsupported modifications and removals return explicit planner errors and do
-  not write partial migration files.
-- `gosqlkit migrate check` catches malformed metadata, goose annotation
-  mistakes, invalid filenames, target snapshot ID mismatches, and broken
-  adjacent lineage.
-
-### Slice 2: Structured Planner IR
-
-Goal: move from statement-first planning to a richer change model that can
-support review, risk reporting, and multiple file renderers.
-
-Scope:
-
-- Expand `internal/migrate/plan.Change` with object kind, stable object key,
-  operation, dependencies, reversibility, risk flags, and optional statement
-  groups.
-- Represent create, drop, rename, alter, and replace operations explicitly.
-- Keep dialect-specific SQL rendering under `internal/dialects/<dialect>/plan`.
-- Keep runner-specific file layout under `internal/migrate/<runner>`.
-- Preserve stable ordering across namespaces, extensions, enum/type objects,
-  tables, table-attached objects, comments, policies, triggers, and indexes.
-
-Acceptance criteria:
-
-- Existing v0 generated files remain valid.
-- The planner can produce a machine-readable plan summary without rendering a
-  migration file.
-- Goose rendering consumes the structured plan rather than ad hoc SQL slices.
-- Unsupported operations carry enough context to explain the exact blocked
-  object.
-
-### Slice 3: Safe Additive PostgreSQL Coverage
-
-Goal: expand automatic diffs to common additive changes that are clearly
-reversible or fail-safe.
-
-Scope:
-
-- Add standalone indexes for new and existing tables.
-- Add table and column comments.
-- Add check, unique, foreign-key, primary-key, and exclusion constraints where
-  PostgreSQL can apply them directly.
-- Add RLS enable/force state and new policies.
-- Add roles, sequences, domains, composite types, functions, triggers, views,
-  and materialized views where the operation is create-only.
-- Generate best-effort `Down` SQL for simple creates and renames.
-
-Acceptance criteria:
-
-- New-table migrations do not omit any attached object present in the snapshot.
-- Additive changes are split into dependency-safe statements, following the
-  Atlas pattern of table creation, separate indexes/comments, then attached
-  policy/trigger style objects.
-- Fixture tests cover each supported object type.
-- Unsupported variants still fail closed.
-
-### Slice 4: Destructive-Change Guardrails
-
-Goal: make risky changes visible and blocked by default.
-
-Scope:
-
-- Detect table, column, enum value, constraint, index, policy, trigger, view,
-  function, sequence, domain, and role removals.
-- Detect column type/default/nullability/generated/identity changes.
-- Detect object replacements that require drop-and-recreate planning.
-- Mark risk flags such as destructive, data-loss, lock-heavy,
-  non-transactional, requires-backfill, and manual-review.
-- Add an explicit CLI override for destructive changes after the review model
-  is in place.
-
-Acceptance criteria:
-
-- Destructive changes fail by default with actionable diagnostics.
-- The planner reports every risky object before refusing to write files.
-- Explicit override behaviour is covered by tests and never applies to unknown
-  or unsupported changes silently.
-
-### Slice 5: Rename-Aware Diffing
-
-Goal: use existing `previousName` metadata to plan renames instead of
-drop/create pairs.
-
-Scope:
-
-- Support table, column, constraint, index, enum/type, sequence, view,
-  materialized view, function, trigger, policy, role, and schema renames where
-  PostgreSQL has a direct operation.
-- Detect extension rename metadata as a manual-review replacement because
-  PostgreSQL cannot rename extensions.
-- Validate rename metadata against previous snapshot object keys.
-- Reject ambiguous rename-plus-alter combinations until semantic planning
-  supports them.
-
-Acceptance criteria:
-
-- Rename migrations are reversible where PostgreSQL supports reversal.
-- Missing or mismatched rename metadata fails with a clear error.
-- Renames happen before dependent alter operations.
-
-### Slice 6: Sandbox Replay and Drift Check
-
-Goal: validate that committed migrations still produce the desired snapshot.
-
-Scope:
-
-- Add PostgreSQL connection plumbing for local/dev URLs.
-- Add sandbox replay that applies committed migrations to a temporary or
-  configured PostgreSQL database.
-- Add PostgreSQL introspection to produce a snapshot-compatible model.
-- Compare replayed database state to the latest embedded target snapshot.
-- Add `gosqlkit migrate check --sandbox-url ...` and later
-  `gosqlkit drift check --url ...`.
-
-Acceptance criteria:
-
-- Replay catches broken SQL, manual migration drift, and stale metadata.
-- Introspection output is deterministic.
-- Credentials and tokens are never written to generated files or logs.
-
-### Slice 7: Auth, Apply, and Runner Expansion
-
-Goal: make migration workflows practical in CI and managed database
-environments without turning `gosqlkit` into the runtime database layer.
-
-Scope:
-
-- Add provider-neutral database auth interfaces.
-- Support password, environment URL, and custom token command auth in the
-  database tooling layer. Azure Entra, AWS IAM, and GCP IAM provider-specific
-  token flows remain future work on top of the same password-provider
-  interface.
-- Add `gosqlkit migrate apply --url ...` as a wrapper around generated
-  migration files. Landed for goose-compatible SQL using `goose_db_version`
-  and `golang-migrate` SQL using `schema_migrations`.
-- Add a `golang-migrate` renderer from the same structured plan.
-- Add machine-readable command output and quiet mode for CI. JSON output has
-  landed for drift/migrate status and apply commands; quiet mode suppresses
-  human-readable success summaries while leaving JSON output available.
-
-Acceptance criteria:
-
-- Token material is acquired just before connection and redacted from
-  diagnostics.
-- `migrate apply` remains optional; generated SQL stays usable with goose.
-- Runner renderers do not change planner behaviour.
+Published OpenSpec capability specs define supported migration behavior.
+Active OpenSpec changes contain unfinished migration work and ordered tasks.
+Use `openspec list --specs --json`, `openspec list --json`, and
+`openspec status --change <name> --json` for current status. The
+[PostgreSQL workflow](openspec/specs/postgres-schema-workflow/spec.md),
+[SQLite workflow](openspec/specs/sqlite-schema-workflow/spec.md), and active
+[`sqlite-tooling` change](openspec/changes/sqlite-tooling/tasks.md) provide the
+current behavior and implementation references. This document remains a
+decision record, not a release-phase backlog.
 
 ## Reasons For This Decision
 
@@ -801,5 +500,3 @@ Acceptance criteria:
 - Should data migrations be represented as manual SQL blocks with explicit
   risk metadata?
 - Should projects be able to opt into Atlas-style hash files?
-- Should the initial implementation support PostgreSQL only, or should the
-  core IR be introduced with a minimal SQLite planner to prove the boundary?

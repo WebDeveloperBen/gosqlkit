@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Phase 1 vertical slice implemented.
+Accepted. Current capability requirements and implementation work are tracked in OpenSpec.
 
 ## Executive summary
 
@@ -20,7 +20,9 @@ sqlc            → SQL query code generation
 pgx             → runtime PostgreSQL driver
 ```
 
-PostgreSQL is the first implemented dialect. The core must stay dialect-neutral so SQLite, MySQL, MSSQL, SingleStore, CockroachDB, and other engines can be added as separate dialect packages.
+PostgreSQL was the first implemented dialect; SQLite is now a separate
+implemented dialect. The core stays dialect-neutral so additional engines such
+as MySQL, MSSQL, SingleStore, and CockroachDB can be added independently.
 
 ## Context
 
@@ -197,84 +199,19 @@ Version 0 should support:
 - CLI stale-output check for CI
 - Golden-file tests for SQL output
 
-Current implementation status:
+## Current Capability Status
 
-- Implemented:
-  - Tables
-  - Columns (all common PostgreSQL scalar types, arrays, custom type escape hatch)
-  - Identity columns with sequence options
-  - Generated stored columns
-  - Column and table comments
-  - Safe default helpers (string, int, bool, JSON, array, date, timestamp)
-  - Column primary keys
-  - Column unique constraints
-  - Inline foreign keys
-  - Table-level primary keys
-  - Composite primary keys
-  - Named unique constraints
-  - Composite unique constraints
-  - Named foreign keys
-  - Composite foreign keys
-  - Deferrable constraints (foreign keys and unique constraints)
-  - Exclusion constraints
-  - Basic indexes
-  - Unique indexes
-  - Advanced index methods
-  - Index predicates
-  - Per-column index ordering/null ordering/operator classes
-  - Concurrent indexes
-  - Index storage parameters
-  - Named index auto-generation helpers
-  - Basic checks
-  - Defaults
-  - Nullable / not-null columns
-  - Common PostgreSQL scalar types listed above
-  - PostgreSQL schemas/namespaces
-  - PostgreSQL extensions
-  - PostgreSQL enums
-  - PostgreSQL sequences
-  - PostgreSQL composite types
-  - PostgreSQL domains
-  - PostgreSQL partitioned tables
-  - PostgreSQL grants
-  - PostgreSQL collations and column-level collation
-  - PostgreSQL tablespace assignment for tables, indexes, and materialized views
-  - Schema-qualified table rendering
-  - Schema-qualified enum column types
-  - Schema-qualified foreign key references
-  - Deterministic table ordering that respects foreign-key dependencies
-  - Deterministic index ordering
-  - Dialect-neutral provider registry
-  - Provider aliases and capabilities
-  - Snapshot JSON output
-  - CLI `generate`
-  - CLI `generate --out`
-  - CLI `generate --check`
-  - CLI `snapshot`
-  - CLI `snapshot --out`
-  - CLI `snapshot --check`
-  - Golden-style SQL output tests
-  - `sqlc` compatibility example
-- Not implemented yet:
-  - Migration diff integration
+This ADR records the original product decision and initial scope. Published
+behavior contracts are [PostgreSQL](openspec/specs/postgres-schema-workflow/spec.md),
+[SQLite](openspec/specs/sqlite-schema-workflow/spec.md), and the
+[project status](openspec/specs/project-status-tracking/spec.md). Active
+changes hold ordered implementation tasks. Use `openspec list --specs --json`
+and `openspec list --json` for current capability and work status rather than
+reconstructing status from this decision record.
 
-## Later scope
-
-Future versions may support:
-
-- Cluster-level `CREATE TABLESPACE` / `DROP TABLESPACE`
-- Raw SQL schema blocks
-- Destructive-change guards
-- Database introspection
-- Password and OAuth2/token database authentication
-- Provider-pluggable PostgreSQL authentication
-- Azure Database for PostgreSQL Microsoft Entra authentication
-- AWS RDS and Aurora PostgreSQL IAM database authentication
-- Google Cloud SQL for PostgreSQL IAM database authentication
-- Expand/contract migration helpers
-- Goose migration file generation
-- Cross-dialect migration planner and dialect-specific SQL renderers
-- CI drift checks
+The original PostgreSQL vertical slice has expanded into the PostgreSQL and
+SQLite workflows defined by their capability specs. Additional dialects or
+capability changes require a proposal grounded in current code and tests.
 
 ## Proposed architecture
 
@@ -398,106 +335,29 @@ Positive:
 Negative:
 
 - Requires building and maintaining custom schema DSL tooling.
-- Migration quality depends on the planned cross-dialect planner and each
-  dialect implementation.
-- Advanced PostgreSQL features will require deliberate support.
-- Rename detection and destructive-change handling will need careful design.
+- Cross-dialect migration plans depend on dialect-specific, semantics-aware
+  implementations.
+- Destructive changes and renames must fail closed when safe planning is
+  unavailable.
 - Initial version will not be as feature-complete as mature ORM ecosystems.
 
-## Recommended implementation phases
+## Current Capability References
 
-### Phase 1: Schema DSL and SQL generation
+The original phased implementation roadmap is retired. Published OpenSpec
+capability specs define behavior, and active OpenSpec changes define unfinished
+work. This ADR remains the record of product goals and architectural decisions,
+not a release-phase checklist.
 
-Build only:
+## Further Decisions
 
-```text
-Go schema DSL
-→ canonical schema.generated.sql
-```
+Questions raised during the initial design have since been resolved where
+needed by implementation and later decisions. Record new product decisions in
+this ADR and track proposed or unfinished behavior through OpenSpec changes.
 
-Deliverables:
+## Initial Slice (Historical Acceptance)
 
-- `pg.Table`
-- common column types
-- constraints
-- indexes
-- deterministic renderer
-- CLI `gosqlkit generate`
-- golden-file tests
-
-### Phase 2: sqlc compatibility
-
-Ensure generated schema SQL can be consumed by `sqlc`.
-
-Deliverables:
-
-- example app using `gosqlkit + sqlc + pgx`
-- CI command to regenerate schema
-- validation that committed schema output is up to date
-
-### Phase 3: Migration planning and generation
-
-Implement the cross-dialect migration planning workflow described in
-[MIGRATIONS.md](MIGRATIONS.md).
-
-Deliverables:
-
-- `gosqlkit migrate create <name>`
-- runner-compatible SQL migration files with embedded `gosqlkit` metadata
-- cross-dialect change IR
-- PostgreSQL planner as the first implementation
-- database connection layer for introspection/diff inputs
-- password auth and provider-pluggable token auth
-- Azure Database for PostgreSQL Microsoft Entra token-as-password support
-- AWS RDS/Aurora PostgreSQL IAM token support
-- Google Cloud SQL PostgreSQL IAM auth support
-- custom token command/provider support for other hosted PostgreSQL environments
-- generated migration SQL
-- safety warnings
-- diff output suitable for PR review
-
-### Phase 4: Migration history integration
-
-Optionally generate runner-compatible migration files.
-
-Deliverables:
-
-- `gosqlkit migration create <name>`
-- generated `Up` SQL
-- best-effort `Down` SQL where safe
-- explicit warnings where down migration is unsafe or unavailable
-
-### Phase 5: Advanced PostgreSQL support
-
-Add support for remaining advanced PostgreSQL objects such as raw SQL schema
-blocks and cluster-level tablespace management if it proves useful.
-
-## Open questions
-
-- Should schema registration be explicit or automatic through package init?
-- Should generated SQL be one file or multiple files?
-- Should `gosqlkit` generate `Down` migrations, or require explicit manual review?
-- Should destructive changes fail by default?
-- How should table/column renames be represented?
-- Should the DSL support raw SQL escape hatches from day one?
-- Should `gosqlkit` own migration application, or leave that entirely to goose?
-
-## Initial agent task
-
-Build the first vertical slice:
-
-```text
-Minimal Go schema DSL
-→ deterministic PostgreSQL SQL generation
-→ CLI command
-→ golden tests
-→ example project using sqlc
-```
-
-Do not build a migration engine in the first pass.
-
-Do not build an ORM.
-
-Do not build query generation.
-
-The success criteria for the first version is that a developer can define two related tables in Go and generate stable PostgreSQL SQL that can be reviewed, committed, and consumed by `sqlc`.
+The initial acceptance criterion was a minimal Go schema DSL that generated
+stable PostgreSQL SQL for a two-table example consumable by `sqlc`. That
+criterion records the starting point for this project; current behavior and
+remaining work are defined by the published OpenSpec capabilities and active
+changes.
